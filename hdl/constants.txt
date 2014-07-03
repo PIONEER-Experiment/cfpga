@@ -1,0 +1,28 @@
+// Collection of constants for the G-2 
+
+// Be sure to use [ `include "constants.txt' ] whenever any of these constants are needed.
+// Also, be sure to use the backtic [ ` ] when the constant is actually used.
+
+// Only define these constants once.
+`ifndef CONSTANTS_INCLUDED
+  `define CONSTANTS_INCLUDED
+
+	// Define 8-bit constants to hold info about code version and functionality
+	// major revision of Xilinx code
+	`define	MAJOR_REV	8'd1
+	// minor revision of Xilinx code
+	`define	MINOR_REV	8'd1
+	
+	// Define 5-bit constants for commands from the Master FPGA
+	`define	CC_NO_CMD		5'd0	// May be useful for synchronizing or testing?
+	`define	CC_LOOPBACK		5'd1	// Echo back an entire command packet
+	`define	CC_RD_REG		5'd2	// Read a configuration register
+	`define	CC_WR_REG		5'd3	// Write a configuration register
+	`define	CC_RD_PATMEM	5'd4	// Read from the test pattern memory
+	`define	CC_WR_PATMEM	5'd5	// Write to the test pattern memory?
+	`define	CC_RD_MEM		5'd6	// Read from a range of memory locations
+	`define	CC_WR_MEM		5'd7	// Write to a range of memory locations
+	`define	CC_RD_FILL		5'd8	// Read the next block of the selected fill
+	`define CC_RD_ADC       5'd9 	// Read a block directly from the ADC
+`endif
+

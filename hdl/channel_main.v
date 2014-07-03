@@ -46,14 +46,14 @@ module channel_main(
   // serial interfaces
   // These have been commented out of "ios.xdc". They must be uncommented as they are used.
   input c0_rx, c0_rx_N,       // Serial data from the master for this channel
-  input c1_rx, c1_rx_N,       // NOT FOR PRODUCTION, connection from the master for the prototype board 
+  //input c1_rx, c1_rx_N,       // NOT FOR PRODUCTION, connection from the master for the prototype board 
   //input c2_rx, c2_rx_N,        // NOT FOR PRODUCTION, connection from the master for the prototype board
   //input c3_rx, c3_rx_N,        // NOT FOR PRODUCTION, connection from the master for the prototype board
   output c0_tx, c0_tx_N,        // Serial data to the master for this channel
-  output c1_tx, c1_tx_N,        // NOT FOR PRODUCTION, connection to the master for the prototype board
+  //output c1_tx, c1_tx_N,        // NOT FOR PRODUCTION, connection to the master for the prototype board
   //output c2_tx, c2_tx_N,        // NOT FOR PRODUCTION, connection to the master for the prototype board
   //output c3_tx, c3_tx_N,        // NOT FOR PRODUCTION, connection to the master for the prototype board
-  input xcvr_clk, xcvr_clk_N,   // 120 MHz oscillator, connected to 'clk0' (not 'clk1') 
+  input xcvr_clk, xcvr_clk_N,   // 125 MHz oscillator, connected to 'clk0' (not 'clk1') 
   // DDR Memory
   output [2:0] ddr3_ba,
   output [12:0] ddr3_addr,
@@ -85,18 +85,12 @@ module channel_main(
   input adc_dovrn, adc_dovrp      // over-range
 );
 
-    // For testing on the WFD1 board, loopback both chan 0 and chan 1
-    // Future boards will only have 1 channel on the slave.
-    wire [0:31] c0_rx_to_c0_tx_axi_tdata;
-    wire [0:3] c0_rx_to_c0_tx_axi_keep;
-    wire [0:32] c1_rx_to_c1_tx_axi_tdata;
-    wire [0:3] c1_rx_to_c1_tx_axi_keep;
-    wire c1_rx_to_c1_tx_axi_tvalid;
-    wire c1_rx_to_c1_tx_axi_tlast;
-    wire c1_rx_to_c1_tx_axi_tready;
-    wire c0_rx_to_c0_tx_axi_tvalid;
-    wire c0_rx_to_c0_tx_axi_tlast;
-    wire c0_rx_to_c0_tx_axi_tready;
+    // Define the AXIS-fifo inputs and outputs for chan 0
+    wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
+    wire [0:3] c0_rx_axi_tkeep, c0_tx_axi_tkeep;
+    wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
+    wire c0_rx_axi_tlast, c0_tx_axi_tlast;
+    wire c0_rx_axi_tready, c0_tx_axi_tready;
 
   ////////////////////////////////////////////////////////////////////////////
   // Clock and reset handling
@@ -105,25 +99,6 @@ module channel_main(
   IBUF IBUF_clkin (.I(clkin), .O(clkin_buf));
   BUFG BUFG_clk50 (.I(clkin_buf), .O(clk50));
   
-//    PLLE2_BASE #(
-//      .CLKFBOUT_MULT(20.0),
-//      .CLKIN1_PERIOD(20), // in ns, so 20 -> 50 MHz
-//      .CLKOUT0_DIVIDE(8),
-//  ) clk (
-//      .CLKIN1(clk50),
-//      .CLKOUT0(clk125),
-//      .CLKOUT1(),
-//      .CLKOUT2(),
-//      .CLKOUT3(),
-//      .CLKOUT4(),
-//      .CLKOUT5(),
-//      .LOCKED(),
-//      .RST(0),
-//      .PWRDWN(0),
-//      .CLKFBOUT(clkfb),
-//      .CLKFBIN(clkfb)
-//  );
-
   // differential clock buffer - This should get shared between the Aurora channel interfaces
   // and other internal logic.
   IBUFDS_GTE2 clk125_IBUFDS_GTE2 (.I(xcvr_clk), .IB(xcvr_clk_N), .O(gt_clk125), .CEB(1'b0), .ODIV2());
@@ -217,9 +192,7 @@ module channel_main(
   led_flasher led_flasher(.clk(clk50), .led(led1), .temporary_in(adc_zero_reg));
 
   ////////////////////////////////////////////////////////////////////////////
-  // Connect the serial links to the channel FPGAs that use the Aurora interface.
-  // This block is copied from the MASTER FPGA code. For the WFD1 board, we may want
-  // to test multiple channels. The final board will only have 1 channel on the slave.
+  // Connect the serial link to the Master FPGA.
   // This block may get pushed down in the hierarchy later.
   // The code below this is derived from the example design that
   // Vivado can generate. The Aurora block was set up with the "common logic" in
@@ -229,10 +202,10 @@ module channel_main(
   all_channels channels(
     // clocks and reset
     .clk50(clk50),                            // Aurora 'init_clk' uses 50 MHz clock per PG046-20
-    .clk50_reset(reset_clk50),                      // active_hi synched to 'clk50'
-    .axis_clk(clk125),                         // clock for the interconnect side of the FIFOs
-    .axis_clk_resetN(reset_clk125N),                  // active-lo reset for the interconnect side of the FIFOs
-    .gt_refclk(gt_clk125),                        // 125 MHz oscillator(), from IBUFDS_GTE2 at a higher level
+    .clk50_reset(reset_clk50),                // active_hi synched to 'clk50'
+    .axis_clk(clk125),                        // clock for the interconnect side of the FIFOs
+    .axis_clk_resetN(reset_clk125N),          // active-lo reset for the interconnect side of the FIFOs
+    .gt_refclk(gt_clk125),                    // 125 MHz oscillator(), from IBUFDS_GTE2 at a higher level
     // There is no IPbus on the CHANNEL FPGA
     // Eventually try to use I2C bus
     // For now, JTAG registers will be provided to read status 
@@ -240,40 +213,49 @@ module channel_main(
     // channel 0 connections
     // connections to 2-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
     // TX interface to slave side of transmit FIFO 
-    .c0_s_axi_tx_tdata(c0_rx_to_c0_tx_axi_tdata[0:31]),        // note index order
-    .c0_s_axi_tx_tkeep(c0_rx_to_c0_tx_axi_keep[0:3]),         // note index order
-    .c0_s_axi_tx_tvalid(c0_rx_to_c0_tx_axi_tvalid),
-    .c0_s_axi_tx_tlast(c0_rx_to_c0_tx_axi_tlast),
-    .c0_s_axi_tx_tready(c0_rx_to_c0_tx_axi_tready),
+    .c0_s_axi_tx_tdata(c0_tx_axi_tdata[0:31]),        // note index order
+    .c0_s_axi_tx_tkeep(c0_tx_axi_tkeep[0:3]),         // note index order
+    .c0_s_axi_tx_tvalid(c0_tx_axi_tvalid),
+    .c0_s_axi_tx_tlast(c0_tx_axi_tlast),
+    .c0_s_axi_tx_tready(c0_tx_axi_tready),
     // RX Interface to master side of receive FIFO
-    .c0_m_axi_rx_tdata(c0_rx_to_c0_tx_axi_tdata[0:31] ),       // note index order
-    .c0_m_axi_rx_tkeep(c0_rx_to_c0_tx_axi_keep[0:3]),        // note index order
-    .c0_m_axi_rx_tvalid(c0_rx_to_c0_tx_axi_tvalid),
-    .c0_m_axi_rx_tlast(c0_rx_to_c0_tx_axi_tlast),
-    .c0_m_axi_rx_tready(c0_rx_to_c0_tx_axi_tready),            // input wire m_axis_tready
+    .c0_m_axi_rx_tdata(c0_rx_axi_tdata[0:31] ),       // note index order
+    .c0_m_axi_rx_tkeep(c0_rx_axi_tkeep[0:3]),        // note index order
+    .c0_m_axi_rx_tvalid(c0_rx_axi_tvalid),
+    .c0_m_axi_rx_tlast(c0_rx_axi_tlast),
+    .c0_m_axi_rx_tready(c0_rx_axi_tready),            // input wire m_axis_tready
     // serial I/O pins
     .c0_rxp(c0_rx), .c0_rxn(c0_rx_N),                   // receive from channel 0 FPGA
-    .c0_txp(c0_tx), .c0_txn(c0_tx_N),                   // transmit to channel 0 FPGA
-
-    // channel 1 connections
-    // connections to 2-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
-    // TX interface to slave side of transmit FIFO 
-    .c1_s_axi_tx_tdata(c1_rx_to_c1_tx_axi_tdata[0:31]),        // note index order
-    .c1_s_axi_tx_tkeep(c1_rx_to_c1_tx_axi_keep[0:3]),         // note index order
-    .c1_s_axi_tx_tvalid(c1_rx_to_c1_tx_axi_tvalid),
-    .c1_s_axi_tx_tlast(c1_rx_to_c1_tx_axi_tlast),
-    .c1_s_axi_tx_tready(c1_rx_to_c1_tx_axi_tready),
-    // RX Interface to master side of receive FIFO
-    .c1_m_axi_rx_tdata(c1_rx_to_c1_tx_axi_tdata[0:31] ),       // note index order
-    .c1_m_axi_rx_tkeep(c1_rx_to_c1_tx_axi_keep[0:3]),        // note index order
-    .c1_m_axi_rx_tvalid(c1_rx_to_c1_tx_axi_tvalid),
-    .c1_m_axi_rx_tlast(c1_rx_to_c1_tx_axi_tlast),
-    .c1_m_axi_rx_tready(c1_rx_to_c1_tx_axi_tready),            // input wire m_axis_tready
-    // serial I/O pins
-    .c1_rxp(c1_rx), .c1_rxn(c1_rx_N),                   // receive from channel 0 FPGA
-    .c1_txp(c1_tx), .c1_txn(c1_tx_N)                   // transmit to channel 0 FPGA
-
+    .c0_txp(c0_tx), .c0_txn(c0_tx_N)                   // transmit to channel 0 FPGA
   );
 
+  // We need to swap the bit order for the RX and TX data
+  wire [31:0] rx_tdata_swap, tx_tdata_swap;
+  assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
+  assign c0_tx_axi_tdata[0:31] = tx_tdata_swap[31:0];
+  
+  ///////////////////////////////////////////////////////////////////////////////////
+  // Connect the command processor. This will receive commands from the Aurora serial
+  // link and process them
+  command_top command_top(
+    // clocks and reset
+    .clk(clk125),                        // clock for the interconnect side of the FIFOs
+    .resetN(reset_clk125N),          // active-lo reset for the interconnect side of the FIFOs
+    // channel 0 connections
+    // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
+    // RX Interface to master side of receive FIFO for receiving from the Master FPGA
+    .rx_data(rx_tdata_swap[31:0]),       // note index order
+    .rx_tkeep(c0_rx_axi_tkeep[0:3]),        // note index order
+    .rx_tvalid(c0_rx_axi_tvalid),
+    .rx_tlast(c0_rx_axi_tlast),
+    .rx_tready(c0_rx_axi_tready),            // input wire m_axis_tready
+    // TX interface to slave side of transmit FIFO for sending to the Master FPGA 
+    .tx_data(tx_tdata_swap[31:0]),        // note index order
+    .tx_tkeep(c0_tx_axi_tkeep[0:3]),         // note index order
+    .tx_tvalid(c0_tx_axi_tvalid),
+    .tx_tlast(c0_tx_axi_tlast),
+    .tx_tready(c0_tx_axi_tready)
+);
+	
 
 endmodule
