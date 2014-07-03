@@ -57,7 +57,7 @@ module command_sm(
 	// sequential always block for state transitions (use non-blocking [<=] assignments)
 	// Reset the sm whenever we get to the end of a frame
 	always @ (posedge clk) begin
-		if (reset || (rx_tvalid && rx_tlast)) begin
+		if (reset) begin
 			CS <= 11'b0;				// set all state bits to 0
 			CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
 		end
