@@ -85,12 +85,20 @@ module channel_main(
   input adc_dovrn, adc_dovrp      // over-range
 );
 
-    // Define the AXIS-fifo inputs and outputs for chan 0
-    wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
-    wire [0:3] c0_rx_axi_tkeep, c0_tx_axi_tkeep;
-    wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
-    wire c0_rx_axi_tlast, c0_tx_axi_tlast;
-    wire c0_rx_axi_tready, c0_tx_axi_tready;
+  // Define the AXIS-fifo inputs and outputs for chan 0
+  wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
+  wire [0:3] c0_rx_axi_tkeep, c0_tx_axi_tkeep;
+  wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
+  wire c0_rx_axi_tlast, c0_tx_axi_tlast;
+  wire c0_rx_axi_tready, c0_tx_axi_tready;
+
+  // Define connection to the ADC data memory and ADC header FIFO
+  wire [11:0] ADC_data_mem_addra, ADC_data_mem_addrb;
+  wire [31:0] ADC_data_mem_dina, ADC_data_mem_doutb;
+  wire ADC_data_mem_wea;  
+  wire [31:0] ADC_header_fifo_din, ADC_header_fifo_dout;
+  wire ADC_header_fifo_wr_en, ADC_header_fifo_rd_en;
+  wire ADC_header_fifo_full, ADC_header_fifo_empty;
 
   ////////////////////////////////////////////////////////////////////////////
   // Clock and reset handling
@@ -121,7 +129,6 @@ module channel_main(
   end 
   wire dummy_source50;
   sync_2stage dummy1(.in(acq_trig_reg), .clk(clk50), .out(dummy_source50));
-
 
   ////////////////////////////////////////////////////////////////////////////
   // dummy assignments to keep logic around
@@ -178,15 +185,52 @@ module channel_main(
     .data_in_to_device(packed_adc_dat)          // output wire [25 : 0] data_in_to_device
   );
 
-  // do something to keep some packed data around
-  reg [25:0] adc_temp;
-  reg adc_zero_reg;
-  always @(posedge adc_clk) begin
-    adc_temp <= packed_adc_dat; // move the DDR output to a temporary register
-    if (adc_temp[12:0] == adc_temp[25:13]) adc_zero_reg <= 1'b1;
-    else adc_zero_reg <= 1'b0;
-  end
+  // put the packed 26-bit ADC data into a 32-bit word for writing to the memory
+  // try to do sign-extension of the 13-bit words to 16-bit words (if timing allows)
+  // comment out while registers are driving the memory
+  //assign ADC_data_mem_dina[12:0]  = packed_adc_dat[12:0];
+  //assign ADC_data_mem_dina[15:13] = (packed_adc_dat[12] == 1'b1) ? 3'b1: 3'b0;
+  //assign ADC_data_mem_dina[28:16] = packed_adc_dat[25:13];
+  //assign ADC_data_mem_dina[31:29] = (packed_adc_dat[25] == 1'b1) ? 3'b1: 3'b0;
  
+   
+  ////////////////////////////////////////////////////////////////////////////
+  // Create a dual-port memory for the ADC data
+  // The write-only "A" port will be connected to the ADC acquisition controller.
+  // The read-only "B" port will be connected to the readout controller
+
+  // Use registers to write to the "A" side until there is an ADC controller
+  // Use 'clk125' with the registers, instead of 'adc_clk'
+  ADC_data_mem ADC_data_mem (	
+  .clka(clk125),    // input wire clka
+  .wea(ADC_data_mem_wea),      // input wire [0 : 0] wea
+  .addra(ADC_data_mem_addra),  // input wire [11 : 0] addra
+  .dina(ADC_data_mem_dina),    // input wire [31 : 0] dina
+  .clkb(clk125),    // input wire clkb
+  .addrb(ADC_data_mem_addrb),  // input wire [11 : 0] addrb
+  .doutb(ADC_data_mem_doutb)  // output wire [31 : 0] doutb
+);
+
+  ////////////////////////////////////////////////////////////////////////////
+  // Create a FIFO for the ADC header info
+  // The write port will be connected to the ADC acquisition controller.
+  // The read port will be connected to the readout controller
+
+  // Use registers to write to the FIFO until there is an ADC controller
+  // Use 'clk125' with the input side, instead of 'adc_clk'
+
+  ADC_header_fifo ADC_header_fifo (
+	.rst(reset_clk125),        // input wire rst
+	.wr_clk(clk125),  // input wire wr_clk
+	.rd_clk(clk125),  // input wire rd_clk
+	.din(ADC_header_fifo_din),        // input wire [31 : 0] din
+	.wr_en(ADC_header_fifo_wr_en),    // input wire wr_en
+	.rd_en(ADC_header_fifo_rd_en),    // input wire rd_en
+	.dout(ADC_header_fifo_dout),      // output wire [31 : 0] dout
+	.full(ADC_header_fifo_full),      // output wire full
+	.empty(ADC_header_fifo_empty)    // output wire empty
+);
+  
   ////////////////////////////////////////////////////////////////////////////
   // flash the led, and temporarily consume adc_zero_reg
   led_flasher led_flasher(.clk(clk50), .led(led1), .temporary_in(adc_zero_reg));
@@ -254,7 +298,20 @@ module channel_main(
     .tx_tkeep(c0_tx_axi_tkeep[0:3]),         // note index order
     .tx_tvalid(c0_tx_axi_tvalid),
     .tx_tlast(c0_tx_axi_tlast),
-    .tx_tready(c0_tx_axi_tready)
+    .tx_tready(c0_tx_axi_tready),
+	// interface to the ADC data memory and header FIFO
+	.ADC_data_mem_addrb(ADC_data_mem_addrb),		// output wire [11 : 0] addrb
+    .ADC_data_mem_doutb(ADC_data_mem_doutb),		// input wire [31 : 0] doutb
+	.ADC_header_fifo_rd_en(ADC_header_fifo_rd_en),	// output wire rd_en
+	.ADC_header_fifo_dout(ADC_header_fifo_dout),	// input wire [31 : 0] dout
+	.ADC_header_fifo_empty(ADC_header_fifo_empty),	// input wire empty
+	// temporary use of registers to write to the ADC memory and ADC header FIFO
+	.ADC_data_mem_wea(ADC_data_mem_wea),      // input wire [0 : 0] wea
+	.ADC_data_mem_addra(ADC_data_mem_addra),  // input wire [11 : 0] addra
+	.ADC_data_mem_dina(ADC_data_mem_dina),    // input wire [31 : 0] dina
+	.ADC_header_fifo_din(ADC_header_fifo_din),        // input wire [31 : 0] din
+	.ADC_header_fifo_wr_en(ADC_header_fifo_wr_en)    // input wire wr_en
+
 );
 	
 

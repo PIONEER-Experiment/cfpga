@@ -22,7 +22,7 @@
 	`define	CC_WR_PATMEM	5'd5	// Write to the test pattern memory?
 	`define	CC_RD_MEM		5'd6	// Read from a range of memory locations
 	`define	CC_WR_MEM		5'd7	// Write to a range of memory locations
-	`define	CC_RD_FILL		5'd8	// Read the next block of the selected fill
+	`define	CC_RD_FILL		5'd8	// Read the next fill
 	`define CC_RD_ADC       5'd9 	// Read a block directly from the ADC
 `endif
 

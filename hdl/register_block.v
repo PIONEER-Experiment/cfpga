@@ -8,7 +8,11 @@ module register_block(
 	input rd_en,			// enable reading of the specific register
 	input wr_en,			// enable writing to the specific register
 	input reg_num_le,		// enable saving of the selected register number
-	output illegal_reg_num	// The desired register does not exist
+	output illegal_reg_num,	// The desired register does not exist
+	// temporary use of registers to write to the ADC memory and ADC header FIFO
+	output ADC_data_mem_wea,      // input wire [0 : 0] wea
+	output [11:0] ADC_data_mem_addra,  // input wire [11 : 0] addra
+	output ADC_header_fifo_wr_en    // input wire wr_en
 );
 			
 	// make a register to hold the number of the selected register.
@@ -52,6 +56,14 @@ module register_block(
 		if (wr_en && (reg_num[3:0] == 4'he)) reg14_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'hf)) reg15_[31:0] <= rx_data[31:0];
 	end
+
+	// temporary use of registers to write to the ADC memory and ADC header FIFO
+	// Use R13 for the memory address
+	assign ADC_data_mem_addra[11:0] = reg13_[11:0]; 
+	// Use R14 'wr_en' for the memory write_enable
+	assign ADC_data_mem_wea = (wr_en && (reg_num[3:0] == 4'he)) ? 1'b1 : 1'b0;
+	// Use R15 'wr_en' for the header FIFO write_enable
+	assign ADC_header_fifo_wr_en  = (wr_en && (reg_num[3:0] == 4'hf)) ? 1'b1 : 1'b0;
 	
 	reg [31:0] rdbk_reg;
 	assign tx_data[31:0] = rdbk_reg[31:0];

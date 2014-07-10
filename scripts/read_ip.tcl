@@ -41,3 +41,23 @@ if {[file exists $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci]} {
 	generate_target all [get_files $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci]
 	synth_ip [get_ips selectio_wiz_0]
 }
+
+# ADC Data Memory - 4k by 32-bit simple dual-port
+if {[file exists $ROOT/ip/ADC_data_mem/ADC_data_mem.xci]} {
+	read_ip $ROOT/ip/ADC_data_mem/ADC_data_mem.xci
+} else {
+	create_ip -name blk_mem_gen -vendor xilinx.com -library ip -module_name ADC_data_mem
+	set_property -dict [list CONFIG.Memory_Type {Simple_Dual_Port_RAM} CONFIG.Write_Width_A {32} CONFIG.Write_Depth_A {4096} CONFIG.Enable_A {Always_Enabled} CONFIG.Enable_B {Always_Enabled}] [get_ips ADC_data_mem]
+	generate_target all [get_files $ROOT/ip/ADC_data_mem/ADC_data_mem.xci]
+	synth_ip [get_ips ADC_data_mem]
+}
+
+# ADC Header FIFO - 128 by 32-bit with first-word fall-through
+if {[file exists $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci]} {
+	read_ip $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci
+} else {
+	create_ip -name fifo_generator -vendor xilinx.com -library ip -module_name ADC_header_fifo
+	set_property -dict [list CONFIG.Fifo_Implementation {Independent_Clocks_Block_RAM} CONFIG.Performance_Options {First_Word_Fall_Through} CONFIG.Input_Data_Width {32} CONFIG.Input_Depth {128}] [get_ips ADC_header_fifo]
+	generate_target all [get_files $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci]
+	synth_ip [get_ips ADC_header_fifo]
+}

@@ -102,11 +102,7 @@ module command_sm(
 			// We enter the WAIT_CC state after we have latched the CSN.
 			// We stay here until data is valid.
 			CS[WAIT_CC]: begin
-				if (rx_tvalid && rx_tlast)
-					// This is unexpected. A final word is on the fifo.
-					// We need to read it and throw it away in order to resync
-					NS[RESYNC] = 1'b1;
-				else if (rx_tvalid && !rx_tlast)
+				if (rx_tvalid)
 					// data is available, presumably the command word
 					NS[LATCH_CC] = 1'b1;
 				else
