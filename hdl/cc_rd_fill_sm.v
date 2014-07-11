@@ -420,8 +420,7 @@ module cc_rd_fill_sm(
 		xmit_data_dly1 <= CS[XMIT_DATA];
 		xmit_data_dly2 <= xmit_data_dly1;
 	end
-	assign dlyd_tx_tvalid = xmit_data_dly2;
-
+	
 
 	// Create registers to hold some header data
 	reg [31:0] trig_num_reg;
@@ -511,9 +510,13 @@ module cc_rd_fill_sm(
 								|| CS[XMIT_CHECKSUM1] == 1'b1 || CS[XMIT_CHECKSUM2] == 1'b1 );
 
 	// send data to the TX FIFO
-	assign tx_tvalid  = (CS[ECHO_CSN2] == 1'b1 || CS[ECHO_CC2] == 1'b1 || CS[XMIT_TRIG_NUM2] == 1'b1
-					|| CS[XMIT_BUF_SIZE2] == 1'b1 || CS[XMIT_CHAN_NUM2] == 1'b1 || CS[XMIT_POST_TRIG2] == 1'b1
-					|| CS[XMIT_CHECKSUM2] == 1'b1 || dlyd_tx_tvalid);
+	reg xmit_hdr_dly1;
+	always @ (posedge clk) begin
+		// make a delayed version of tx_valid for the header data
+		xmit_hdr_dly1 <= (CS[XMIT_TRIG_NUM2] == 1'b1 || CS[XMIT_BUF_SIZE2] == 1'b1 || CS[XMIT_CHAN_NUM2] == 1'b1
+						|| CS[XMIT_POST_TRIG2] == 1'b1 || CS[XMIT_CHECKSUM2] == 1'b1);
+	end
+	assign tx_tvalid  = (CS[ECHO_CSN2] == 1'b1 || CS[ECHO_CC2] == 1'b1 || xmit_hdr_dly1 || xmit_data_dly2);
 
 
 	
