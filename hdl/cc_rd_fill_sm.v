@@ -87,13 +87,14 @@ module cc_rd_fill_sm(
 		XMIT_DATA		= 5'd21,
 		PAUSE1			= 5'd22,
 		PAUSE2			= 5'd23,
-		XMIT_CHECKSUM1	= 5'd24,
-		XMIT_CHECKSUM2	= 5'd25,
-		DONE			= 5'd26;
+		PAUSE3			= 5'd24,
+		XMIT_CHECKSUM1	= 5'd25,
+		XMIT_CHECKSUM2	= 5'd26,
+		DONE			= 5'd27;
 				
 	// Declare current state and next state variables
-	reg [26:0] /* synopsys enum STATE_TYPE */ CS;
-	reg [26:0] /* synopsys enum STATE_TYPE */ NS;
+	reg [27:0] /* synopsys enum STATE_TYPE */ CS;
+	reg [27:0] /* synopsys enum STATE_TYPE */ NS;
 	//synopsys state_vector CS
 
  
@@ -101,7 +102,7 @@ module cc_rd_fill_sm(
 	// Reset the sm whenever we are not enabled
 	always @ (posedge clk) begin
 		if (!run_sm) begin
-			CS <= 27'b0;				// set all state bits to 0
+			CS <= 28'b0;				// set all state bits to 0
 			CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
 		end
 		else  CS <= NS;			// set state bits to next state
@@ -109,7 +110,7 @@ module cc_rd_fill_sm(
 
 	// combinational always block to determine next state  (use blocking [=] assignments) 
 	always @ (CS or tx_tready or error_found or ADC_header_fifo_empty or word_count) begin
-		NS = 27'b0;					// default all bits to zero; will overrride one bit
+		NS = 28'b0;					// default all bits to zero; will overrride one bit
 
 		case (1'b1) //synopsys full_case parallel_case
 
@@ -366,9 +367,17 @@ module cc_rd_fill_sm(
 			// We stay here for one cycle to accommodate the memory pipeline
 			CS[PAUSE2]: begin
 				// Go send the checksum
+				NS[PAUSE3] = 1'b1;
+			end
+
+			// We enter the PAUSE3 state whenever we have completed retrieving the ADC data from memory .
+			// We stay here for one cycle to accommodate the memory pipeline
+			CS[PAUSE3]: begin
+				// Go send the checksum
 				NS[XMIT_CHECKSUM1] = 1'b1;
 			end
 
+		
 			// We enter the XMIT_CHECKSUM1 state after we have transmitted all of the ADC data.
 			// We stay here until the TX FIFO is ready to accept data.
 			// The ADC header data is routed to the TX FIFO
@@ -413,14 +422,14 @@ module cc_rd_fill_sm(
 	end
 
 	// make a delayed version of 'XMIT_DATA' to use when sending ADC data from the memory.
-	// There is a 2-clock latency on the memory data.
+	// There is a 3-clock latency on the memory data.
 	// The delayed signal will be used for both 'tx_tvalid' and for the checksum
-	reg xmit_data_dly1, xmit_data_dly2;
+	reg xmit_data_dly1, xmit_data_dly2, xmit_data_dly3;
 	always @ (posedge clk) begin
 		xmit_data_dly1 <= CS[XMIT_DATA];
 		xmit_data_dly2 <= xmit_data_dly1;
+		xmit_data_dly3 <= xmit_data_dly2;
 	end
-	
 
 	// Create registers to hold some header data
 	reg [31:0] trig_num_reg;
@@ -481,9 +490,6 @@ module cc_rd_fill_sm(
 	assign send_cmd     = !error_found && ((CS[ECHO_CC1] == 1'b1 || CS[ECHO_CC2] == 1'b1 ));			// send the CC
 	assign send_inv_cmd =  error_found && ((CS[ECHO_CC1] == 1'b1 || CS[ECHO_CC2] == 1'b1 ));			// send the CC
 
-	// this is the last word to send
-	assign tx_tlast = !error_found && (CS[XMIT_CHECKSUM2] == 1'b1)	// send with checksum
-					|| error_found && (CS[ECHO_CC2] == 1'b1);   	// send with inverse CC
 
 	// send the ADC memory contents
 	assign send_adc_mem_data  = (CS[XMIT_DATA] == 1'b1 || CS[PAUSE1] == 1'b1 || CS[PAUSE2] == 1'b1);
@@ -516,8 +522,17 @@ module cc_rd_fill_sm(
 		xmit_hdr_dly1 <= (CS[XMIT_TRIG_NUM2] == 1'b1 || CS[XMIT_BUF_SIZE2] == 1'b1 || CS[XMIT_CHAN_NUM2] == 1'b1
 						|| CS[XMIT_POST_TRIG2] == 1'b1 || CS[XMIT_CHECKSUM2] == 1'b1);
 	end
-	assign tx_tvalid  = (CS[ECHO_CSN2] == 1'b1 || CS[ECHO_CC2] == 1'b1 || xmit_hdr_dly1 || xmit_data_dly2);
+	assign tx_tvalid  = (CS[ECHO_CSN2] == 1'b1 || CS[ECHO_CC2] == 1'b1 || xmit_hdr_dly1 || xmit_data_dly3);
 
+	// this is the last word to send
+	reg xmit_tlast_dly1;
+	always @ (posedge clk) begin
+		// make a delayed version of tx_tlast for the checksum
+		// We need this to match up with the delayed version of tx_tvalid
+		xmit_tlast_dly1 <= (CS[XMIT_CHECKSUM2] == 1'b1);
+	end
+	assign tx_tlast = (!error_found && xmit_tlast_dly1)	// send with checksum
+					|| (error_found && (CS[ECHO_CC2] == 1'b1));   	// send with inverse CC
 
 	
 endmodule
@@ -545,6 +560,7 @@ endmodule
 		// 0200000 XMIT_DATA		= 5'd21,
 		// 0400000 PAUSE1			= 5'd22,
 		// 0800000 PAUSE2			= 5'd23,
-		// 1000000 XMIT_CHECKSUM1	= 5'd24,
-		// 2000000 XMIT_CHECKSUM2	= 5'd25,
-		// 4000000 DONE			= 5'd26;
+		// 1000000 PAUSE3			= 5'd24,
+		// 2000000 XMIT_CHECKSUM1	= 5'd25,
+		// 4000000 XMIT_CHECKSUM2	= 5'd26,
+		// 8000000 DONE			= 5'd27;
