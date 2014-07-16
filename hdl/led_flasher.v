@@ -2,8 +2,7 @@
 
 module led_flasher(
   input clk,
-  output led,
-  input temporary_in
+  output led
 );
   
 // Make a counter to flash an LED
@@ -19,6 +18,6 @@ always @ (posedge clk) begin
   end
 end
 
-assign led = led_toggle | temporary_in; 
+assign led = led_toggle; 
 
 endmodule

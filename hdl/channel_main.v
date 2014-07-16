@@ -1,36 +1,10 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// G-2 WFD1 prototype Channel FPGA
+// G-2 WFD5 prototype Channel FPGA
 //
 // Notes:
-//  1) ADC data bits D4, D6, D7, D8, and D9 were renumbered in 'ios.xdc' to conform with
-//     the numbering on the schematic.
-//  2) The 'adc_ovrp' and 'adc_ovrn' signals are cross-wired on the schematic, with the
-//     positive signal going to the negative input, and the negative signal going to the
-//     positive input. This will have the effect of inverting the OVR signal such that it
-//     will be LOW when the input exceeds the full scale range. We may want to invert it
-//     somewhere in the signal chain.
-//  3) The 'adc_dryp' and 'adc_dryn' clock signals are cross-wired on the schematic, with the
-//     positive signal going to the negative input, and the negative signal going to the
-//     positive input. This will have the effect of inverting the ADC clock signal. According
-//     to footnote #1 on page 9 of the ADS5463 data sheet, the ploarity of 'dry' is undetermined,
-//     so this does not matter.
-//  4) The ADC over-range signals were renamed from 'adc_ovrp/n' to 'adc_dovrp/n'. This was done
-//     to include these signals in the wildcard grouping of the ADC data pins.
-//  5) The ADC 'data ready' signals were renamed from 'adc_dryp/n' to 'adc_clk_p/n'. This was done
-//     to allow wildcards in grouping the ADC data pins, and to reflect the usage of this signal
-//     as the clock for bringing in the ADC data.
-//  6) The 'receive' signals 'ch0' and 'ch1' were changed to 'c0' and 'c1' to conform
-//     with the other two channels and with the 'transmit' signals.
-//  7) A complex timing constraint setup is applied in 'timing.xdc' for the ADC data and clock. It
-//     may not be correct, but it implements without errors.
-//  8) All of the DDR memory signals were renamed to conform to the "Memory Interface Generator"
-//     requirements. This was before discovering that the Wizard is unhappy with the pin assignments.
-//  9) The DDR memory is fully disabled. Active-lo signals are high, active-hi signals are low,
-//     busses are tri-state.
-//  10) An attempt was made to put the IP for the Aurora serial interface into a 'shared' directory
-//    (shared between master and channel). This does not work because the IP get specific part number
-//    stuff embedded in it. Each different part number needs its own IP instance.
+// 1) The is only one link to the master. It is chan 0.
+//
 //////////////////////////////////////////////////////////////////////////////////
 module channel_main(
   // Utility
@@ -40,31 +14,24 @@ module channel_main(
   input clkin,                  // 50 MHz oscillator
   input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
   output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+  input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> , [1=0,2=1]-> , [1=1,2=0]-> , [1=1,2=1]->  
-  input bbus_scl,   // SHOULD BE "INOUT" I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
-  input bbus_sda,   // SHOULD BE "INOUT" I2C bus data, connected to Atmel Chip, MAster FPGA, and to other Channel FPGAs
+  input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
+  input bbus_sda, //SHOULD BE INOUT//               // I2C bus data, connected to Atmel Chip, MAster FPGA, and to other Channel FPGAs
   // serial interfaces
-  // These have been commented out of "ios.xdc". They must be uncommented as they are used.
   input c0_rx, c0_rx_N,       // Serial data from the master for this channel
-  //input c1_rx, c1_rx_N,       // NOT FOR PRODUCTION, connection from the master for the prototype board 
-  //input c2_rx, c2_rx_N,        // NOT FOR PRODUCTION, connection from the master for the prototype board
-  //input c3_rx, c3_rx_N,        // NOT FOR PRODUCTION, connection from the master for the prototype board
   output c0_tx, c0_tx_N,        // Serial data to the master for this channel
-  //output c1_tx, c1_tx_N,        // NOT FOR PRODUCTION, connection to the master for the prototype board
-  //output c2_tx, c2_tx_N,        // NOT FOR PRODUCTION, connection to the master for the prototype board
-  //output c3_tx, c3_tx_N,        // NOT FOR PRODUCTION, connection to the master for the prototype board
   input xcvr_clk, xcvr_clk_N,   // 125 MHz oscillator, connected to 'clk0' (not 'clk1') 
   // DDR Memory
   output [2:0] ddr3_ba,
   output [12:0] ddr3_addr,
   inout [15:0] ddr3_dq,
   output ddr3_cas_n,
-  output ddr3_cke,
-  output ddr3_ck_n, ddr3_ck_p,
-  output ddr3_cs_n,
+  output [0:0] ddr3_cke,
+  output [0:0] ddr3_ck_n, ddr3_ck_p,
   output [1:0] ddr3_dm,
   inout [1:0] ddr3_dqs_n, ddr3_dqs_p,
-  output ddr3_odt,
+  output [0:0] ddr3_odt,
   output ddr3_ras_n,
   output ddr3_reset_n,
   output ddr3_we_n,
@@ -81,8 +48,16 @@ module channel_main(
   input adc_d9n, adc_d9p,
   input adc_d10n, adc_d10p,
   input adc_d11n, adc_d11p,
-  input adc_clk_n, adc_clk_p,     // 250 MHz sample clock from ADC chip
-  input adc_dovrn, adc_dovrp      // over-range
+  input adc_clk_n, adc_clk_p,     // 400 MHz sample clock from ADC chip
+  input adc_dovrn, adc_dovrp,      // over-range
+  input adc_sdo,
+  output adc_sdio,
+  output adc_sdclk,
+  output adc_sdenb,
+  output adc_sresetb,
+  output adc_enable,
+  input adc_syncp, adc_syncn
+
 );
 
   // Define the AXIS-fifo inputs and outputs for chan 0
@@ -111,7 +86,8 @@ module channel_main(
   // and other internal logic.
   IBUFDS_GTE2 clk125_IBUFDS_GTE2 (.I(xcvr_clk), .IB(xcvr_clk_N), .O(gt_clk125), .CEB(1'b0), .ODIV2());
   BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
-    
+
+  
   // synchronous reset logic
   startup_reset startup_reset(
     .clk50(clk50),              // 50 MHz buffered clock 
@@ -120,52 +96,29 @@ module channel_main(
     .reset_clk125(reset_clk125)	// active-high reset output, goes low after startup
   );
 
-  ////////////////////////////////////////////////////////////////////////////
-  // Dummy synchronizers for use during partial implementation
-  // make a synchronizer to bring 'acq_trig' into the 50 MHz clock domain
-  (* IOB = "true" *) reg acq_trig_reg;
-  always @(posedge clk50) begin
-    acq_trig_reg <= acq_trig;
-  end 
-  wire dummy_source50;
-  sync_2stage dummy1(.in(acq_trig_reg), .clk(clk50), .out(dummy_source50));
 
-  ////////////////////////////////////////////////////////////////////////////
+ ////////////////////////////////////////////////////////////////////////////
   // dummy assignments to keep logic around
-  assign led2 = dummy_source50;
-  assign acq_done = dummy_source50;
-  assign debug[2:0] = dummy_source50 ? ch_addr[2:0] : 3'h0;
-  assign debug[5:3] = dummy_source50 ? power_good[2:0]: 3'h0;
-  assign debug[9:6] = dummy_source50 ? 4'hf : 4'h0;
+  assign led2 = acq_trig;
+  assign debug[2:0] = acq_trig ? ch_addr[2:0] : 3'h0;
+  assign debug[5:3] = acq_trig ? power_good[2:0]: 3'h0;
+  assign debug[9:6] = acq_trig ? io[3:0]: 4'h0;
+  IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
+  assign adc_sdio = adc_sdo || adc_sync;
+  assign adc_sdclk = 1'b0;
+  assign adc_sdenb = 1'b0;
+  assign adc_sresetb = 1'b0;
+  assign adc_enable = 1'b0;
+  assign acq_done = acq_trig;
   
-  ////////////////////////////////////////////////////////////////////////////
-  // dummy logic for DDR3 SDRAM
-  // internal wires associated with differential buffers
-  wire ddr_ckp_OBUFDS_in;
-  wire ddr_ldqsp_OBUFDS_in;
-  wire ddr_udqsp_OBUFDS_in;
-  // differential buffers
-  OBUFDS ddr_ckp_OBUFDS (.I(ddr_ckp_OBUFDS_in), .O(ddr3_ck_p), .OB(ddr3_ck_n));
-  OBUFDS ddr_ldqsp_OBUFDS (.I(ddr_ldqsp_OBUFDS_in), .O(ddr3_dqs_p[0]), .OB(ddr3_dqs_n[0]));
-  OBUFDS ddr_udqsp_OBUFDS (.I(ddr_udqsp_OBUFDS_in), .O(ddr3_dqs_p[1]), .OB(ddr3_dqs_n[1]));
-  // assignments to keep000000000000000000000000000 memory chip inactive
-  assign ddr3_addr[12:0] = 13'h0000;
-  assign ddr3_ba[2:0] = 3'h0;
-  assign ddr_ckp_OBUFDS_in = clk50;  // may not be needed, but run a clock to the memory 
-  assign ddr3_cke = 1'b0;               // this should put chip in power-down mode
-  assign ddr3_cs_n = 1'b1;
-  assign ddr3_dm[1:0] = 2'b0;
-  assign ddr3_odt = 1'b0;
-  assign ddr3_cas_n = 1'b1;
-  assign ddr3_ras_n = 1'b1;
-  assign ddr3_we_n = 1'b1;
-  assign ddr3_reset_n = 1'b1;
-  assign ddr3_dq[15:0] = 16'hzzzz;
-  assign ddr_ldqsp_OBUFDS_in = 1'b0;
-  assign ddr_udqsp_OBUFDS_in = 1'b0;
+//  ////////////////////////////////////////////////////////////////////////////
+//  // Connect the ADC signals
+//  // assert 'adc_reset' until the clock is stable
+//  adc_startup_reset adc_startup_reset(
+//    .adc_clk(adc_clk),			// buffered clock, 250 MHz
+//    .reset_adc_clk(reset_adc_clk)	// active-high reset output, goes low after startup
+//  );
 
-  ////////////////////////////////////////////////////////////////////////////
-  // Connect the ADC signals
   // A good note on DDR timing
   // http://forums.xilinx.com/t5/Timing-Analysis/XDC-constraints-Source-Synchronous-ADC-DDR/td-p/292807
   // Combine the ADC data 'p' pins and 'n' pins. Put the over-range into the LSB
@@ -232,8 +185,8 @@ module channel_main(
 );
   
   ////////////////////////////////////////////////////////////////////////////
-  // flash the led, and temporarily consume adc_zero_reg
-  led_flasher led_flasher(.clk(clk50), .led(led1), .temporary_in(adc_zero_reg));
+  // flash the led
+  led_flasher led_flasher(.clk(clk50), .led(led1));
 
   ////////////////////////////////////////////////////////////////////////////
   // Connect the serial link to the Master FPGA.
@@ -313,6 +266,74 @@ module channel_main(
 	.ADC_header_fifo_wr_en(ADC_header_fifo_wr_en)    // input wire wr_en
 
 );
-	
+
+///// COMMENT OUT DDR3 MEMORY
+//  // Make 200 MHz from 125 MHz, needed by the DDR3 function
+//  wire clk200;
+//  clk_wiz_0 clk_wiz_200 (
+//   // Clock in ports
+//    .clk_in1(clk125),      // input clk_in1
+//    // Clock out ports
+//    .clk_out1(clk200));    // output clk_out1
+//
+//  wire tg_compare_error, init_calib_complete;
+// assign led2 = tg_compare_error | init_calib_complete;
+//  ////////////////////////////////////////////////////////////////////////
+//  // Connect the example DDR3 memory files.
+//  // Inouts
+//  example_top ddr3_example_top (
+//    .ddr3_dq(ddr3_dq),
+//    .ddr3_dqs_n(ddr3_dqs_n),
+//    .ddr3_dqs_p(ddr3_dqs_p),
+//    // Outputs
+//    .ddr3_addr(ddr3_addr),
+//    .ddr3_ba(ddr3_ba),
+//    .ddr3_ras_n(ddr3_ras_n),
+//    .ddr3_cas_n(ddr3_cas_n),
+//    .ddr3_we_n(ddr3_we_n),
+//    .ddr3_reset_n(ddr3_reset_n),
+//    .ddr3_ck_p(ddr3_ck_p),
+//    .ddr3_ck_n(ddr3_ck_n),
+//    .ddr3_cke(ddr3_cke),
+//    .ddr3_dm(ddr3_dm),
+//    .ddr3_odt(ddr3_odt),
+//    // Inputs
+//    // Single-ended system clock
+//   .sys_clk_i(clk125),
+//    // Single-ended iodelayctrl clk (reference clock)
+//    .clk_ref_i(clk200),
+//    .tg_compare_error(tg_compare_error),
+//    .init_calib_complete(init_calib_complete),
+//    // System reset - Default polarity of sys_rst pin is Active Low.
+//    // System reset polarity will change based on the option 
+//    // selected in GUI.
+//    .sys_rst(reset_clk125N)
+//  );
+
+  ////////////////////////////////////////////////////////////////////////////
+  // dummy logic for DDR3 SDRAM
+  // internal wires associated with differential buffers
+  wire ddr_ckp_OBUFDS_in;
+  wire ddr_ldqsp_OBUFDS_in;
+  wire ddr_udqsp_OBUFDS_in;
+  // differential buffers
+  OBUFDS ddr_ckp_OBUFDS (.I(ddr_ckp_OBUFDS_in), .O(ddr3_ck_p), .OB(ddr3_ck_n));
+  OBUFDS ddr_ldqsp_OBUFDS (.I(ddr_ldqsp_OBUFDS_in), .O(ddr3_dqs_p[0]), .OB(ddr3_dqs_n[0]));
+  OBUFDS ddr_udqsp_OBUFDS (.I(ddr_udqsp_OBUFDS_in), .O(ddr3_dqs_p[1]), .OB(ddr3_dqs_n[1]));
+  // assignments to keep memory chip inactive
+  assign ddr3_addr[12:0] = 13'h0000;
+  assign ddr3_ba[2:0] = 3'h0;
+  assign ddr_ckp_OBUFDS_in = clk50;  // may not be needed, but run a clock to the memory 
+  assign ddr3_cke = 1'b0;               // this should put chip in power-down mode
+  assign ddr3_dm[1:0] = 2'b0;
+  assign ddr3_odt[0] = 1'b0;
+  assign ddr3_cas_n = 1'b1;
+  assign ddr3_ras_n = 1'b1;
+  assign ddr3_we_n = 1'b1;
+  assign ddr3_reset_n = 1'b1;
+  assign ddr3_dq[15:0] = 16'hzzzz;
+  assign ddr_ldqsp_OBUFDS_in = 1'b0;
+  assign ddr_udqsp_OBUFDS_in = 1'b0;
+  
 
 endmodule

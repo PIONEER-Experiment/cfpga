@@ -4,7 +4,6 @@ create_clock -period 8.000 -name xcvr_clk [get_ports xcvr_clk]
 
 # Aurora USER_CLK Constraint : Value is selected based on the line rate (5.0 Gbps) and lane width (4-Byte)
 create_clock -period 8.000 -name user_clk_chan0 [get_pins channels/chan0/clock_module/user_clk_buf_i/O]
-create_clock -period 8.000 -name user_clk_chan1 [get_pins channels/chan1/clock_module/user_clk_buf_i/O]
 
 ###### CDC in RESET_LOGIC from INIT_CLK to USER_CLK ##############
 set_max_delay -datapath_only -from [get_clocks clk50] -to [get_clocks user_clk_chan0] 8.000
@@ -30,6 +29,5 @@ set_input_delay -clock [get_clocks adc_clk] -min 2.050 [get_ports adc_d*]
 set_clock_groups -asynchronous -group [get_clocks clk50]
 set_clock_groups -asynchronous -group [get_clocks xcvr_clk]
 set_clock_groups -asynchronous -group [get_clocks user_clk_chan0]
-set_clock_groups -asynchronous -group [get_clocks user_clk_chan1]
 
 
