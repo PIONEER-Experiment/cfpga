@@ -60,6 +60,17 @@ module channel_main(
 
 );
 
+  // Use io[3] for a 'reset' and io[2] for 'acq_arm'
+  wire acq_arm;
+  assign acq_arm = io[2];
+
+  wire [31:0] ADC_buffer_size;		// number of words in the data stream (2 samples per word)
+  wire [31:0] ADC_channel_num;		// the number for this channel
+  wire [31:0] ADC_post_trig_size;	// number of words to continue acquiring after a trigger
+  wire [31:0] ADC_initial_trig_num;	// initial value for the event number
+  wire ADC_trig_num_we;				// enable saving of the initial value for the event number
+  wire [31:0] ADC_current_trig_num;	// the current value for the event number
+
   // Define the AXIS-fifo inputs and outputs for chan 0
   wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
   wire [0:3] c0_rx_axi_tkeep, c0_tx_axi_tkeep;
@@ -109,7 +120,7 @@ module channel_main(
   assign adc_sdenb = 1'b0;
   assign adc_sresetb = 1'b0;
   assign adc_enable = 1'b0;
-  assign acq_done = acq_trig;
+  //assign acq_done = acq_trig;
   
 //  ////////////////////////////////////////////////////////////////////////////
 //  // Connect the ADC signals
@@ -134,17 +145,21 @@ module channel_main(
     .clk_in_n(adc_clk_n),                        // input wire clk_in_n
     .io_reset(reset_clk50),                        // input wire io_reset
     //.ref_clock(adc_clk),                        // loop ADC_CLK back around for input timing delay settings
-    .clk_out(adc_clk),                          // output wire clk_out
+    .clk_out(real_adc_clk),                          // output wire clk_out
     .data_in_to_device(packed_adc_dat)          // output wire [25 : 0] data_in_to_device
   );
-
+  
+  // use clk125 to run the ADC memory, header FIFO, and acquisition controller
+  // assign adc_clk = real_adc_clk;
+  assign adc_clk = clk125;
+  
   // put the packed 26-bit ADC data into a 32-bit word for writing to the memory
   // try to do sign-extension of the 13-bit words to 16-bit words (if timing allows)
   // comment out while registers are driving the memory
-  //assign ADC_data_mem_dina[12:0]  = packed_adc_dat[12:0];
-  //assign ADC_data_mem_dina[15:13] = (packed_adc_dat[12] == 1'b1) ? 3'b1: 3'b0;
-  //assign ADC_data_mem_dina[28:16] = packed_adc_dat[25:13];
-  //assign ADC_data_mem_dina[31:29] = (packed_adc_dat[25] == 1'b1) ? 3'b1: 3'b0;
+  assign ADC_data_mem_dina[12:0]  = packed_adc_dat[12:0];
+  assign ADC_data_mem_dina[15:13] = (packed_adc_dat[12] == 1'b1) ? 3'b1: 3'b0;
+  assign ADC_data_mem_dina[28:16] = packed_adc_dat[25:13];
+  assign ADC_data_mem_dina[31:29] = (packed_adc_dat[25] == 1'b1) ? 3'b1: 3'b0;
  
    
   ////////////////////////////////////////////////////////////////////////////
@@ -155,7 +170,7 @@ module channel_main(
   // Use registers to write to the "A" side until there is an ADC controller
   // Use 'clk125' with the registers, instead of 'adc_clk'
   ADC_data_mem ADC_data_mem (	
-  .clka(clk125),    // input wire clka
+  .clka(adc_clk),    // input wire clka
   .wea(ADC_data_mem_wea),      // input wire [0 : 0] wea
   .addra(ADC_data_mem_addra),  // input wire [11 : 0] addra
   .dina(ADC_data_mem_dina),    // input wire [31 : 0] dina
@@ -174,7 +189,7 @@ module channel_main(
 
   ADC_header_fifo ADC_header_fifo (
 	.rst(reset_clk125),        // input wire rst
-	.wr_clk(clk125),  // input wire wr_clk
+	.wr_clk(adc_clk),  // input wire wr_clk
 	.rd_clk(clk125),  // input wire rd_clk
 	.din(ADC_header_fifo_din),        // input wire [31 : 0] din
 	.wr_en(ADC_header_fifo_wr_en),    // input wire wr_en
@@ -183,6 +198,30 @@ module channel_main(
 	.full(ADC_header_fifo_full),      // output wire full
 	.empty(ADC_header_fifo_empty)    // output wire empty
 );
+
+  ////////////////////////////////////////////////////////////////////////////
+  // Connect the ADC acquisition state machine
+  adc_acquisition_control_sm adc_acquisition_control_sm(
+	.clk(adc_clk),					// 400 MHz ADC clock !!! USE REAL ADC CLOCK WHEN AVAILABLE
+	.arm(acq_arm),					// arm or reset the acquisition controller
+	.trig(acq_trig),				// we have been triggered
+	.done(acq_done),				// acquisition for the current trigger is complete
+	// interface to the ADC data memory and header FIFO
+	.data_mem_wea(ADC_data_mem_wea),					// enable writing to the ADC data memory
+	.data_mem_addra(ADC_data_mem_addra),				// address for writing to the ADC data memory
+	.header_fifo_wr_en(ADC_header_fifo_wr_en),			// enable writing to the ADC header FIFO
+	.header_data(ADC_header_fifo_din),					// data to put in the ADC header FIFO 
+	// data for the ADC header FIFO and/or for local control
+	// The buffer_size, channel_num, post_trig_size, and initial_trig_num are from the register block/
+	// They are stable during operation, so do not need synchronization. The 'initial_even_num_we' signal
+	// will need to be synched. The current_trig_num is provided for register readback
+	.buffer_size(ADC_buffer_size),			// number of words in the data stream (2 samples per word)
+	.channel_num(ADC_channel_num),			// the number for this channel
+	.post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
+	.initial_trig_num(ADC_initial_trig_num),// initial value for the event number
+	.trig_num_we(ADC_trig_num_we),			// enable saving of the initial value for the event number
+	.current_trig_num(ADC_current_trig_num)	// the current value for the event number
+ );
   
   ////////////////////////////////////////////////////////////////////////////
   // flash the led
@@ -259,11 +298,19 @@ module channel_main(
 	.ADC_header_fifo_dout(ADC_header_fifo_dout),	// input wire [31 : 0] dout
 	.ADC_header_fifo_empty(ADC_header_fifo_empty),	// input wire empty
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
-	.ADC_data_mem_wea(ADC_data_mem_wea),      // input wire [0 : 0] wea
-	.ADC_data_mem_addra(ADC_data_mem_addra),  // input wire [11 : 0] addra
-	.ADC_data_mem_dina(ADC_data_mem_dina),    // input wire [31 : 0] dina
-	.ADC_header_fifo_din(ADC_header_fifo_din),        // input wire [31 : 0] din
-	.ADC_header_fifo_wr_en(ADC_header_fifo_wr_en)    // input wire wr_en
+	// Signal connection have been removed in order to use the real ADC acquisition controller
+	.ADC_data_mem_wea(), 						    // WAS .ADC_data_mem_wea(ADC_data_mem_wea),
+	.ADC_data_mem_addra(),                          // WAS .ADC_data_mem_addra(ADC_data_mem_addra),
+	.ADC_data_mem_dina(),				    		// WAS .ADC_data_mem_dina(ADC_data_mem_dina),
+	.ADC_header_fifo_din(),							// WAS .ADC_header_fifo_din(ADC_header_fifo_din),
+	.ADC_header_fifo_wr_en(),						// WAS .ADC_header_fifo_wr_en(ADC_header_fifo_wr_en),
+	// Registers to/from the ADC acquisition state machine
+	.ADC_buffer_size(ADC_buffer_size),		// number of words in the data stream (2 samples per word)
+	.ADC_channel_num(ADC_channel_num),		// the number for this channel
+	.ADC_post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
+	.ADC_initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
+	.ADC_trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
+	.ADC_current_trig_num(ADC_current_trig_num)	// the current value for the event number
 
 );
 
@@ -334,6 +381,8 @@ module channel_main(
   assign ddr3_dq[15:0] = 16'hzzzz;
   assign ddr_ldqsp_OBUFDS_in = 1'b0;
   assign ddr_udqsp_OBUFDS_in = 1'b0;
+
+
   
 
 endmodule

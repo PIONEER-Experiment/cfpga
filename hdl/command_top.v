@@ -34,7 +34,14 @@ module command_top(
 	output [11:0] ADC_data_mem_addra,  // input wire [11 : 0] addra
 	output [31:0] ADC_data_mem_dina,    // input wire [31 : 0] dina
 	output [31:0] ADC_header_fifo_din,        // input wire [31 : 0] din
-	output ADC_header_fifo_wr_en    // input wire wr_en
+	output ADC_header_fifo_wr_en,    // input wire wr_en
+	// Register to/from the ADC acquisition state machine
+	output [31:0] ADC_buffer_size,		// number of words in the data stream (2 samples per word)
+	output [31:0] ADC_channel_num,		// the number for this channel
+	output [31:0] ADC_post_trig_size,	// number of words to continue acquiring after a trigger
+	output [31:0] ADC_initial_trig_num,	// initial value for the event number
+	output ADC_trig_num_we,				// enable saving of the initial value for the event number
+	input [31:0] ADC_current_trig_num	// the current value for the event number
 
 );
 
@@ -304,7 +311,14 @@ module command_top(
 		// temporary connections for writing to the ADC memory and header FIFO
 		.ADC_data_mem_wea(ADC_data_mem_wea),      // input wire [0 : 0] wea
 		.ADC_data_mem_addra(ADC_data_mem_addra),  // input wire [11 : 0] addra
-		.ADC_header_fifo_wr_en(ADC_header_fifo_wr_en)    // input wire wr_en
+		.ADC_header_fifo_wr_en(ADC_header_fifo_wr_en),    // input wire wr_en
+		// Register to/from the ADC acquisition state machine
+		.buffer_size(ADC_buffer_size),		// number of words in the data stream (2 samples per word)
+		.channel_num(ADC_channel_num),		// the number for this channel
+		.post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
+		.initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
+		.trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
+		.current_trig_num(ADC_current_trig_num)	// the current value for the event number
 
 );
 
