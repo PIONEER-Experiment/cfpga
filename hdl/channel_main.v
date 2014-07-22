@@ -121,8 +121,8 @@ module channel_main(
   assign adc_sdio = adc_sdo || adc_sync;
   assign adc_sdclk = 1'b0;
   assign adc_sdenb = 1'b0;
-  assign adc_sresetb = 1'b0;
-  assign adc_enable = 1'b0;
+  assign adc_sresetb = 1'b1;
+  assign adc_enable = 1'b1;
   //assign acq_done = acq_trig;
   
 //  ////////////////////////////////////////////////////////////////////////////
@@ -153,8 +153,8 @@ module channel_main(
   );
   
   // use clk125 to run the ADC memory, header FIFO, and acquisition controller
-  // assign adc_clk = real_adc_clk;
-  assign adc_clk = clk125;
+  assign adc_clk = real_adc_clk;
+  // assign adc_clk = clk125;
   
   // put the packed 26-bit ADC data into a 32-bit word for writing to the memory
   // try to do sign-extension of the 13-bit words to 16-bit words (if timing allows)
