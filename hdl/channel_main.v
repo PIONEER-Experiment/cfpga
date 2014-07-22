@@ -61,15 +61,18 @@ module channel_main(
 );
 
   // Use io[3] for a 'reset' and io[2] for 'acq_arm'
-  wire acq_arm;
+  (* mark_debug = "true" *) wire acq_arm;
   assign acq_arm = io[2];
 
-  wire [31:0] ADC_buffer_size;		// number of words in the data stream (2 samples per word)
-  wire [31:0] ADC_channel_num;		// the number for this channel
-  wire [31:0] ADC_post_trig_size;	// number of words to continue acquiring after a trigger
-  wire [31:0] ADC_initial_trig_num;	// initial value for the event number
-  wire ADC_trig_num_we;				// enable saving of the initial value for the event number
-  wire [31:0] ADC_current_trig_num;	// the current value for the event number
+  (* mark_debug = "true" *) wire rst;
+  assign rst = io[3];
+
+  (* mark_debug = "true" *) wire [31:0] ADC_buffer_size;		// number of words in the data stream (2 samples per word)
+  (* mark_debug = "true" *) wire [31:0] ADC_channel_num;		// the number for this channel
+  (* mark_debug = "true" *) wire [31:0] ADC_post_trig_size;	// number of words to continue acquiring after a trigger
+  (* mark_debug = "true" *) wire [31:0] ADC_initial_trig_num;	// initial value for the event number
+  (* mark_debug = "true" *) wire ADC_trig_num_we;				// enable saving of the initial value for the event number
+  (* mark_debug = "true" *) wire [31:0] ADC_current_trig_num;	// the current value for the event number
 
   // Define the AXIS-fifo inputs and outputs for chan 0
   wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
@@ -110,7 +113,7 @@ module channel_main(
 
  ////////////////////////////////////////////////////////////////////////////
   // dummy assignments to keep logic around
-  assign led2 = acq_trig;
+  assign led2 = ~acq_trig;
   assign debug[2:0] = acq_trig ? ch_addr[2:0] : 3'h0;
   assign debug[5:3] = acq_trig ? power_good[2:0]: 3'h0;
   assign debug[9:6] = acq_trig ? io[3:0]: 4'h0;
@@ -220,7 +223,8 @@ module channel_main(
 	.post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
 	.initial_trig_num(ADC_initial_trig_num),// initial value for the event number
 	.trig_num_we(ADC_trig_num_we),			// enable saving of the initial value for the event number
-	.current_trig_num(ADC_current_trig_num)	// the current value for the event number
+	.current_trig_num(ADC_current_trig_num),	// the current value for the event number
+  .rst(rst) // reset from the master
  );
   
   ////////////////////////////////////////////////////////////////////////////
