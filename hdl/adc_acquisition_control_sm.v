@@ -2,7 +2,6 @@
 //
 // 
 module adc_acquisition_control_sm(
-
 	input clk,					// 400 MHz ADC clock
 
 	(* mark_debug = "true" *) input arm,					// arm or reset the acquisition controller
@@ -25,8 +24,12 @@ module adc_acquisition_control_sm(
 	input [31:0] initial_trig_num,	// initial value for the event number
 	input trig_num_we,				// enable saving of the initial value for the event number
 	(* mark_debug = "true" *) output reg [31:0] current_trig_num,	// the current value for the event number
-	(* mark_debug = "true" *) input rst // reset from master
+	(* mark_debug = "true" *) input rst, // reset from master
+	output led2 // green led
  );
+
+ 	// green led is ON only when channel is both triggered and done
+ 	assign led2 = ~(trig_sync2 && done) ? 1'b1 : 1'b0;
 
 	(* mark_debug = "true" *) wire post_trig_done;
 	
@@ -69,18 +72,18 @@ module adc_acquisition_control_sm(
 				
 	// Declare current state and next state variables
 	(* mark_debug = "true" *) reg [15:0] /* synopsys enum STATE_TYPE */ CS;
-	(* mark_debug = "true" *) reg [15:0] /* synopsys enum STATE_TYPE */ NS;
+	reg [15:0] /* synopsys enum STATE_TYPE */ NS;
 	//synopsys state_vector CS
 
  
 	// sequential always block for state transitions (use non-blocking [<=] assignments)
 	// Reset the sm whenever we are not armed or when reset signal comes from the master
 	always @ (posedge clk) begin
-		if (!arm_sync1) begin
+		if (!arm_sync2) begin
 			CS <= 16'b0;			// set all state bits to 0
 			CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
 		end
-		else if (rst_sync1) begin
+		else if (rst_sync2) begin
 			CS <= 16'b0;			// set all state bits to 0
 			CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
 		end
@@ -88,7 +91,7 @@ module adc_acquisition_control_sm(
 	end
 
 	// combinational always block to determine next state  (use blocking [=] assignments) 
-	always @ (CS or trig_sync1 or post_trig_done) begin
+	always @ (CS or trig_sync2 or post_trig_done) begin
 		NS = 16'b0;					// default all bits to zero; will overrride one bit
 
 		case (1'b1) //synopsys full_case parallel_case
@@ -112,7 +115,7 @@ module adc_acquisition_control_sm(
 			// We stay here until a trigger is detected.
 			// The address counter runs continuously, creating a circular pre-trigger buffer.
 			CS[WAIT_TRIG]: begin
-				if (trig_sync1)
+				if (trig_sync2)
 					// we have been triggered, so go start post-trigger activities
 					NS[TRIGGERED] = 1'b1;
 				else
@@ -282,7 +285,7 @@ module adc_acquisition_control_sm(
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// outputs are based on states
 	// assert 'done' whenever we are in the DONE state
-	assign done = (CS[DONE] == 1'b1);
+	assign done = (CS[DONE] == 1'b1) ? 1'b1 : 1'b0;
 
 	// Make a MUX to route various pieces of header info to the FIFO
 	always @ (posedge clk) begin
@@ -290,7 +293,7 @@ module adc_acquisition_control_sm(
 		if (CS[HDR_BUF_SIZE1] == 1'b1 || CS[HDR_BUF_SIZE2] == 1'b1)   header_data[31:0] <= buffer_size[31:0]; 
 		if (CS[HDR_CHAN_NUM1] == 1'b1 || CS[HDR_CHAN_NUM2] == 1'b1)   header_data[31:0] <= channel_num[31:0]; 
 		if (CS[HDR_POST_TRIG1] == 1'b1 || CS[HDR_POST_TRIG2] == 1'b1) header_data[31:0] <= post_trig_size[31:0]; 
-		if (CS[HDR_START_ADR1] == 1'b1 || CS[HDR_START_ADR2] == 1'b1) header_data[31:0] <= {20'b0, start_adr_reg[11:0]}; 
+		if (CS[HDR_START_ADR1] == 1'b1 || CS[HDR_START_ADR2] == 1'b1) header_data[31:0] <= {20'b0, start_adr_reg[11:0]};
 	end
 
 	// write data to the header FIFO
@@ -305,4 +308,3 @@ module adc_acquisition_control_sm(
 	end
 
 	endmodule
-

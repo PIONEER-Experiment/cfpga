@@ -57,7 +57,6 @@ module channel_main(
   output adc_sresetb,
   output adc_enable,
   input adc_syncp, adc_syncn
-
 );
 
   // Use io[3] for a 'reset' and io[2] for 'acq_arm'
@@ -113,7 +112,7 @@ module channel_main(
 
  ////////////////////////////////////////////////////////////////////////////
   // dummy assignments to keep logic around
-  assign led2 = ~acq_trig;
+  // assign led2 = ~acq_trig;
   assign debug[2:0] = acq_trig ? ch_addr[2:0] : 3'h0;
   assign debug[5:3] = acq_trig ? power_good[2:0]: 3'h0;
   assign debug[9:6] = acq_trig ? io[3:0]: 4'h0;
@@ -224,7 +223,8 @@ module channel_main(
 	.initial_trig_num(ADC_initial_trig_num),// initial value for the event number
 	.trig_num_we(ADC_trig_num_we),			// enable saving of the initial value for the event number
 	.current_trig_num(ADC_current_trig_num),	// the current value for the event number
-  .rst(rst) // reset from the master
+  .rst(rst), // reset from the master
+  .led2(led2) // green led
  );
   
   ////////////////////////////////////////////////////////////////////////////
