@@ -3,16 +3,15 @@
 // 
 module adc_acquisition_control_sm(
 	input clk,					// 400 MHz ADC clock
-
-	(* mark_debug = "true" *) input arm,					// arm or reset the acquisition controller
-	(* mark_debug = "true" *) input trig,					// we have been triggered
-	(* mark_debug = "true" *) output done,				// acquisition for the current trigger is complete
+	input arm,					// arm or reset the acquisition controller
+	input trig,					// we have been triggered
+	output done,				// acquisition for the current trigger is complete
 	
 	// interface to the ADC data memory and header FIFO
-	(* mark_debug = "true" *) output reg data_mem_wea,			// enable writing to the ADC data memory
-	(* mark_debug = "true" *) output reg [11:0] data_mem_addra,	// address for writing to the ADC data memory
-	(* mark_debug = "true" *) output reg header_fifo_wr_en,		// enable writing to the ADC header FIFO
-	(* mark_debug = "true" *) output reg [31:0] header_data,		// data to put in the ADC header FIFO 
+	output reg data_mem_wea,			// enable writing to the ADC data memory
+	output reg [11:0] data_mem_addra,	// address for writing to the ADC data memory
+	output reg header_fifo_wr_en,		// enable writing to the ADC header FIFO
+	output reg [31:0] header_data,		// data to put in the ADC header FIFO 
  
 	// data for the ADC header FIFO and/or for local control
 	// The buffer_size, channel_num, post_trig_size, and initial_trig_num are from the register block/
@@ -23,15 +22,15 @@ module adc_acquisition_control_sm(
 	input [31:0] post_trig_size,	// number of words to continue acquiring after a trigger
 	input [31:0] initial_trig_num,	// initial value for the event number
 	input trig_num_we,				// enable saving of the initial value for the event number
-	(* mark_debug = "true" *) output reg [31:0] current_trig_num,	// the current value for the event number
-	(* mark_debug = "true" *) input rst, // reset from master
+	output reg [31:0] current_trig_num,	// the current value for the event number
+	input rst, // reset from master
 	output led2 // green led
  );
 
  	// green led is ON only when channel is both triggered and done
  	assign led2 = ~(trig_sync2 && done) ? 1'b1 : 1'b0;
 
-	(* mark_debug = "true" *) wire post_trig_done;
+	wire post_trig_done;
 	
 	// synchronize 'arm' and 'trig' , and 'trig_num_we' to the ADC clock
 	reg arm_sync1, arm_sync2, trig_sync1, trig_sync2, trig_num_we_sync1, trig_num_we_sync2;
@@ -71,7 +70,7 @@ module adc_acquisition_control_sm(
 		DONE			= 5'd15;
 				
 	// Declare current state and next state variables
-	(* mark_debug = "true" *) reg [15:0] /* synopsys enum STATE_TYPE */ CS;
+	reg [15:0] /* synopsys enum STATE_TYPE */ CS;
 	reg [15:0] /* synopsys enum STATE_TYPE */ NS;
 	//synopsys state_vector CS
 

@@ -30,7 +30,6 @@ module chan_io_block(
   input tx_resetdone_out,           // 
   input rx_resetdone_out,           // 
   input link_reset_out              // 
-  
 );
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,4 +88,3 @@ module chan_io_block(
   end
 
 endmodule
-

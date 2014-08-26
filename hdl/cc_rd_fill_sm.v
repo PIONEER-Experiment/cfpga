@@ -26,9 +26,9 @@ module cc_rd_fill_sm(
 	input clk,					// local clock
 	input reset,				// active-hi
 
-	(* mark_debug = "true" *) input run_sm,  		 	    // run this state machine
-	(* mark_debug = "true" *) output sm_running,			// we are running
-	(* mark_debug = "true" *) output sm_done,				// we are finished
+	input run_sm,  		 	    // run this state machine
+	output sm_running,			// we are running
+	output sm_done,				// we are finished
 
 	output tx_tvalid,            // the data we are presenting is valid
     output tx_tlast,             // this is the final word in the frame
@@ -37,23 +37,23 @@ module cc_rd_fill_sm(
 	output send_csn,			// send the CSN
 	output send_cmd,			// send the CC
 	output send_inv_cmd,		// send the inverse CC
-	(* mark_debug = "true" *) output send_adc_header_data,	// mux source is the ADC header
-	(* mark_debug = "true" *) output send_adc_mem_data,	// mux source is the ADC memory
+	output send_adc_header_data,	// mux source is the ADC header
+	output send_adc_mem_data,	// mux source is the ADC memory
 
 	// interface to the ADC data memory and header FIFO
-	(* mark_debug = "true" *) output reg [11:0] ADC_data_mem_addrb,		// output wire [11 : 0] addrb
+	output reg [11:0] ADC_data_mem_addrb,		// output wire [11 : 0] addrb
 	input [31:0] ADC_data_mem_doutb,		// input wire [31 : 0] doutb
-	(* mark_debug = "true" *) output ADC_header_fifo_rd_en,	// output wire rd_en
+	output ADC_header_fifo_rd_en,	// output wire rd_en
 	input [31:0] ADC_header_fifo_dout,	// input wire [31 : 0] dout
 	input ADC_header_fifo_empty,	// input wire empty
-	(* mark_debug = "true" *) output reg [31:0] adc_header_data
+	output reg [31:0] adc_header_data
 	);
 
 	// make a register to hold error status
-	(* mark_debug = "true" *) reg error_found;
+	reg error_found;
 
 	// create a counter to use when transmitting ADC memory data
-	(* mark_debug = "true" *) reg [11:0] word_count;
+	reg [11:0] word_count;
 	
 	// Everything is already synchronous to the clock.
 
@@ -93,8 +93,8 @@ module cc_rd_fill_sm(
 		DONE			= 5'd27;
 				
 	// Declare current state and next state variables
-	(* mark_debug = "true" *) reg [27:0] /* synopsys enum STATE_TYPE */ CS;
-	(* mark_debug = "true" *) reg [27:0] /* synopsys enum STATE_TYPE */ NS;
+	reg [27:0] /* synopsys enum STATE_TYPE */ CS;
+	reg [27:0] /* synopsys enum STATE_TYPE */ NS;
 	//synopsys state_vector CS
 
  

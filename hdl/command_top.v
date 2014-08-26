@@ -12,17 +12,17 @@ module command_top(
     // channel connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
     // RX Interface to master side of receive FIFO for receiving from the Master FPGA
-    (* mark_debug = "true" *) input  [31:0] rx_data,       // note index order
+    input  [31:0] rx_data,       // note index order
     input  [0:3] rx_tkeep,        // note index order
-    (* mark_debug = "true" *) input  rx_tvalid,
-    (* mark_debug = "true" *) input  rx_tlast,
-    (* mark_debug = "true" *) output rx_tready,            // input wire m_axis_tready
+    input  rx_tvalid,
+    input  rx_tlast,
+    output rx_tready,            // input wire m_axis_tready
     // TX interface to slave side of transmit FIFO for sending to the Master FPGA 
-   (* mark_debug = "true" *) output [31:0] tx_data,        // note index order
+    output [31:0] tx_data,        // note index order
     output [0:3] tx_tkeep,         // note index order
-    (* mark_debug = "true" *) output tx_tvalid,
-    (* mark_debug = "true" *) output tx_tlast,
-    (* mark_debug = "true" *) input  tx_tready,
+    output tx_tvalid,
+    output tx_tlast,
+    input  tx_tready,
 	// interface to the ADC data memory and header FIFO
 	output [11:0] ADC_data_mem_addrb,		// output wire [11 : 0] addrb
     input [31:0] ADC_data_mem_doutb,		// input wire [31 : 0] doutb
@@ -42,7 +42,6 @@ module command_top(
 	output [31:0] ADC_initial_trig_num,	// initial value for the event number
 	output ADC_trig_num_we,				// enable saving of the initial value for the event number
 	input [31:0] ADC_current_trig_num	// the current value for the event number
-
 );
 
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
@@ -85,7 +84,7 @@ module command_top(
 	// start with 'run_cmd_sm' which is a 'run someone' from the command sm.
 	// Use the actual command from the command register to activate 1 particular sm.
 	wire run_cmd_sm;    
-	(* mark_debug = "true" *) wire run_cc_no_cmd, run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_rd_patmem,
+	wire run_cc_no_cmd, run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_rd_patmem,
 		 run_cc_wr_patmem, run_cc_rd_mem, run_cc_wr_mem, run_cc_rd_fill, run_cc_rd_adc;
 	assign run_cc_no_cmd     = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
 	assign run_cc_loopback   = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
@@ -291,7 +290,6 @@ module command_top(
 		.reg_num_le(wr_reg_sm_reg_num_le),		// enable saving the register number
 		.wr_en(wr_reg_sm_reg_wr_en),		// enable writing to the specific register
 		.illegal_reg_num(illegal_reg_num)		// The desired register does not exist
-
 	);
 	
 	wire reg_num_le;
@@ -319,7 +317,6 @@ module command_top(
 		.initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
 		.trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
 		.current_trig_num(ADC_current_trig_num)	// the current value for the event number
-
 );
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -350,8 +347,6 @@ module command_top(
 		.ADC_header_fifo_dout(ADC_header_fifo_dout),	// input wire [31 : 0] dout
 		.ADC_header_fifo_empty(ADC_header_fifo_empty),	// input wire empty
 		.adc_header_data(adc_header_data)
-
 	);
 	
 	endmodule
-

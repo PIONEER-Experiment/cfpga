@@ -49,8 +49,8 @@ module command_sm(
 		ILLEGAL_CC		= 4'd10;
 		
 	// Declare current state and next state variables
-	(* mark_debug = "true" *) reg [10:0] /* synopsys enum STATE_TYPE */ CS;
-	(* mark_debug = "true" *) reg [10:0] /* synopsys enum STATE_TYPE */ NS;
+	reg [10:0] /* synopsys enum STATE_TYPE */ CS;
+	reg [10:0] /* synopsys enum STATE_TYPE */ NS;
 	//synopsys state_vector CS
 
  
@@ -182,4 +182,5 @@ module command_sm(
 	assign command_le = (CS[LATCH_CC] == 1'b1);
 	// run another state machine to process an individual command
 	assign run_cmd_sm = (CS[START_CC] == 1'b1 || CS[PAUSE] == 1'b1 || CS[TEST_RUNNING] == 1'b1 || CS[WAIT_FOR_DONE] == 1'b1);
+
 endmodule

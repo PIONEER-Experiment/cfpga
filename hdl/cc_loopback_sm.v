@@ -18,9 +18,9 @@ module cc_loopback_sm(
 	input clk,					// local clock
 	input reset,				// active-hi
 
-	(* mark_debug = "true" *) input run_sm,  		 	    // run this state machine
-	(* mark_debug = "true" *) output sm_running,			// we are running
-	(* mark_debug = "true" *) output sm_done,				// we are finished
+	input run_sm,  		 	    // run this state machine
+	output sm_running,			// we are running
+	output sm_done,				// we are finished
 
 	input rx_tvalid,            // valid data is available
     input [31:0] rx_data,       // received data
@@ -32,10 +32,9 @@ module cc_loopback_sm(
     output tx_tlast,             // this is the final word in the frame
     input tx_tready,             // signal that the TX fifo has accepted the data
 
-	(* mark_debug = "true" *) output send_csn,			// send the CSN
-	(* mark_debug = "true" *) output send_cmd,			// send the CC
-	(* mark_debug = "true" *) output send_rx_data			// mux source is RX FIFO
-
+	output send_csn,			// send the CSN
+	output send_cmd,			// send the CC
+	output send_rx_data			// mux source is RX FIFO
 	);
 
 	reg was_last_reg;            // remembers when 'rx_last' is received
@@ -60,8 +59,8 @@ module cc_loopback_sm(
 		DONE			= 4'd9;
 				
 	// Declare current state and next state variables
-	(* mark_debug = "true" *) reg [11:0] /* synopsys enum STATE_TYPE */ CS;
-	(* mark_debug = "true" *) reg [11:0] /* synopsys enum STATE_TYPE */ NS;
+	reg [11:0] /* synopsys enum STATE_TYPE */ CS;
+	reg [11:0] /* synopsys enum STATE_TYPE */ NS;
 	//synopsys state_vector CS
 
  

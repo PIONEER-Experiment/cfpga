@@ -12,8 +12,8 @@ module channel_main(
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
-  output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+  (* mark_debug = "true" *) input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
+  (* mark_debug = "true" *) output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> , [1=0,2=1]-> , [1=1,2=0]-> , [1=1,2=1]->  
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
@@ -59,19 +59,94 @@ module channel_main(
   input adc_syncp, adc_syncn
 );
 
+  // Add dummy wires to monitor adc connections
+  (* mark_debug = "true" *) wire adc_d0n_debug;
+  (* mark_debug = "true" *) wire adc_d0p_debug;
+  (* mark_debug = "true" *) wire adc_d1n_debug;
+  (* mark_debug = "true" *) wire adc_d1p_debug;
+  (* mark_debug = "true" *) wire adc_d2n_debug;
+  (* mark_debug = "true" *) wire adc_d2p_debug;
+  (* mark_debug = "true" *) wire adc_d3n_debug;
+  (* mark_debug = "true" *) wire adc_d3p_debug;
+  (* mark_debug = "true" *) wire adc_d4n_debug;
+  (* mark_debug = "true" *) wire adc_d4p_debug;
+  (* mark_debug = "true" *) wire adc_d5n_debug;
+  (* mark_debug = "true" *) wire adc_d5p_debug;
+  (* mark_debug = "true" *) wire adc_d6n_debug;
+  (* mark_debug = "true" *) wire adc_d6p_debug;
+  (* mark_debug = "true" *) wire adc_d7n_debug;
+  (* mark_debug = "true" *) wire adc_d7p_debug;
+  (* mark_debug = "true" *) wire adc_d8n_debug;
+  (* mark_debug = "true" *) wire adc_d8p_debug;
+  (* mark_debug = "true" *) wire adc_d9n_debug;
+  (* mark_debug = "true" *) wire adc_d9p_debug;
+  (* mark_debug = "true" *) wire adc_d10n_debug;
+  (* mark_debug = "true" *) wire adc_d10p_debug;
+  (* mark_debug = "true" *) wire adc_d11n_debug;
+  (* mark_debug = "true" *) wire adc_d11p_debug;
+  (* mark_debug = "true" *) wire adc_clk_n_debug;
+  (* mark_debug = "true" *) wire adc_clk_p_debug;
+  (* mark_debug = "true" *) wire adc_dovrn_debug;
+  (* mark_debug = "true" *) wire adc_dovrp_debug;
+  (* mark_debug = "true" *) wire adc_sdo_debug;
+  (* mark_debug = "true" *) wire adc_sdio_debug;
+  (* mark_debug = "true" *) wire adc_sdclk_debug;
+  (* mark_debug = "true" *) wire adc_sdenb_debug;
+  (* mark_debug = "true" *) wire adc_sresetb_debug;
+  (* mark_debug = "true" *) wire adc_enable_debug;
+  (* mark_debug = "true" *) wire adc_syncp_debug;
+  (* mark_debug = "true" *) wire adc_syncn_debug;
+
+  assign adc_d0n_debug = adc_d0n;
+  assign adc_d0p_debug = adc_d0p;
+  assign adc_d1n_debug = adc_d1n;
+  assign adc_d1p_debug = adc_d1p;
+  assign adc_d2n_debug = adc_d2n;
+  assign adc_d2p_debug = adc_d2p;
+  assign adc_d3n_debug = adc_d3n;
+  assign adc_d3p_debug = adc_d3p;
+  assign adc_d4n_debug = adc_d4n;
+  assign adc_d4p_debug = adc_d4p;
+  assign adc_d5n_debug = adc_d5n;
+  assign adc_d5p_debug = adc_d5p;
+  assign adc_d6n_debug = adc_d6n;
+  assign adc_d6p_debug = adc_d6p;
+  assign adc_d7n_debug = adc_d7n;
+  assign adc_d7p_debug = adc_d7p;
+  assign adc_d8n_debug = adc_d8n;
+  assign adc_d8p_debug = adc_d8p;
+  assign adc_d9n_debug = adc_d9n;
+  assign adc_d9p_debug = adc_d9p;
+  assign adc_d10n_debug = adc_d10n;
+  assign adc_d10p_debug = adc_d10p;
+  assign adc_d11n_debug = adc_d11n;
+  assign adc_d11p_debug = adc_d11p;
+  assign adc_clk_n_debug = adc_clk_n;
+  assign adc_clk_p_debug = adc_clk_p;
+  assign adc_dovrn_debug = adc_dovrn;
+  assign adc_dovrp_debug = adc_dovrp;
+  assign adc_sdo_debug = adc_sdo;
+  assign adc_sdio_debug = adc_sdio; // output
+  assign adc_sdclk_debug = adc_sdclk; // output
+  assign adc_sdenb_debug = adc_sdenb; // output
+  assign adc_sresetb_debug = adc_sresetb; // output
+  assign adc_enable_debug = adc_enable; // output
+  assign adc_syncp_debug = adc_syncp;
+  assign adc_syncn_debug = adc_syncn;
+
   // Use io[3] for a 'reset' and io[2] for 'acq_arm'
-  (* mark_debug = "true" *) wire acq_arm;
+  wire acq_arm;
   assign acq_arm = io[2];
 
-  (* mark_debug = "true" *) wire rst;
+  wire rst;
   assign rst = io[3];
 
-  (* mark_debug = "true" *) wire [31:0] ADC_buffer_size;		// number of words in the data stream (2 samples per word)
-  (* mark_debug = "true" *) wire [31:0] ADC_channel_num;		// the number for this channel
-  (* mark_debug = "true" *) wire [31:0] ADC_post_trig_size;	// number of words to continue acquiring after a trigger
-  (* mark_debug = "true" *) wire [31:0] ADC_initial_trig_num;	// initial value for the event number
-  (* mark_debug = "true" *) wire ADC_trig_num_we;				// enable saving of the initial value for the event number
-  (* mark_debug = "true" *) wire [31:0] ADC_current_trig_num;	// the current value for the event number
+  wire [31:0] ADC_buffer_size;		// number of words in the data stream (2 samples per word)
+  wire [31:0] ADC_channel_num;		// the number for this channel
+  wire [31:0] ADC_post_trig_size;	// number of words to continue acquiring after a trigger
+  wire [31:0] ADC_initial_trig_num;	// initial value for the event number
+  wire ADC_trig_num_we;				// enable saving of the initial value for the event number
+  wire [31:0] ADC_current_trig_num;	// the current value for the event number
 
   // Define the AXIS-fifo inputs and outputs for chan 0
   wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
@@ -386,7 +461,5 @@ module channel_main(
   assign ddr_ldqsp_OBUFDS_in = 1'b0;
   assign ddr_udqsp_OBUFDS_in = 1'b0;
 
-
-  
 
 endmodule
