@@ -17,9 +17,9 @@ module channel_main(
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> , [1=0,2=1]-> , [1=1,2=0]-> , [1=1,2=1]->  
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
-  input bbus_sda, //SHOULD BE INOUT//               // I2C bus data, connected to Atmel Chip, MAster FPGA, and to other Channel FPGAs
+  input bbus_sda, //SHOULD BE INPUT//               // I2C bus data, connected to Atmel Chip, MAster FPGA, and to other Channel FPGAs
   // serial interfaces
-  input c0_rx, c0_rx_N,       // Serial data from the master for this channel
+  input c0_rx, c0_rx_N,         // Serial data from the master for this channel
   output c0_tx, c0_tx_N,        // Serial data to the master for this channel
   input xcvr_clk, xcvr_clk_N,   // 125 MHz oscillator, connected to 'clk0' (not 'clk1') 
   // DDR Memory
@@ -49,7 +49,7 @@ module channel_main(
   input adc_d10n, adc_d10p,
   input adc_d11n, adc_d11p,
   input adc_clk_n, adc_clk_p,     // 400 MHz sample clock from ADC chip
-  input adc_dovrn, adc_dovrp,      // over-range
+  input adc_dovrn, adc_dovrp,     // over-range
   input adc_sdo,
   output adc_sdio,
   output adc_sdclk,
@@ -58,81 +58,6 @@ module channel_main(
   output adc_enable,
   input adc_syncp, adc_syncn
 );
-
-  // Add dummy wires to monitor adc connections
-  (* mark_debug = "true" *) wire adc_d0n_debug;
-  (* mark_debug = "true" *) wire adc_d0p_debug;
-  (* mark_debug = "true" *) wire adc_d1n_debug;
-  (* mark_debug = "true" *) wire adc_d1p_debug;
-  (* mark_debug = "true" *) wire adc_d2n_debug;
-  (* mark_debug = "true" *) wire adc_d2p_debug;
-  (* mark_debug = "true" *) wire adc_d3n_debug;
-  (* mark_debug = "true" *) wire adc_d3p_debug;
-  (* mark_debug = "true" *) wire adc_d4n_debug;
-  (* mark_debug = "true" *) wire adc_d4p_debug;
-  (* mark_debug = "true" *) wire adc_d5n_debug;
-  (* mark_debug = "true" *) wire adc_d5p_debug;
-  (* mark_debug = "true" *) wire adc_d6n_debug;
-  (* mark_debug = "true" *) wire adc_d6p_debug;
-  (* mark_debug = "true" *) wire adc_d7n_debug;
-  (* mark_debug = "true" *) wire adc_d7p_debug;
-  (* mark_debug = "true" *) wire adc_d8n_debug;
-  (* mark_debug = "true" *) wire adc_d8p_debug;
-  (* mark_debug = "true" *) wire adc_d9n_debug;
-  (* mark_debug = "true" *) wire adc_d9p_debug;
-  (* mark_debug = "true" *) wire adc_d10n_debug;
-  (* mark_debug = "true" *) wire adc_d10p_debug;
-  (* mark_debug = "true" *) wire adc_d11n_debug;
-  (* mark_debug = "true" *) wire adc_d11p_debug;
-  (* mark_debug = "true" *) wire adc_clk_n_debug;
-  (* mark_debug = "true" *) wire adc_clk_p_debug;
-  (* mark_debug = "true" *) wire adc_dovrn_debug;
-  (* mark_debug = "true" *) wire adc_dovrp_debug;
-  (* mark_debug = "true" *) wire adc_sdo_debug;
-  (* mark_debug = "true" *) wire adc_sdio_debug;
-  (* mark_debug = "true" *) wire adc_sdclk_debug;
-  (* mark_debug = "true" *) wire adc_sdenb_debug;
-  (* mark_debug = "true" *) wire adc_sresetb_debug;
-  (* mark_debug = "true" *) wire adc_enable_debug;
-  (* mark_debug = "true" *) wire adc_syncp_debug;
-  (* mark_debug = "true" *) wire adc_syncn_debug;
-
-  assign adc_d0n_debug = adc_d0n;
-  assign adc_d0p_debug = adc_d0p;
-  assign adc_d1n_debug = adc_d1n;
-  assign adc_d1p_debug = adc_d1p;
-  assign adc_d2n_debug = adc_d2n;
-  assign adc_d2p_debug = adc_d2p;
-  assign adc_d3n_debug = adc_d3n;
-  assign adc_d3p_debug = adc_d3p;
-  assign adc_d4n_debug = adc_d4n;
-  assign adc_d4p_debug = adc_d4p;
-  assign adc_d5n_debug = adc_d5n;
-  assign adc_d5p_debug = adc_d5p;
-  assign adc_d6n_debug = adc_d6n;
-  assign adc_d6p_debug = adc_d6p;
-  assign adc_d7n_debug = adc_d7n;
-  assign adc_d7p_debug = adc_d7p;
-  assign adc_d8n_debug = adc_d8n;
-  assign adc_d8p_debug = adc_d8p;
-  assign adc_d9n_debug = adc_d9n;
-  assign adc_d9p_debug = adc_d9p;
-  assign adc_d10n_debug = adc_d10n;
-  assign adc_d10p_debug = adc_d10p;
-  assign adc_d11n_debug = adc_d11n;
-  assign adc_d11p_debug = adc_d11p;
-  assign adc_clk_n_debug = adc_clk_n;
-  assign adc_clk_p_debug = adc_clk_p;
-  assign adc_dovrn_debug = adc_dovrn;
-  assign adc_dovrp_debug = adc_dovrp;
-  assign adc_sdo_debug = adc_sdo;
-  assign adc_sdio_debug = adc_sdio; // output
-  assign adc_sdclk_debug = adc_sdclk; // output
-  assign adc_sdenb_debug = adc_sdenb; // output
-  assign adc_sresetb_debug = adc_sresetb; // output
-  assign adc_enable_debug = adc_enable; // output
-  assign adc_syncp_debug = adc_syncp;
-  assign adc_syncn_debug = adc_syncn;
 
   // Use io[3] for a 'reset' and io[2] for 'acq_arm'
   wire acq_arm;
