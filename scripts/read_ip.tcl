@@ -27,7 +27,7 @@ if {[file exists $ROOT/ip/aurora_8b10b_0/aurora_8b10b_0.xci]} {
 	read_ip $ROOT/ip/aurora_8b10b_0/aurora_8b10b_0.xci
 } else {
 	create_ip -name aurora_8b10b -vendor xilinx.com -library ip -module_name aurora_8b10b_0 -dir $ROOT/ip
-	set_property -dict [list CONFIG.C_LANE_WIDTH {4} CONFIG.C_LINE_RATE {4.5}] [get_ips aurora_8b10b_0]
+	set_property -dict [list CONFIG.C_LANE_WIDTH {4} CONFIG.C_LINE_RATE {5.0}] [get_ips aurora_8b10b_0]
 	generate_target all [get_files $ROOT/ip/aurora_8b10b_0/aurora_8b10b_0.xci]
 	synth_ip [get_ips aurora_8b10b_0]
 }
@@ -37,7 +37,7 @@ if {[file exists $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci]} {
 	read_ip $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci
 } else {
 	create_ip -name selectio_wiz -vendor xilinx.com -library ip -module_name selectio_wiz_0
-	set_property -dict [list CONFIG.BUS_SIG_TYPE {DIFF} CONFIG.BUS_IO_STD {LVDS_25} CONFIG.SELIO_ACTIVE_EDGE {DDR} CONFIG.SYSTEM_DATA_WIDTH {13} CONFIG.SELIO_BUS_IN_DELAY {NONE} CONFIG.SELIO_BUS_IN_TAP {24} CONFIG.SELIO_DDR_ALIGNMENT {OPPOSITE_EDGE}] [get_ips selectio_wiz_0]
+	set_property -dict [list CONFIG.BUS_SIG_TYPE {DIFF} CONFIG.BUS_IO_STD {LVDS_25} CONFIG.SELIO_ACTIVE_EDGE {DDR} CONFIG.SYSTEM_DATA_WIDTH {13} CONFIG.SELIO_BUS_IN_DELAY {FIXED} CONFIG.SELIO_BUS_IN_TAP {31} CONFIG.CLK_DELAY {FIXED} CONFIG.CLK_TAP {0} CONFIG.SELIO_DDR_ALIGNMENT {OPPOSITE_EDGE}] [get_ips selectio_wiz_0]
 	generate_target all [get_files $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci]
 	synth_ip [get_ips selectio_wiz_0]
 }
