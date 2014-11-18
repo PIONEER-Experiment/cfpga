@@ -24,9 +24,9 @@
 //             continue to be stored after a trigger is received. It is a 32-bit number that will
 //             allow one to collect data long after the trigger has been seen. The amount of data
 //             will still be limited by the ADC buffer size and the actual memory size.
-// R5:
-// R6:
-// R7:
+// R5:  generic register address and control
+// R6:  generic register wr
+// R7:  generic register rd
 // R8:
 // R9:
 // R10:
@@ -65,7 +65,10 @@ module register_block(
 	output [31:0] post_trig_size,	// number of words to continue acquiring after a trigger
 	output [31:0] initial_trig_num,	// initial value for the event number
 	output trig_num_we,				// enable saving of the initial value for the event number
-	input [31:0] current_trig_num	// the current value for the event number
+	input [31:0] current_trig_num,	// the current value for the event number
+	output [31:0] genreg_addr_ctrl,	//generic register address and control output
+	output [31:0] genreg_wr_data,	//generic register data written from Master FPGA 
+	input [31:0] genreg_rd_data	//generic register data read by Master FPGA
 
 );
 			
@@ -101,7 +104,8 @@ module register_block(
 		if (wr_en && (reg_num[3:0] == 4'h4)) reg4_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'h5)) reg5_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'h6)) reg6_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'h7)) reg7_[31:0] <= rx_data[31:0];
+		//R7 is read only
+		//if (wr_en && (reg_num[3:0] == 4'h7)) reg7_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'h8)) reg8_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'h9)) reg9_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'ha)) reg10_[31:0] <= rx_data[31:0];
@@ -129,6 +133,14 @@ module register_block(
 	// R4
 	assign post_trig_size[31:0]   = reg4_[31:0];	// number of words to continue acquiring after a trigger
 
+	// R5
+	assign genreg_addr_ctrl[31:0] = reg5_[31:0];	//address and control for the generic register interface
+
+	// R6
+	assign genreg_wr_data[31:0]  = reg6_[31:0];	//data written TO generic register interface
+
+	// R7 is read only
+	
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
 	// Use R13 for the memory address
 	assign ADC_data_mem_addra[11:0] = reg13_[11:0]; 
@@ -150,7 +162,7 @@ module register_block(
 		if (rd_en && (reg_num[3:0] == 4'h4)) rdbk_reg[31:0] <= reg4_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'h5)) rdbk_reg[31:0] <= reg5_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'h6)) rdbk_reg[31:0] <= reg6_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h7)) rdbk_reg[31:0] <= reg7_[31:0];
+		if (rd_en && (reg_num[3:0] == 4'h7)) rdbk_reg[31:0] <= genreg_rd_data[31:0];  //data read from generic register interface
 		if (rd_en && (reg_num[3:0] == 4'h8)) rdbk_reg[31:0] <= reg8_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'h9)) rdbk_reg[31:0] <= reg9_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'ha)) rdbk_reg[31:0] <= reg10_[31:0];

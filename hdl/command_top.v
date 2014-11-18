@@ -41,7 +41,11 @@ module command_top(
 	output [31:0] ADC_post_trig_size,	// number of words to continue acquiring after a trigger
 	output [31:0] ADC_initial_trig_num,	// initial value for the event number
 	output ADC_trig_num_we,				// enable saving of the initial value for the event number
-	input [31:0] ADC_current_trig_num	// the current value for the event number
+	input [31:0] ADC_current_trig_num,	// the current value for the event number
+
+	output [31:0] genreg_addr_ctrl,	//generic register address and control output
+	output [31:0] genreg_wr_data,	//generic register data written from Master FPGA 
+	input [31:0] genreg_rd_data	//generic register data read by Master FPGA
 );
 
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
@@ -299,7 +303,7 @@ module command_top(
 		.clk(clk),                   // 125 MHz, clock for the interconnect side of the FIFOs
 		.reset(reset),                 // reset 
 		// incoming and outgoing data
-        .rx_data(rx_data[31:0]),       // note index order
+        	.rx_data(rx_data[31:0]),       // note index order
 		.tx_data(reg_data[31:0]),
 		// controls
 		.rd_en(rd_reg_sm_reg_rd_en),			// enable reading of the specific register
@@ -316,8 +320,11 @@ module command_top(
 		.post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
 		.initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
 		.trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
-		.current_trig_num(ADC_current_trig_num)	// the current value for the event number
-);
+		.current_trig_num(ADC_current_trig_num),	// the current value for the event number
+		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
+		.genreg_wr_data(genreg_wr_data[31:0]),
+		.genreg_rd_data(genreg_rd_data[31:0])
+	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that processes the CC_RD_FILL command

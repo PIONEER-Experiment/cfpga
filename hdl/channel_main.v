@@ -88,6 +88,17 @@ module channel_main(
   wire ADC_header_fifo_wr_en, ADC_header_fifo_rd_en;
   wire ADC_header_fifo_full, ADC_header_fifo_empty;
 
+  //generic register interface
+  wire [31:0] genreg_addr_ctrl;
+  wire [31:0] genreg_wr_data;
+  wire [31:0] genreg_rd_data;
+  wire [31:0] adc_intf_rd_data;
+  wire [31:0] adc_intf_wr_data;
+
+  wire [7:0] debug_wires;
+
+  assign debug[7:0] = debug_wires[7:0];
+
   ////////////////////////////////////////////////////////////////////////////
   // Clock and reset handling
   // Connect an input buffer and a global clock buffer to the 50 MHz clock
@@ -113,15 +124,9 @@ module channel_main(
  ////////////////////////////////////////////////////////////////////////////
   // dummy assignments to keep logic around
   // assign led2 = ~acq_trig;
-  assign debug[2:0] = acq_trig ? ch_addr[2:0] : 3'h0;
-  assign debug[5:3] = acq_trig ? power_good[2:0]: 3'h0;
-  assign debug[9:6] = acq_trig ? io[3:0]: 4'h0;
+  assign debug[8] = acq_trig & io[3] & io[2] & io[1] & io[0] & ch_addr[2] & ch_addr[1] & ch_addr[0] & power_good;
   IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
-  assign adc_sdio = adc_sdo || adc_sync;
-  assign adc_sdclk = 1'b0;
-  assign adc_sdenb = 1'b0;
-  assign adc_sresetb = 1'b1;
-  assign adc_enable = 1'b1;
+  
   //assign acq_done = acq_trig;
   
 //  ////////////////////////////////////////////////////////////////////////////
@@ -314,9 +319,43 @@ module channel_main(
 	.ADC_post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
 	.ADC_initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
 	.ADC_trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
-	.ADC_current_trig_num(ADC_current_trig_num)	// the current value for the event number
+	.ADC_current_trig_num(ADC_current_trig_num),	// the current value for the event number
 
+	.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
+	.genreg_wr_data(genreg_wr_data[31:0]),
+	.genreg_rd_data(genreg_rd_data[31:0])
 );
+
+gen_reg gen_reg(
+	.clk(clk50),
+	.reset(reset_clk50),
+	.addr_ctrl(genreg_addr_ctrl[31:0]),
+	.data_in(genreg_wr_data[31:0]),
+	.data_out(genreg_rd_data[31:0]),
+	.adc_intf_data_in(adc_intf_rd_data[31:0]),		// data word from adc serial interface
+	.adc_intf_data_out(adc_intf_wr_data[31:0]),		// data word to adc serial interface
+	.debug()
+);
+
+//*************************************************************************
+// adc serial interface
+//*************************************************************************
+adc_intf adc_intf(
+	.clk(clk50),
+	.reset(reset_clk50),
+	.data_in(adc_intf_wr_data[31:0]),
+	.data_out(adc_intf_rd_data[31:0]),
+	.sclk(adc_sdclk),
+ 	.sdio(adc_sdio),
+	.sdi(adc_sdo),
+  	.sdenb(adc_sdenb),
+  	.sresetb(adc_sresetb),
+  	.enable(adc_enable),
+	.debug(debug_wires[7:0])
+);
+
+
+
 
 ///// COMMENT OUT DDR3 MEMORY
 //  // Make 200 MHz from 125 MHz, needed by the DDR3 function
