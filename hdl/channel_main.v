@@ -12,9 +12,9 @@ module channel_main(
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  (* mark_debug = "true" *) input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
-  (* mark_debug = "true" *) output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
-  input [3:0] io,               // connections to the master FPGA
+  input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
+  output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+  input [3:0] io,               // connections to the master FPGA; use io[3] for a 'reset' and io[2] for 'acq_arm'
   output led1, led2,            // multi color LED, [1=0,2=0]-> , [1=0,2=1]-> , [1=1,2=0]-> , [1=1,2=1]->  
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
   input bbus_sda, //SHOULD BE INPUT//               // I2C bus data, connected to Atmel Chip, MAster FPGA, and to other Channel FPGAs
@@ -59,13 +59,7 @@ module channel_main(
   input adc_syncp, adc_syncn
 );
 
-  // Use io[3] for a 'reset' and io[2] for 'acq_arm'
-  wire acq_arm;
-  assign acq_arm = io[2];
-
-  wire rst;
-  assign rst = io[3];
-
+ 
   wire [31:0] ADC_buffer_size;		// number of words in the data stream (2 samples per word)
   wire [31:0] ADC_channel_num;		// the number for this channel
   wire [31:0] ADC_post_trig_size;	// number of words to continue acquiring after a trigger
@@ -121,13 +115,13 @@ module channel_main(
   );
 
 
+ 
+
  ////////////////////////////////////////////////////////////////////////////
   // dummy assignments to keep logic around
-  // assign led2 = ~acq_trig;
-  assign debug[8] = acq_trig & io[3] & io[2] & io[1] & io[0] & ch_addr[2] & ch_addr[1] & ch_addr[0] & power_good;
+  assign debug[8] = io[3] & io[2] & io[1] & io[0] & ch_addr[2] & ch_addr[1] & ch_addr[0] & power_good;
   IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
   
-  //assign acq_done = acq_trig;
   
 //  ////////////////////////////////////////////////////////////////////////////
 //  // Connect the ADC signals
@@ -159,6 +153,31 @@ module channel_main(
   // use clk125 to run the ADC memory, header FIFO, and acquisition controller
   assign adc_clk = real_adc_clk;
   // assign adc_clk = clk125;
+
+
+  // put the trigger and reset signals into the ADC clock domain
+  wire acq_trig_sync;
+  wire acq_arm_sync;
+  wire rst_from_master;
+
+  sync_2stage trig_sync(
+      .clk(adc_clk),
+      .in(acq_trig),
+      .out(acq_trig_sync)
+  );
+  
+  sync_2stage trig_arm_sync(
+      .clk(adc_clk),
+      .in(io[2]),
+      .out(acq_arm_sync)
+  );
+
+  sync_2stage rst_sync(
+      .clk(adc_clk),
+      .in(io[3]),
+      .out(rst_from_master)
+  );
+
   
   // put the packed 26-bit ADC data into a 32-bit word for writing to the memory
   // try to do sign-extension of the 13-bit words to 16-bit words (if timing allows)
@@ -210,8 +229,8 @@ module channel_main(
   // Connect the ADC acquisition state machine
   adc_acquisition_control_sm adc_acquisition_control_sm(
 	.clk(adc_clk),					// 400 MHz ADC clock !!! USE REAL ADC CLOCK WHEN AVAILABLE
-	.arm(acq_arm),					// arm or reset the acquisition controller
-	.trig(acq_trig),				// we have been triggered
+	.arm(acq_arm_sync),		  // arm or reset the acquisition controller
+	.trig(acq_trig_sync),		// we have been triggered
 	.done(acq_done),				// acquisition for the current trigger is complete
 	// interface to the ADC data memory and header FIFO
 	.data_mem_wea(ADC_data_mem_wea),					// enable writing to the ADC data memory
@@ -228,7 +247,7 @@ module channel_main(
 	.initial_trig_num(ADC_initial_trig_num),// initial value for the event number
 	.trig_num_we(ADC_trig_num_we),			// enable saving of the initial value for the event number
 	.current_trig_num(ADC_current_trig_num),	// the current value for the event number
-  .rst(rst), // reset from the master
+  .rst(rst_from_master),
   .led2(led2) // green led
  );
   
