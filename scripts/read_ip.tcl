@@ -36,8 +36,8 @@ if {[file exists $ROOT/ip/aurora_8b10b_0/aurora_8b10b_0.xci]} {
 if {[file exists $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci]} {
 	read_ip $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci
 } else {
-	create_ip -name selectio_wiz -vendor xilinx.com -library ip -module_name selectio_wiz_0
-	set_property -dict [list CONFIG.BUS_SIG_TYPE {DIFF} CONFIG.BUS_IO_STD {LVDS_25} CONFIG.SELIO_ACTIVE_EDGE {DDR} CONFIG.SYSTEM_DATA_WIDTH {13} CONFIG.SELIO_BUS_IN_DELAY {FIXED} CONFIG.SELIO_BUS_IN_TAP {31} CONFIG.CLK_DELAY {FIXED} CONFIG.CLK_TAP {0} CONFIG.SELIO_DDR_ALIGNMENT {OPPOSITE_EDGE}] [get_ips selectio_wiz_0]
+	create_ip -name selectio_wiz -vendor xilinx.com -library ip -module_name selectio_wiz_0 -dir $ROOT/ip
+	set_property -dict [list CONFIG.BUS_SIG_TYPE {DIFF} CONFIG.BUS_IO_STD {LVDS_25} CONFIG.SELIO_ACTIVE_EDGE {DDR} CONFIG.SYSTEM_DATA_WIDTH {13} CONFIG.SELIO_BUS_IN_DELAY {VAR_LOADABLE} CONFIG.CLK_DELAY {FIXED} CONFIG.CLK_TAP {0} CONFIG.SELIO_DDR_ALIGNMENT {OPPOSITE_EDGE}] [get_ips selectio_wiz_0]
 	generate_target all [get_files $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci]
 	synth_ip [get_ips selectio_wiz_0]
 }
@@ -46,7 +46,7 @@ if {[file exists $ROOT/ip/selectio_wiz_0/selectio_wiz_0.xci]} {
 if {[file exists $ROOT/ip/ADC_data_mem/ADC_data_mem.xci]} {
 	read_ip $ROOT/ip/ADC_data_mem/ADC_data_mem.xci
 } else {
-	create_ip -name blk_mem_gen -vendor xilinx.com -library ip -module_name ADC_data_mem
+	create_ip -name blk_mem_gen -vendor xilinx.com -library ip -module_name ADC_data_mem -dir $ROOT/ip
 	set_property -dict [list CONFIG.Memory_Type {Simple_Dual_Port_RAM} CONFIG.Write_Width_A {32} CONFIG.Write_Depth_A {4096} CONFIG.Enable_A {Always_Enabled} CONFIG.Enable_B {Always_Enabled}] [get_ips ADC_data_mem]
 	generate_target all [get_files $ROOT/ip/ADC_data_mem/ADC_data_mem.xci]
 	synth_ip [get_ips ADC_data_mem]
@@ -56,7 +56,7 @@ if {[file exists $ROOT/ip/ADC_data_mem/ADC_data_mem.xci]} {
 if {[file exists $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci]} {
 	read_ip $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci
 } else {
-	create_ip -name fifo_generator -vendor xilinx.com -library ip -module_name ADC_header_fifo
+	create_ip -name fifo_generator -vendor xilinx.com -library ip -module_name ADC_header_fifo -dir $ROOT/ip
 	set_property -dict [list CONFIG.Fifo_Implementation {Independent_Clocks_Block_RAM} CONFIG.Performance_Options {First_Word_Fall_Through} CONFIG.Input_Data_Width {32} CONFIG.Input_Depth {128}] [get_ips ADC_header_fifo]
 	generate_target all [get_files $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci]
 	synth_ip [get_ips ADC_header_fifo]

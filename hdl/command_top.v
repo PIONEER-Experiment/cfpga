@@ -13,13 +13,13 @@ module command_top(
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
     // RX Interface to master side of receive FIFO for receiving from the Master FPGA
     input  [31:0] rx_data,       // note index order
-    input  [0:3] rx_tkeep,        // note index order
+    input  [0:3] rx_tkeep,       // note index order
     input  rx_tvalid,
     input  rx_tlast,
     output rx_tready,            // input wire m_axis_tready
     // TX interface to slave side of transmit FIFO for sending to the Master FPGA 
-    output [31:0] tx_data,        // note index order
-    output [0:3] tx_tkeep,         // note index order
+    output [31:0] tx_data,       // note index order
+    output [0:3] tx_tkeep,       // note index order
     output tx_tvalid,
     output tx_tlast,
     input  tx_tready,
@@ -30,11 +30,11 @@ module command_top(
 	input [31:0] ADC_header_fifo_dout,		// input wire [31 : 0] dout
 	input ADC_header_fifo_empty,			// input wire empty
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
-	output ADC_data_mem_wea,      // input wire [0 : 0] wea
-	output [11:0] ADC_data_mem_addra,  // input wire [11 : 0] addra
+	output ADC_data_mem_wea,            // input wire [0 : 0] wea
+	output [11:0] ADC_data_mem_addra,   // input wire [11 : 0] addra
 	output [31:0] ADC_data_mem_dina,    // input wire [31 : 0] dina
-	output [31:0] ADC_header_fifo_din,        // input wire [31 : 0] din
-	output ADC_header_fifo_wr_en,    // input wire wr_en
+	output [31:0] ADC_header_fifo_din,  // input wire [31 : 0] din
+	output ADC_header_fifo_wr_en,       // input wire wr_en
 	// Register to/from the ADC acquisition state machine
 	output [31:0] ADC_buffer_size,		// number of words in the data stream (2 samples per word)
 	output [31:0] ADC_channel_num,		// the number for this channel
@@ -43,15 +43,18 @@ module command_top(
 	output ADC_trig_num_we,				// enable saving of the initial value for the event number
 	input [31:0] ADC_current_trig_num,	// the current value for the event number
 
-	output [31:0] genreg_addr_ctrl,	//generic register address and control output
-	output [31:0] genreg_wr_data,	//generic register data written from Master FPGA 
-	input [31:0] genreg_rd_data	//generic register data read by Master FPGA
+	output [31:0] genreg_addr_ctrl,	// generic register address and control output
+	output [31:0] genreg_wr_data,	// generic register data written from Master FPGA 
+	input [31:0] genreg_rd_data, 	// generic register data read by Master FPGA
+
+	output [31:0] data_delay,       // tap value of the data bus delay line
+	input [31:0] current_data_delay // current tap value of the data bus delay line, from wizard
 );
 
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
 	// the data inputs for the memory and fifo are just the received data
 	assign ADC_data_mem_dina[31:0] = rx_data[31:0];    // input wire [31 : 0] dina
-	assign ADC_header_fifo_din[31:0] = rx_data[31:0];        // input wire [31 : 0] din
+	assign ADC_header_fifo_din[31:0] = rx_data[31:0];  // input wire [31 : 0] din
 
 	wire ser_num_le, command_le;
 	// make active-hi reset
@@ -300,30 +303,32 @@ module command_top(
 	assign reg_num_le = rd_reg_sm_reg_num_le || wr_reg_sm_reg_num_le;
 	register_block register_block (
 		// clocks and reset
-		.clk(clk),                   // 125 MHz, clock for the interconnect side of the FIFOs
+		.clk(clk),                     // 125 MHz, clock for the interconnect side of the FIFOs
 		.reset(reset),                 // reset 
 		// incoming and outgoing data
-        	.rx_data(rx_data[31:0]),       // note index order
+        .rx_data(rx_data[31:0]),       // note index order
 		.tx_data(reg_data[31:0]),
 		// controls
-		.rd_en(rd_reg_sm_reg_rd_en),			// enable reading of the specific register
-		.wr_en(wr_reg_sm_reg_wr_en),			// enable writing to the specific register
-		.reg_num_le(reg_num_le),				// enable saving of the selected register number
-		.illegal_reg_num(illegal_reg_num),		// The desired register does not exist
+		.rd_en(rd_reg_sm_reg_rd_en),			    // enable reading of the specific register
+		.wr_en(wr_reg_sm_reg_wr_en),			    // enable writing to the specific register
+		.reg_num_le(reg_num_le),				    // enable saving of the selected register number
+		.illegal_reg_num(illegal_reg_num),		    // The desired register does not exist
 		// temporary connections for writing to the ADC memory and header FIFO
-		.ADC_data_mem_wea(ADC_data_mem_wea),      // input wire [0 : 0] wea
-		.ADC_data_mem_addra(ADC_data_mem_addra),  // input wire [11 : 0] addra
+		.ADC_data_mem_wea(ADC_data_mem_wea),        // input wire [0 : 0] wea
+		.ADC_data_mem_addra(ADC_data_mem_addra),    // input wire [11 : 0] addra
 		.ADC_header_fifo_wr_en(ADC_header_fifo_wr_en),    // input wire wr_en
 		// Register to/from the ADC acquisition state machine
-		.buffer_size(ADC_buffer_size),		// number of words in the data stream (2 samples per word)
-		.channel_num(ADC_channel_num),		// the number for this channel
-		.post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
+		.buffer_size(ADC_buffer_size),		        // number of words in the data stream (2 samples per word)
+		.channel_num(ADC_channel_num),		        // the number for this channel
+		.post_trig_size(ADC_post_trig_size),	    // number of words to continue acquiring after a trigger
 		.initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
 		.trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
 		.current_trig_num(ADC_current_trig_num),	// the current value for the event number
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),
-		.genreg_rd_data(genreg_rd_data[31:0])
+		.genreg_rd_data(genreg_rd_data[31:0]),
+		.data_delay(data_delay[31:0]),
+		.current_data_delay(current_data_delay[31:0])
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////

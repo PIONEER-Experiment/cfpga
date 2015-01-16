@@ -60,11 +60,11 @@ module channel_main(
 );
 
  
-  wire [31:0] ADC_buffer_size;		// number of words in the data stream (2 samples per word)
-  wire [31:0] ADC_channel_num;		// the number for this channel
-  wire [31:0] ADC_post_trig_size;	// number of words to continue acquiring after a trigger
+  wire [31:0] ADC_buffer_size;		  // number of words in the data stream (2 samples per word)
+  wire [31:0] ADC_channel_num;		  // the number for this channel
+  wire [31:0] ADC_post_trig_size; 	// number of words to continue acquiring after a trigger
   wire [31:0] ADC_initial_trig_num;	// initial value for the event number
-  wire ADC_trig_num_we;				// enable saving of the initial value for the event number
+  wire ADC_trig_num_we;				      // enable saving of the initial value for the event number
   wire [31:0] ADC_current_trig_num;	// the current value for the event number
 
   // Define the AXIS-fifo inputs and outputs for chan 0
@@ -82,12 +82,17 @@ module channel_main(
   wire ADC_header_fifo_wr_en, ADC_header_fifo_rd_en;
   wire ADC_header_fifo_full, ADC_header_fifo_empty;
 
-  //generic register interface
+  // generic register interface
   wire [31:0] genreg_addr_ctrl;
   wire [31:0] genreg_wr_data;
   wire [31:0] genreg_rd_data;
   wire [31:0] adc_intf_rd_data;
   wire [31:0] adc_intf_wr_data;
+
+  // SelectIO Interface Wizard connections
+  (* mark_debug = "true" *) wire [31:0] data_delay;
+  (* mark_debug = "true" *) wire [64:0] current_data_delay;
+  (* mark_debug = "true" *) wire delay_data_reset;
 
   wire [7:0] debug_wires;
 
@@ -110,14 +115,12 @@ module channel_main(
   startup_reset startup_reset(
     .clk50(clk50),              // 50 MHz buffered clock 
     .reset_clk50(reset_clk50),  // active-high reset output, goes low after startup
-    .clk125(clk125),			// buffered clock, 125 MHz
+    .clk125(clk125),			      // 125 MHz buffered clock
     .reset_clk125(reset_clk125)	// active-high reset output, goes low after startup
   );
 
 
- 
-
- ////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////
   // dummy assignments to keep logic around
   assign debug[8] = io[3] & io[2] & io[1] & io[0] & ch_addr[2] & ch_addr[1] & ch_addr[0] & power_good;
   IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
@@ -142,13 +145,29 @@ module channel_main(
   selectio_wiz_0 adc_dat_buf (
     .data_in_from_pins_p(adc_in_p),             // input wire [12 : 0] data_in_from_pins_p
     .data_in_from_pins_n(adc_in_n),             // input wire [12 : 0] data_in_from_pins_n
-    .clk_in_p(adc_clk_p),                        // input wire clk_in_p
-    .clk_in_n(adc_clk_n),                        // input wire clk_in_n
-    .io_reset(reset_clk50),                        // input wire io_reset
+    .clk_in_p(adc_clk_p),                       // input wire clk_in_p
+    .clk_in_n(adc_clk_n),                       // input wire clk_in_n
+    .io_reset(reset_clk50),                     // input wire io_reset
+
+    .delay_clk(adc_clk),                        // input wire delay_clk
+    .in_delay_reset(delay_data_reset),          // input wire in_delay_reset
+    .in_delay_tap_in({ 13 {data_delay[4:0]} }), // input wire [64 : 0] in_delay_tap_in
+    .in_delay_tap_out(current_data_delay),      // output wire [64 : 0] in_delay_tap_out
+    .in_delay_data_ce({ 13 {1'b0} }),           // input wire [12 : 0] in_delay_data_ce
+    .in_delay_data_inc({ 13 {1'b0} }),          // input wire [12 : 0] in_delay_data_inc
+
     //.ref_clock(adc_clk),                        // loop ADC_CLK back around for input timing delay settings
-    .clk_out(real_adc_clk),                          // output wire clk_out
+    .clk_out(real_adc_clk),                     // output wire clk_out
     .data_in_to_device(packed_adc_dat)          // output wire [25 : 0] data_in_to_device
   );
+
+  data_delay_reset data_delay_reset(
+    .clk(clk50),                          // input, 50 MHz buffered clock
+    .reset(reset_clk50),                  // input, start-up reset to initialize SM
+    .delay_tap(data_delay[4:0]),          // input [4:0], tap delay to set from register block
+    .delay_data_reset(delay_data_reset)   // output, active-high reset, 4 clk cycles high
+  );
+
   
   // use clk125 to run the ADC memory, header FIFO, and acquisition controller
   assign adc_clk = real_adc_clk;
@@ -319,30 +338,31 @@ module channel_main(
     .tx_tvalid(c0_tx_axi_tvalid),
     .tx_tlast(c0_tx_axi_tlast),
     .tx_tready(c0_tx_axi_tready),
-	// interface to the ADC data memory and header FIFO
-	.ADC_data_mem_addrb(ADC_data_mem_addrb),		// output wire [11 : 0] addrb
+	  // interface to the ADC data memory and header FIFO
+	  .ADC_data_mem_addrb(ADC_data_mem_addrb),		// output wire [11 : 0] addrb
     .ADC_data_mem_doutb(ADC_data_mem_doutb),		// input wire [31 : 0] doutb
-	.ADC_header_fifo_rd_en(ADC_header_fifo_rd_en),	// output wire rd_en
-	.ADC_header_fifo_dout(ADC_header_fifo_dout),	// input wire [31 : 0] dout
-	.ADC_header_fifo_empty(ADC_header_fifo_empty),	// input wire empty
-	// temporary use of registers to write to the ADC memory and ADC header FIFO
-	// Signal connection have been removed in order to use the real ADC acquisition controller
-	.ADC_data_mem_wea(), 						    // WAS .ADC_data_mem_wea(ADC_data_mem_wea),
-	.ADC_data_mem_addra(),                          // WAS .ADC_data_mem_addra(ADC_data_mem_addra),
-	.ADC_data_mem_dina(),				    		// WAS .ADC_data_mem_dina(ADC_data_mem_dina),
-	.ADC_header_fifo_din(),							// WAS .ADC_header_fifo_din(ADC_header_fifo_din),
-	.ADC_header_fifo_wr_en(),						// WAS .ADC_header_fifo_wr_en(ADC_header_fifo_wr_en),
-	// Registers to/from the ADC acquisition state machine
-	.ADC_buffer_size(ADC_buffer_size),		// number of words in the data stream (2 samples per word)
-	.ADC_channel_num(ADC_channel_num),		// the number for this channel
-	.ADC_post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
-	.ADC_initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
-	.ADC_trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
-	.ADC_current_trig_num(ADC_current_trig_num),	// the current value for the event number
-
-	.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
-	.genreg_wr_data(genreg_wr_data[31:0]),
-	.genreg_rd_data(genreg_rd_data[31:0])
+	  .ADC_header_fifo_rd_en(ADC_header_fifo_rd_en),	// output wire rd_en
+	  .ADC_header_fifo_dout(ADC_header_fifo_dout),	// input wire [31 : 0] dout
+	  .ADC_header_fifo_empty(ADC_header_fifo_empty),	// input wire empty
+	  // temporary use of registers to write to the ADC memory and ADC header FIFO
+	  // Signal connection have been removed in order to use the real ADC acquisition controller
+	  .ADC_data_mem_wea(), 						    // WAS .ADC_data_mem_wea(ADC_data_mem_wea),
+	  .ADC_data_mem_addra(),                          // WAS .ADC_data_mem_addra(ADC_data_mem_addra),
+	  .ADC_data_mem_dina(),				    		// WAS .ADC_data_mem_dina(ADC_data_mem_dina),
+	  .ADC_header_fifo_din(),							// WAS .ADC_header_fifo_din(ADC_header_fifo_din),
+	  .ADC_header_fifo_wr_en(),						// WAS .ADC_header_fifo_wr_en(ADC_header_fifo_wr_en),
+	  // Registers to/from the ADC acquisition state machine
+	  .ADC_buffer_size(ADC_buffer_size),		// number of words in the data stream (2 samples per word)
+	  .ADC_channel_num(ADC_channel_num),		// the number for this channel
+	  .ADC_post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
+	  .ADC_initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
+	  .ADC_trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
+	  .ADC_current_trig_num(ADC_current_trig_num),	// the current value for the event number
+	  .genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
+	  .genreg_wr_data(genreg_wr_data[31:0]),
+	  .genreg_rd_data(genreg_rd_data[31:0]),
+    .data_delay(data_delay[31:0]),
+    .current_data_delay(current_data_delay[31:0])
 );
 
 gen_reg gen_reg(
