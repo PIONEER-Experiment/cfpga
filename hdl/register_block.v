@@ -30,9 +30,11 @@
 // R8: R/W Data Delay - This register holds the variable loadable tap value (0-31) for the data
 //			   delay line in the SelectIO Interface Wizard.
 // R9: RO Data Delay - The tap value for the data bus delay line as outputted by the SelectIO
-//			   Interface Wizard.
-// R10:
-// R11:
+//			   Interface Wizard, bits 0-4.
+// R10: RO Data Delay - The tap value for the data bus delay line as outputted by the SelectIO
+//			   Interface Wizard, bits 5-9.
+// R11: RO Data Delay - The tap value for the data bus delay line as outputted by the SelectIO
+//			   Interface Wizard, bits 10-12.
 // R12:
 //
 // R13: R/W Test Memory Address - This register holds the address in the Test Memory that will be
@@ -73,7 +75,7 @@ module register_block(
 	input [31:0] genreg_rd_data,	  // generic register data read by Master FPGA
 	// Register to the SelectIO Interface Wizard
 	output [31:0] data_delay,         // data bus delay tap value (0-31)
-	input [31:0] current_data_delay   // current data bus delay tap value
+	input [64:0] current_data_delay   // current data bus delay tap value
 );
 			
 	// make a register to hold the number of the selected register.
@@ -95,8 +97,9 @@ module register_block(
 	//  make a block of 16 32-bit registers
 	reg [31:0] reg0_, reg1_, reg2_, reg3_, 
 				reg4_, reg5_, reg6_, reg7_,
-				reg8_, reg9_, reg10_, reg11_,
+				reg9_, reg10_, reg11_,
 				reg12_, reg13_, reg14_, reg15_;
+	reg [31:0] reg8_ = 32'b11111; // default tap value of 31
 
 	// write to the writable registers
 	always @ (posedge clk) begin
@@ -111,10 +114,10 @@ module register_block(
 		// R7 is read only
 		// if (wr_en && (reg_num[3:0] == 4'h7)) reg7_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'h8)) reg8_[31:0] <= rx_data[31:0];
-		// R9 is read only
+		// R9-11 is read only
 		// if (wr_en && (reg_num[3:0] == 4'h9)) reg9_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'ha)) reg10_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'hb)) reg11_[31:0] <= rx_data[31:0];
+		// if (wr_en && (reg_num[3:0] == 4'ha)) reg10_[31:0] <= rx_data[31:0];
+		// if (wr_en && (reg_num[3:0] == 4'hb)) reg11_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'hc)) reg12_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'hd)) reg13_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'he)) reg14_[31:0] <= rx_data[31:0];
@@ -170,11 +173,11 @@ module register_block(
 		if (rd_en && (reg_num[3:0] == 4'h4)) rdbk_reg[31:0] <= reg4_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'h5)) rdbk_reg[31:0] <= reg5_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'h6)) rdbk_reg[31:0] <= reg6_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h7)) rdbk_reg[31:0] <= genreg_rd_data[31:0];  //data read from generic register interface
+		if (rd_en && (reg_num[3:0] == 4'h7)) rdbk_reg[31:0] <= genreg_rd_data[31:0]; //data read from generic register interface
 		if (rd_en && (reg_num[3:0] == 4'h8)) rdbk_reg[31:0] <= reg8_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h9)) rdbk_reg[31:0] <= current_data_delay; // R9 is read only
-		if (rd_en && (reg_num[3:0] == 4'ha)) rdbk_reg[31:0] <= reg10_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'hb)) rdbk_reg[31:0] <= reg11_[31:0];
+		if (rd_en && (reg_num[3:0] == 4'h9)) rdbk_reg[31:0] <= {7'b0,current_data_delay[24:0]};   // R9 is read only
+		if (rd_en && (reg_num[3:0] == 4'ha)) rdbk_reg[31:0] <= {7'b0,current_data_delay[49:25]};  // R10 is read only
+		if (rd_en && (reg_num[3:0] == 4'hb)) rdbk_reg[31:0] <= {17'b0,current_data_delay[64:50]}; // R11 is read only
 		if (rd_en && (reg_num[3:0] == 4'hc)) rdbk_reg[31:0] <= reg12_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'hd)) rdbk_reg[31:0] <= reg13_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'he)) rdbk_reg[31:0] <= reg14_[31:0];

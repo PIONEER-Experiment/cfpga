@@ -24,11 +24,11 @@ module command_top(
     output tx_tlast,
     input  tx_tready,
 	// interface to the ADC data memory and header FIFO
-	output [11:0] ADC_data_mem_addrb,		// output wire [11 : 0] addrb
-    input [31:0] ADC_data_mem_doutb,		// input wire [31 : 0] doutb
-	output ADC_header_fifo_rd_en,			// output wire rd_en
-	input [31:0] ADC_header_fifo_dout,		// input wire [31 : 0] dout
-	input ADC_header_fifo_empty,			// input wire empty
+	output [11:0] ADC_data_mem_addrb,	// output wire [11 : 0] addrb
+    input [31:0] ADC_data_mem_doutb,	// input wire [31 : 0] doutb
+	output ADC_header_fifo_rd_en,		// output wire rd_en
+	input [31:0] ADC_header_fifo_dout,	// input wire [31 : 0] dout
+	input ADC_header_fifo_empty,		// input wire empty
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
 	output ADC_data_mem_wea,            // input wire [0 : 0] wea
 	output [11:0] ADC_data_mem_addra,   // input wire [11 : 0] addra
@@ -48,7 +48,7 @@ module command_top(
 	input [31:0] genreg_rd_data, 	// generic register data read by Master FPGA
 
 	output [31:0] data_delay,       // tap value of the data bus delay line
-	input [31:0] current_data_delay // current tap value of the data bus delay line, from wizard
+	input [64:0] current_data_delay // current tap value of the data bus delay line, from wizard
 );
 
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
@@ -273,29 +273,29 @@ module command_top(
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that processes the CC_WR_REG command
 	cc_wr_reg_sm cc_wr_reg_sm (
-		.clk(clk),					// local clock
-		.reset(reset),				// active-hi
-		// state machine control
-		.run_sm(run_cc_wr_reg),   	    // run this state machine
-		.sm_running(cc_wr_reg_running),	// we are running
-		.sm_done(cc_wr_reg_done),			// we are finished
-		// RX FIFO
-		.rx_tvalid(rx_tvalid),				// valid data is available
+		.clk(clk),								// local clock
+		.reset(reset),							// active-hi
+		// state machine control	
+		.run_sm(run_cc_wr_reg),   	   	    	// run this state machine
+		.sm_running(cc_wr_reg_running),			// we are running
+		.sm_done(cc_wr_reg_done),				// we are finished
+		// RX FIFO	
+		.rx_tvalid(rx_tvalid),					// valid data is available
 		.rx_data(rx_data[31:0]), 				// received data
-		.rx_tkeep(rx_tkeep),				// which bytes are valid, should always be all of them
-		.rx_tlast(rx_tlast),				// final word in the frame
-		.rx_tready(wr_reg_sm_rx_tready),	// signal that we are accepting the data from the fifo
-		// TX FIFO
-		.tx_tvalid(wr_reg_sm_tx_tvalid),	// the data we are presenting is valid
-		.tx_tlast(wr_reg_sm_tx_tlast),	    // this is the final word in the frame
-		.tx_tready(tx_tready),				// the TX fifo is ready to accepted data
-		// TX mux control
-		.send_csn(wr_reg_sm_send_csn),      // send the CSN
-		.send_cmd(wr_reg_sm_send_cmd),  	// send the CC
-		.send_inv_cmd(wr_reg_sm_send_inv_cmd),  	// send the inverse CC
+		.rx_tkeep(rx_tkeep),					// which bytes are valid, should always be all of them
+		.rx_tlast(rx_tlast),					// final word in the frame
+		.rx_tready(wr_reg_sm_rx_tready),		// signal that we are accepting the data from the fifo
+		// TX FIFO	
+		.tx_tvalid(wr_reg_sm_tx_tvalid),		// the data we are presenting is valid
+		.tx_tlast(wr_reg_sm_tx_tlast),	    	// this is the final word in the frame
+		.tx_tready(tx_tready),					// the TX fifo is ready to accepted data
+		// TX mux control	
+		.send_csn(wr_reg_sm_send_csn),      	// send the CSN
+		.send_cmd(wr_reg_sm_send_cmd),  		// send the CC
+		.send_inv_cmd(wr_reg_sm_send_inv_cmd),  // send the inverse CC
 		//local controls
 		.reg_num_le(wr_reg_sm_reg_num_le),		// enable saving the register number
-		.wr_en(wr_reg_sm_reg_wr_en),		// enable writing to the specific register
+		.wr_en(wr_reg_sm_reg_wr_en),			// enable writing to the specific register
 		.illegal_reg_num(illegal_reg_num)		// The desired register does not exist
 	);
 	
@@ -328,7 +328,7 @@ module command_top(
 		.genreg_wr_data(genreg_wr_data[31:0]),
 		.genreg_rd_data(genreg_rd_data[31:0]),
 		.data_delay(data_delay[31:0]),
-		.current_data_delay(current_data_delay[31:0])
+		.current_data_delay(current_data_delay[64:0])
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////

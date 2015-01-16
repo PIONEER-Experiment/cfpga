@@ -156,7 +156,7 @@ module channel_main(
     .in_delay_data_ce({ 13 {1'b0} }),           // input wire [12 : 0] in_delay_data_ce
     .in_delay_data_inc({ 13 {1'b0} }),          // input wire [12 : 0] in_delay_data_inc
 
-    //.ref_clock(adc_clk),                        // loop ADC_CLK back around for input timing delay settings
+    .ref_clock(adc_clk),                        // loop ADC_CLK back around for input timing delay settings
     .clk_out(real_adc_clk),                     // output wire clk_out
     .data_in_to_device(packed_adc_dat)          // output wire [25 : 0] data_in_to_device
   );
@@ -165,7 +165,7 @@ module channel_main(
     .clk(clk50),                          // input, 50 MHz buffered clock
     .reset(reset_clk50),                  // input, start-up reset to initialize SM
     .delay_tap(data_delay[4:0]),          // input [4:0], tap delay to set from register block
-    .delay_data_reset(delay_data_reset)   // output, active-high reset, 4 clk cycles high
+    .delay_data_reset(delay_data_reset)   // output, active-high reset
   );
 
   
@@ -362,7 +362,7 @@ module channel_main(
 	  .genreg_wr_data(genreg_wr_data[31:0]),
 	  .genreg_rd_data(genreg_rd_data[31:0]),
     .data_delay(data_delay[31:0]),
-    .current_data_delay(current_data_delay[31:0])
+    .current_data_delay(current_data_delay[64:0])
 );
 
 gen_reg gen_reg(

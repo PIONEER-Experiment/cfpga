@@ -47,7 +47,7 @@ begin
         
                 // active-high reset
                 S2 : begin
-                    if (counter < 4'b0011)           // high for 4 clk cycles
+                    if (counter < 4'b0100)           // high for 5 clk cycles
                     	begin
                     		delay_data_reset <= 1'b1;
                             counter <= counter + 1;
