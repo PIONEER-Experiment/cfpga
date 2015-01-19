@@ -43,12 +43,13 @@ module command_top(
 	output ADC_trig_num_we,				// enable saving of the initial value for the event number
 	input [31:0] ADC_current_trig_num,	// the current value for the event number
 
-	output [31:0] genreg_addr_ctrl,	// generic register address and control output
-	output [31:0] genreg_wr_data,	// generic register data written from Master FPGA 
-	input [31:0] genreg_rd_data, 	// generic register data read by Master FPGA
-
-	output [31:0] data_delay,       // tap value of the data bus delay line
-	input [64:0] current_data_delay // current tap value of the data bus delay line, from wizard
+	output [31:0] genreg_addr_ctrl,	 // generic register address and control output
+	output [31:0] genreg_wr_data,	 // generic register data written from Master FPGA 
+	input [31:0] genreg_rd_data, 	 // generic register data read by Master FPGA
+ 
+	output [31:0] data_delay,        // tap value of the data bus delay line
+	input [64:0] current_data_delay, // current tap value of the data bus delay line, from wizard
+	input data_delay_error           // error occured while setting the data delay tap values
 );
 
 	// temporary use of registers to write to the ADC memory and ADC header FIFO
@@ -328,7 +329,8 @@ module command_top(
 		.genreg_wr_data(genreg_wr_data[31:0]),
 		.genreg_rd_data(genreg_rd_data[31:0]),
 		.data_delay(data_delay[31:0]),
-		.current_data_delay(current_data_delay[64:0])
+		.current_data_delay(current_data_delay[64:0]),
+		.data_delay_error(data_delay_error)
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -35,7 +35,7 @@
 //			   Interface Wizard, bits 5-9.
 // R11: RO Data Delay - The tap value for the data bus delay line as outputted by the SelectIO
 //			   Interface Wizard, bits 10-12.
-// R12:
+// R12: RO Data Delay Error
 //
 // R13: R/W Test Memory Address - This register holds the address in the Test Memory that will be
 //              used for the next memory access using register R14. Only the low 12 bits are used.
@@ -75,7 +75,8 @@ module register_block(
 	input [31:0] genreg_rd_data,	  // generic register data read by Master FPGA
 	// Register to the SelectIO Interface Wizard
 	output [31:0] data_delay,         // data bus delay tap value (0-31)
-	input [64:0] current_data_delay   // current data bus delay tap value
+	input [64:0] current_data_delay,  // current data bus delay tap value
+	input data_delay_error            // error in setting the data delay tap values
 );
 			
 	// make a register to hold the number of the selected register.
@@ -118,7 +119,8 @@ module register_block(
 		// if (wr_en && (reg_num[3:0] == 4'h9)) reg9_[31:0] <= rx_data[31:0];
 		// if (wr_en && (reg_num[3:0] == 4'ha)) reg10_[31:0] <= rx_data[31:0];
 		// if (wr_en && (reg_num[3:0] == 4'hb)) reg11_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'hc)) reg12_[31:0] <= rx_data[31:0];
+		// R12 is read only
+		// if (wr_en && (reg_num[3:0] == 4'hc)) reg12_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'hd)) reg13_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'he)) reg14_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[3:0] == 4'hf)) reg15_[31:0] <= rx_data[31:0];
@@ -178,7 +180,7 @@ module register_block(
 		if (rd_en && (reg_num[3:0] == 4'h9)) rdbk_reg[31:0] <= {7'b0,current_data_delay[24:0]};   // R9 is read only
 		if (rd_en && (reg_num[3:0] == 4'ha)) rdbk_reg[31:0] <= {7'b0,current_data_delay[49:25]};  // R10 is read only
 		if (rd_en && (reg_num[3:0] == 4'hb)) rdbk_reg[31:0] <= {17'b0,current_data_delay[64:50]}; // R11 is read only
-		if (rd_en && (reg_num[3:0] == 4'hc)) rdbk_reg[31:0] <= reg12_[31:0];
+		if (rd_en && (reg_num[3:0] == 4'hc)) rdbk_reg[31:0] <= {31'b0,data_delay_error}; // R12 is read only
 		if (rd_en && (reg_num[3:0] == 4'hd)) rdbk_reg[31:0] <= reg13_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'he)) rdbk_reg[31:0] <= reg14_[31:0];
 		if (rd_en && (reg_num[3:0] == 4'hf)) rdbk_reg[31:0] <= reg15_[31:0];

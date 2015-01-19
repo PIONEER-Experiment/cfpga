@@ -93,6 +93,7 @@ module channel_main(
   (* mark_debug = "true" *) wire [31:0] data_delay;
   (* mark_debug = "true" *) wire [64:0] current_data_delay;
   (* mark_debug = "true" *) wire delay_data_reset;
+  (* mark_debug = "true" *) wire delay_data_error;
 
   wire [7:0] debug_wires;
 
@@ -162,10 +163,12 @@ module channel_main(
   );
 
   data_delay_reset data_delay_reset(
-    .clk(clk50),                          // input, 50 MHz buffered clock
-    .reset(reset_clk50),                  // input, start-up reset to initialize SM
-    .delay_tap(data_delay[4:0]),          // input [4:0], tap delay to set from register block
-    .delay_data_reset(delay_data_reset)   // output, active-high reset
+    .clk(clk50),                              // input, 50 MHz buffered clock
+    .reset(reset_clk50),                      // input, start-up reset to initialize SM
+    .delay_tap(data_delay[4:0]),              // input [4:0], tap delay to set from register block
+    .wiz_delay_tap(current_data_delay[64:0]), // input [64:0], tap values according to the wizard
+    .delay_data_reset(delay_data_reset),      // output, active-high reset
+    .error(delay_data_error)                  // output, tap values not set properly
   );
 
   
@@ -362,7 +365,8 @@ module channel_main(
 	  .genreg_wr_data(genreg_wr_data[31:0]),
 	  .genreg_rd_data(genreg_rd_data[31:0]),
     .data_delay(data_delay[31:0]),
-    .current_data_delay(current_data_delay[64:0])
+    .current_data_delay(current_data_delay[64:0]),
+    .data_delay_error(delay_data_error)
 );
 
 gen_reg gen_reg(
