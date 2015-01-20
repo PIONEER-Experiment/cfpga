@@ -102,9 +102,23 @@ module channel_main(
   ////////////////////////////////////////////////////////////////////////////
   // Clock and reset handling
   // Connect an input buffer and a global clock buffer to the 50 MHz clock
-  wire clkin_buf, clk50;
-  IBUF IBUF_clkin (.I(clkin), .O(clkin_buf));
-  BUFG BUFG_clk50 (.I(clkin_buf), .O(clk50));
+  wire clk200, clk250;
+
+  g2_chan_clks clk_dcm_50_200(
+  // Clock in ports
+    .clk_in1(clkin),    // input clk_in1
+    // Clock out ports
+    .clk50M(clk50),     // output clk_50M
+    .clk_200M(clk200),  // output clk_200M
+    .clk_250M(clk250),
+    // Status and control signals
+    .reset(1'b0),      // input reset
+    .locked()          // output locked
+  );
+
+//  wire clkin_buf, clk50;
+//  IBUF IBUF_clkin (.I(clkin), .O(clkin_buf));
+//  BUFG BUFG_clk50 (.I(clkin_buf), .O(clk50));
   
   // differential clock buffer - This should get shared between the Aurora channel interfaces
   // and other internal logic.
@@ -150,14 +164,14 @@ module channel_main(
     .clk_in_n(adc_clk_n),                       // input wire clk_in_n
     .io_reset(reset_clk50),                     // input wire io_reset
 
-    .delay_clk(adc_clk),                        // input wire delay_clk
+    .delay_clk(clk200),                         // input wire delay_clk
     .in_delay_reset(delay_data_reset),          // input wire in_delay_reset
     .in_delay_tap_in({ 13 {data_delay[4:0]} }), // input wire [64 : 0] in_delay_tap_in
     .in_delay_tap_out(current_data_delay),      // output wire [64 : 0] in_delay_tap_out
     .in_delay_data_ce({ 13 {1'b0} }),           // input wire [12 : 0] in_delay_data_ce
     .in_delay_data_inc({ 13 {1'b0} }),          // input wire [12 : 0] in_delay_data_inc
 
-    .ref_clock(adc_clk),                        // loop ADC_CLK back around for input timing delay settings
+    .ref_clock(clk200),                         // 200 MHz clock required to ensure tap value settings
     .clk_out(real_adc_clk),                     // output wire clk_out
     .data_in_to_device(packed_adc_dat)          // output wire [25 : 0] data_in_to_device
   );

@@ -61,3 +61,13 @@ if {[file exists $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci]} {
 	generate_target all [get_files $ROOT/ip/ADC_header_fifo/ADC_header_fifo.xci]
 	synth_ip [get_ips ADC_header_fifo]
 }
+
+# clock dcm for 50M and 200M and 250M
+if {[file exists $ROOT/ip/g2_chan_clks/g2_chan_clks.xci]} {
+	read_ip $ROOT/ip/g2_chan_clks/g2_chan_clks.xci
+} else {
+	create_ip -name clk_wiz -vendor xilinx.com -library ip -module_name g2_chan_clks -dir $ROOT/ip
+	set_property -dict [list CONFIG.PRIM_IN_FREQ {50} CONFIG.CLKOUT2_USED {true} CONFIG.CLKOUT3_USED {true} CONFIG.CLK_OUT1_PORT {clk50M} CONFIG.CLK_OUT2_PORT {clk_200M} CONFIG.CLK_OUT3_PORT {clk_250M} CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {50} CONFIG.CLKOUT2_REQUESTED_OUT_FREQ {200} CONFIG.CLKOUT3_REQUESTED_OUT_FREQ {250}] [get_ips g2_chan_clks]
+	generate_target {instantiation_template} [get_files $ROOT/ip/g2_chan_clks/g2_chan_clks.xci]
+	synth_ip [get_ips g2_chan_clks]
+}
