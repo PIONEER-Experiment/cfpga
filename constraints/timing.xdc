@@ -29,5 +29,3 @@ set_input_delay -clock [get_clocks adc_clk] -min 2.050 [get_ports adc_d*]
 set_clock_groups -asynchronous -group [get_clocks clk50]
 set_clock_groups -asynchronous -group [get_clocks xcvr_clk]
 set_clock_groups -asynchronous -group [get_clocks user_clk_chan0]
-
-
