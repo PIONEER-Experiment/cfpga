@@ -62,7 +62,7 @@ reg sreg_strobe;
 reg [23:0] sreg_in;
 reg [23:0] sreg_out;
 wire [23:0] sreg_payload;
-reg [5:0] sreg_cnt = 6'b100000;
+//reg [5:0] sreg_cnt = 6'b100000;
 reg sreg_ready;
 parameter IDLE = 2'b00;
 parameter LOAD = 2'b01;

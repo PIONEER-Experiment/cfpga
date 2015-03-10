@@ -1,0 +1,26 @@
+# Ignore all
+*
+!.gitignore
+!README.txt
+
+# Folders
+!*/
+projects/
+
+# Constraints
+!constraints/**/*.xdc
+
+# Sources
+!*.v
+!*.vhd
+!hdl/*.txt
+
+# IPs
+!ip/**/*.xci
+!ip/**/*.prj
+
+ip/**/*.v
+ip/**/*.vhd
+
+# Tcl Scripts
+!scripts/**/*.tcl

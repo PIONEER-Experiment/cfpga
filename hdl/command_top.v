@@ -7,55 +7,52 @@
 
 module command_top(
 	// clocks and reset
+	input clk50,              // 50 MHz buffered clock 
+	input reset_clk50,  // active-high reset output, goes low after startup
     input clk,                   // 125 MHz, clock for the interconnect side of the FIFOs
     input resetN,                // active-lo reset for the interconnect side of the FIFOs
     // channel connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
     // RX Interface to master side of receive FIFO for receiving from the Master FPGA
     input  [31:0] rx_data,       // note index order
-    input  [0:3] rx_tkeep,       // note index order
+    input  [0:3] rx_tkeep,        // note index order
     input  rx_tvalid,
     input  rx_tlast,
     output rx_tready,            // input wire m_axis_tready
     // TX interface to slave side of transmit FIFO for sending to the Master FPGA 
-    output [31:0] tx_data,       // note index order
-    output [0:3] tx_tkeep,       // note index order
+    output [31:0] tx_data,        // note index order
+    output [0:3] tx_tkeep,         // note index order
     output tx_tvalid,
     output tx_tlast,
     input  tx_tready,
+	input readout_pause,			// stop sending fill data to the Aurora
 	// interface to the ADC data memory and header FIFO
-	output [11:0] ADC_data_mem_addrb,	// output wire [11 : 0] addrb
-    input [31:0] ADC_data_mem_doutb,	// input wire [31 : 0] doutb
-	output ADC_header_fifo_rd_en,		// output wire rd_en
-	input [31:0] ADC_header_fifo_dout,	// input wire [31 : 0] dout
-	input ADC_header_fifo_empty,		// input wire empty
-	// temporary use of registers to write to the ADC memory and ADC header FIFO
-	output ADC_data_mem_wea,            // input wire [0 : 0] wea
-	output [11:0] ADC_data_mem_addra,   // input wire [11 : 0] addra
-	output [31:0] ADC_data_mem_dina,    // input wire [31 : 0] dina
-	output [31:0] ADC_header_fifo_din,  // input wire [31 : 0] din
-	output ADC_header_fifo_wr_en,       // input wire wr_en
+	input fill_header_fifo_empty,				// input, a header is available when not asserted
+	output fill_header_fifo_rd_en,				// output, remove the current data from the FIFO
+	input [127:0] fill_header_fifo_out,			// input, data at the head of the FIFO
+	output [22:0] ddr3_rd_burst_addr,			// output, the address of the requested 128-bit burst
+	output ddr3_rd_one_burst,					// output, get one 128-bit burst from the DDR3
+	input ddr3_one_burst_rdy,					// input, the requested 128-bit burst is ready
+	input [127:0] ddr3_one_burst_data,			// input, the requested 128-bit burst
+
 	// Register to/from the ADC acquisition state machine
-	output [31:0] ADC_buffer_size,		// number of words in the data stream (2 samples per word)
-	output [31:0] ADC_channel_num,		// the number for this channel
-	output [31:0] ADC_post_trig_size,	// number of words to continue acquiring after a trigger
-	output [31:0] ADC_initial_trig_num,	// initial value for the event number
-	output ADC_trig_num_we,				// enable saving of the initial value for the event number
-	input [31:0] ADC_current_trig_num,	// the current value for the event number
+	input [23:0] fill_num,	         // fill number for this fill
+	output [15:0] channel_tag,		// stuff about the channel to put in the header
+	output [20:0] num_muon_bursts,	// number of sample bursts in a MUON fill
+	output [20:0] num_laser_bursts,	// number of sample bursts in a LASER fill
+	output [20:0] num_ped_bursts,	// number of sample bursts in a OPEDESTAL fill
+	output [23:0] initial_fill_num,  // event number to assign to the first fill
+	output initial_fill_num_wr,      // write-strobe to store the initial_fill_num
+	input [2:0] ch_addr,			// the channel address jumpers
+	output adc_buf_delay_data_reset,	// use the new delay settings
+	output [4:0] adc_buf_data_delay,	// 5 delay-tap-bits per line, all lines always all the same
+	input [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
 
-	output [31:0] genreg_addr_ctrl,	 // generic register address and control output
-	output [31:0] genreg_wr_data,	 // generic register data written from Master FPGA 
-	input [31:0] genreg_rd_data, 	 // generic register data read by Master FPGA
- 
-	output [31:0] data_delay,        // tap value of the data bus delay line
-	input [64:0] current_data_delay, // current tap value of the data bus delay line, from wizard
-	input data_delay_error           // error occured while setting the data delay tap values
+	output [31:0] genreg_addr_ctrl,	//generic register address and control output
+	output [31:0] genreg_wr_data,	//generic register data written from Master FPGA 
+	input [31:0] genreg_rd_data	//generic register data read by Master FPGA
+
 );
-
-	// temporary use of registers to write to the ADC memory and ADC header FIFO
-	// the data inputs for the memory and fifo are just the received data
-	assign ADC_data_mem_dina[31:0] = rx_data[31:0];    // input wire [31 : 0] dina
-	assign ADC_header_fifo_din[31:0] = rx_data[31:0];  // input wire [31 : 0] din
 
 	wire ser_num_le, command_le;
 	// make active-hi reset
@@ -64,7 +61,7 @@ module command_top(
 	// always drive all 4 'tx_tkeep' bits
 	assign tx_tkeep[0:3] = 4'b1111;
 	
-	wire [31:0] reg_data;
+	wire [31:0] reg_data, fill_data;
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect registers to hold the incoming serial number and command
@@ -158,17 +155,15 @@ module command_top(
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect a big mux to steer data to the TX FIFO
-	wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_adc_header_data, send_adc_mem_data;
+	wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_fill_data;
 	reg [31:0] tx_data_reg;
-	wire [31:0] adc_header_data;
 	always @ (posedge clk) begin
 		if (send_csn) tx_data_reg[31:0] <= serial_num_reg[31:0];	// serial number
 		if (send_cmd) tx_data_reg[31:0] <= command_reg[31:0];		// command
 		if (send_inv_cmd) tx_data_reg[31:0] <= ~command_reg[31:0];	// inverse of command
 		if (send_rx_data) tx_data_reg[31:0] <= rx_data[31:0];		// loopback
 		if (send_reg_data) tx_data_reg[31:0] <= reg_data[31:0];		// reading from a register
-		if (send_adc_header_data) tx_data_reg[31:0] <= adc_header_data[31:0];		// ADC header, indirectly from FIFO
-		if (send_adc_mem_data) tx_data_reg[31:0] <= ADC_data_mem_doutb[31:0];		// ADC data directly from memory
+		if (send_fill_data) tx_data_reg[31:0] <= fill_data[31:0];	// ADC herader/data from DDR3 memory
 	end
 	assign tx_data[31:0] = tx_data_reg[31:0];
 	
@@ -192,9 +187,8 @@ module command_top(
 	// Only the read_register state machine sends register data
 	assign send_reg_data = rd_reg_sm_send_reg_data;
 	
-	// Only the read_fill state machine sends ADC header data and ADC memory data
-	assign send_adc_header_data = rd_fill_sm_send_adc_header_data;
-	assign send_adc_mem_data = rd_fill_sm_send_adc_mem_data;
+	// Only the read_fill state machine sends fill data
+	assign send_fill_data = rd_fill_sm_send_fill_data;
 		
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that receives and dispatches commands
@@ -274,29 +268,29 @@ module command_top(
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that processes the CC_WR_REG command
 	cc_wr_reg_sm cc_wr_reg_sm (
-		.clk(clk),								// local clock
-		.reset(reset),							// active-hi
-		// state machine control	
-		.run_sm(run_cc_wr_reg),   	   	    	// run this state machine
-		.sm_running(cc_wr_reg_running),			// we are running
-		.sm_done(cc_wr_reg_done),				// we are finished
-		// RX FIFO	
-		.rx_tvalid(rx_tvalid),					// valid data is available
+		.clk(clk),					// local clock
+		.reset(reset),				// active-hi
+		// state machine control
+		.run_sm(run_cc_wr_reg),   	    // run this state machine
+		.sm_running(cc_wr_reg_running),	// we are running
+		.sm_done(cc_wr_reg_done),			// we are finished
+		// RX FIFO
+		.rx_tvalid(rx_tvalid),				// valid data is available
 		.rx_data(rx_data[31:0]), 				// received data
-		.rx_tkeep(rx_tkeep),					// which bytes are valid, should always be all of them
-		.rx_tlast(rx_tlast),					// final word in the frame
-		.rx_tready(wr_reg_sm_rx_tready),		// signal that we are accepting the data from the fifo
-		// TX FIFO	
-		.tx_tvalid(wr_reg_sm_tx_tvalid),		// the data we are presenting is valid
-		.tx_tlast(wr_reg_sm_tx_tlast),	    	// this is the final word in the frame
-		.tx_tready(tx_tready),					// the TX fifo is ready to accepted data
-		// TX mux control	
-		.send_csn(wr_reg_sm_send_csn),      	// send the CSN
-		.send_cmd(wr_reg_sm_send_cmd),  		// send the CC
-		.send_inv_cmd(wr_reg_sm_send_inv_cmd),  // send the inverse CC
+		.rx_tkeep(rx_tkeep),				// which bytes are valid, should always be all of them
+		.rx_tlast(rx_tlast),				// final word in the frame
+		.rx_tready(wr_reg_sm_rx_tready),	// signal that we are accepting the data from the fifo
+		// TX FIFO
+		.tx_tvalid(wr_reg_sm_tx_tvalid),	// the data we are presenting is valid
+		.tx_tlast(wr_reg_sm_tx_tlast),	    // this is the final word in the frame
+		.tx_tready(tx_tready),				// the TX fifo is ready to accepted data
+		// TX mux control
+		.send_csn(wr_reg_sm_send_csn),      // send the CSN
+		.send_cmd(wr_reg_sm_send_cmd),  	// send the CC
+		.send_inv_cmd(wr_reg_sm_send_inv_cmd),  	// send the inverse CC
 		//local controls
 		.reg_num_le(wr_reg_sm_reg_num_le),		// enable saving the register number
-		.wr_en(wr_reg_sm_reg_wr_en),			// enable writing to the specific register
+		.wr_en(wr_reg_sm_reg_wr_en),		// enable writing to the specific register
 		.illegal_reg_num(illegal_reg_num)		// The desired register does not exist
 	);
 	
@@ -304,63 +298,87 @@ module command_top(
 	assign reg_num_le = rd_reg_sm_reg_num_le || wr_reg_sm_reg_num_le;
 	register_block register_block (
 		// clocks and reset
-		.clk(clk),                     // 125 MHz, clock for the interconnect side of the FIFOs
+		.clk50(clk50),              // 50 MHz buffered clock 
+		.reset_clk50(reset_clk50),  // active-high reset output, goes low after startup
+		.clk(clk),                   // 125 MHz, clock for the interconnect side of the FIFOs
 		.reset(reset),                 // reset 
 		// incoming and outgoing data
         .rx_data(rx_data[31:0]),       // note index order
 		.tx_data(reg_data[31:0]),
 		// controls
-		.rd_en(rd_reg_sm_reg_rd_en),			    // enable reading of the specific register
-		.wr_en(wr_reg_sm_reg_wr_en),			    // enable writing to the specific register
-		.reg_num_le(reg_num_le),				    // enable saving of the selected register number
-		.illegal_reg_num(illegal_reg_num),		    // The desired register does not exist
-		// temporary connections for writing to the ADC memory and header FIFO
-		.ADC_data_mem_wea(ADC_data_mem_wea),        // input wire [0 : 0] wea
-		.ADC_data_mem_addra(ADC_data_mem_addra),    // input wire [11 : 0] addra
-		.ADC_header_fifo_wr_en(ADC_header_fifo_wr_en),    // input wire wr_en
+		.rd_en(rd_reg_sm_reg_rd_en),			// enable reading of the specific register
+		.wr_en(wr_reg_sm_reg_wr_en),			// enable writing to the specific register
+		.reg_num_le(reg_num_le),				// enable saving of the selected register number
+		.illegal_reg_num(illegal_reg_num),		// The desired register does not exist
 		// Register to/from the ADC acquisition state machine
-		.buffer_size(ADC_buffer_size),		        // number of words in the data stream (2 samples per word)
-		.channel_num(ADC_channel_num),		        // the number for this channel
-		.post_trig_size(ADC_post_trig_size),	    // number of words to continue acquiring after a trigger
-		.initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
-		.trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
-		.current_trig_num(ADC_current_trig_num),	// the current value for the event number
+		.fill_num(fill_num[23:0]),			         // fill number for this fill
+		.channel_tag(channel_tag[15:0]), 		   // stuff about the channel to put in the header
+		.num_muon_bursts(num_muon_bursts[20:0]),  // number of sample bursts in a MUON fill
+		.num_laser_bursts(num_laser_bursts[20:0]),// number of sample bursts in a LASER fill
+		.num_ped_bursts(num_ped_bursts[20:0]),    // number of sample bursts in a PEDESTAL fill
+		.initial_fill_num(initial_fill_num[23:0]),  // event number to assign to the first fill
+		.initial_fill_num_wr(initial_fill_num_wr),  // write-strobe to store the initial_fill_num
+		.ch_addr(ch_addr[2:0]),						// the channel address jumpers
+	    .adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
+	    .adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
+	    .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
+
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),
-		.genreg_rd_data(genreg_rd_data[31:0]),
-		.data_delay(data_delay[31:0]),
-		.current_data_delay(current_data_delay[64:0]),
-		.data_delay_error(data_delay_error)
+		.genreg_rd_data(genreg_rd_data[31:0])
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that processes the CC_RD_FILL command
 	cc_rd_fill_sm cc_rd_fill_sm (
 		.clk(clk),					// local clock
-		.reset(reset),				// active-hi
+		.reset(reset),					// active-hi
 		// state machine control
-		.run_sm(run_cc_rd_fill),   	    // run this state machine
-		.sm_running(cc_rd_fill_running),	// we are running
+		.run_sm(run_cc_rd_fill),   	    		// run this state machine
+		.sm_running(cc_rd_fill_running),		// we are running
 		.sm_done(cc_rd_fill_done),			// we are finished
 		// RX FIFO - this sm does not get anything from the RX FIFO
 		// TX FIFO
-		.tx_tvalid(rd_fill_sm_tx_tvalid),	// the data we are presenting is valid
-		.tx_tlast(rd_fill_sm_tx_tlast),	    // this is the final word in the frame
+		.tx_tvalid(rd_fill_sm_tx_tvalid),		// the data we are presenting is valid
+		.tx_tlast(rd_fill_sm_tx_tlast),	    		// this is the final word in the frame
 		.tx_tready(tx_tready),				// the TX fifo is ready to accepted data
+		.tx_data(fill_data[31:0]),			// 32-bit chinks of DDR3 bursts
+		.readout_pause(readout_pause),		// stop sending fill data to the Aurora
 		// TX mux control
-		.send_csn(rd_fill_sm_send_csn),      // send the CSN
-		.send_cmd(rd_fill_sm_send_cmd),  	// send the CC
+		.send_csn(rd_fill_sm_send_csn),      		// send the CSN
+		.send_cmd(rd_fill_sm_send_cmd),  		// send the CC
 		.send_inv_cmd(rd_fill_sm_send_inv_cmd),  	// send the inverse CC
-		.send_adc_header_data(rd_fill_sm_send_adc_header_data),	// mux source is the ADC header
-		.send_adc_mem_data(rd_fill_sm_send_adc_mem_data),	// mux source is the ADC memory
+		.send_fill_data(rd_fill_sm_send_fill_data),	// mux source is the ADC memory
 		//local controls
-		// interface to the ADC data memory and header FIFO
-		.ADC_data_mem_addrb(ADC_data_mem_addrb),		// output wire [11 : 0] addrb
-		.ADC_data_mem_doutb(ADC_data_mem_doutb),		// input wire [31 : 0] doutb
-		.ADC_header_fifo_rd_en(ADC_header_fifo_rd_en),	// output wire rd_en
-		.ADC_header_fifo_dout(ADC_header_fifo_dout),	// input wire [31 : 0] dout
-		.ADC_header_fifo_empty(ADC_header_fifo_empty),	// input wire empty
-		.adc_header_data(adc_header_data)
+		// interface to the DDR3 data memory and header FIFO
+		.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
+		.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
+		.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
+		.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
+		.ddr3_rd_one_burst(ddr3_rd_one_burst),				// input, get one 128-bit burst from the DDR3
+		.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// output, the requested 128-bit burst is ready
+		.ddr3_one_burst_data(ddr3_one_burst_data[127:0])	// output, the requested 128-bit burst
 	);
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// connect the state machine that processes the CC_RD_MEM command
+	//   this sm controls the ddr3 interface to allow reads from the
+	//   external memory
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+//	cc_rd_mem_sm cc_rd_mem_sm (
+
+//	);
+	
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// connect the state machine that processes the CC_WR_MEM command
+	//   this sm controls the ddr3 interface to allow writes to the
+	//   external memory
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//	cc_wr_mem_sm cc_wr_mem_sm (
+
+//	);
 	
 	endmodule

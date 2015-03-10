@@ -26,7 +26,8 @@ module all_channels(
   input c0_m_axi_rx_tready,            // input wire m_axis_tready
   // serial I/O pins
   input c0_rxp, c0_rxn,                   // receive from channel 0 FPGA
-  output c0_txp, c0_txn                   // transmit to channel 0 FPGA
+  output c0_txp, c0_txn,                   // transmit to channel 0 FPGA
+  output [7:0] debug 
  );
 
   wire [8:0] c0_live_status, c1_live_status;  // packed status bits from channels
@@ -67,7 +68,7 @@ module all_channels(
     .gt_qpllclk_quad2(1'b0),           // input
     .gt_qpllrefclk_quad2(1'b0),     // input
     .gt0_qpllreset(),                               // output
-    .live_status(c0_live_status)         // status bits
+    .debug(debug[7:0])         // debug bits
   );
  
 endmodule

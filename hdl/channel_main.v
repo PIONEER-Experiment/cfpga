@@ -12,9 +12,9 @@ module channel_main(
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
-  output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
-  input [3:0] io,               // connections to the master FPGA; use io[3] for a 'reset' and io[2] for 'acq_arm'
+  (* mark_debug = "true" *) input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
+  (* mark_debug = "true" *) output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+  input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> , [1=0,2=1]-> , [1=1,2=0]-> , [1=1,2=1]->  
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
   input bbus_sda, //SHOULD BE INPUT//               // I2C bus data, connected to Atmel Chip, MAster FPGA, and to other Channel FPGAs
@@ -59,234 +59,184 @@ module channel_main(
   input adc_syncp, adc_syncn
 );
 
- 
-  wire [31:0] ADC_buffer_size;		  // number of words in the data stream (2 samples per word)
-  wire [31:0] ADC_channel_num;		  // the number for this channel
-  wire [31:0] ADC_post_trig_size; 	// number of words to continue acquiring after a trigger
-  wire [31:0] ADC_initial_trig_num;	// initial value for the event number
-  wire ADC_trig_num_we;				      // enable saving of the initial value for the event number
-  wire [31:0] ADC_current_trig_num;	// the current value for the event number
+// Use io[3] for a 'acq_reset', io[2:1] for 'acq_enable', and io[0] for 'readout_pause'
+wire acq_reset;
+assign acq_reset = io[3];
+wire acq_enable0;              // indicates enabled for triggers, and fill type
+wire acq_enable1;              // indicates enabled for triggers, and fill type
+assign acq_enable0 = io[1];
+assign acq_enable1 = io[2];
+wire readout_pause;
+assign readout_pause = io[0];	// stop sending fill data to the Aurora
 
-  // Define the AXIS-fifo inputs and outputs for chan 0
-  wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
-  wire [0:3] c0_rx_axi_tkeep, c0_tx_axi_tkeep;
-  wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
-  wire c0_rx_axi_tlast, c0_tx_axi_tlast;
-  wire c0_rx_axi_tready, c0_tx_axi_tready;
+wire [15:0] channel_tag;			// stuff about the channel to put in the header
+wire [20:0] num_muon_bursts;		// number of sample bursts in a MUON fill
+wire [20:0]	num_laser_bursts;		// number of sample bursts in a LASER fill
+wire [20:0]	num_ped_bursts;			// number of sample bursts in a PEDESTAL fill
+wire [23:0]	initial_fill_num;		// event number to assign to the first fill
+wire [127:0] adc_acq_out_dat;		// 128-bit header or ADC data to 'ddr3_write_fifo'
+wire [127:0] ddr3_wr_dat;			// 128-bit header or ADC data from 'ddr3_write_fifo'
+wire [127:0] ddr3_rd_dat;			// 128-bit header or ADC data from DDR3 memory
+wire [23:0] fill_num;				// fill number for this fill
 
-  // Define connection to the ADC data memory and ADC header FIFO
-  wire [11:0] ADC_data_mem_addra, ADC_data_mem_addrb;
-  wire [31:0] ADC_data_mem_dina, ADC_data_mem_doutb;
-  wire ADC_data_mem_wea;  
-  wire [31:0] ADC_header_fifo_din, ADC_header_fifo_dout;
-  wire ADC_header_fifo_wr_en, ADC_header_fifo_rd_en;
-  wire ADC_header_fifo_full, ADC_header_fifo_empty;
+// Define the AXIS-fifo inputs and outputs for chan 0
+wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
+wire [0:3] c0_rx_axi_tkeep, c0_tx_axi_tkeep;
+wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
+wire c0_rx_axi_tlast, c0_tx_axi_tlast;
+wire c0_rx_axi_tready, c0_tx_axi_tready;
 
-  // generic register interface
-  wire [31:0] genreg_addr_ctrl;
-  wire [31:0] genreg_wr_data;
-  wire [31:0] genreg_rd_data;
-  wire [31:0] adc_intf_rd_data;
-  wire [31:0] adc_intf_wr_data;
+//generic register interface
+wire [31:0] genreg_addr_ctrl;
+wire [31:0] genreg_wr_data;
+wire [31:0] genreg_rd_data;
+wire [31:0] adc_intf_rd_data;
+wire [31:0] adc_intf_wr_data;
 
-  // SelectIO Interface Wizard connections
-  (* mark_debug = "true" *) wire [31:0] data_delay;
-  (* mark_debug = "true" *) wire [64:0] current_data_delay;
-  (* mark_debug = "true" *) wire delay_data_reset;
-  (* mark_debug = "true" *) wire delay_data_error;
+wire [127:0] fill_header_fifo_out;
+wire [22:0] ddr3_rd_burst_addr;
+wire [127:0] ddr3_one_burst_data;
 
-  wire [7:0] debug_wires;
+wire [4:0] adc_buf_data_delay;
+wire [64:0] adc_buf_current_data_delay;
 
-  assign debug[7:0] = debug_wires[7:0];
+//wire [7:0] debug_wires;
+//assign debug[7:0] = debug_wires[7:0];
 
-  ////////////////////////////////////////////////////////////////////////////
-  // Clock and reset handling
-  // Connect an input buffer and a global clock buffer to the 50 MHz clock
-  wire clk200, clk250;
+////////////////////////////////////////////////////////////////////////////
+// Clock and reset handling
+// Connect an input buffer and a global clock buffer to the 50 MHz clock
+wire clk50, clk200, clk250;
 
-  g2_chan_clks clk_dcm_50_200(
-  // Clock in ports
-    .clk_in1(clkin),    // input clk_in1
-    // Clock out ports
-    .clk50M(clk50),     // output clk_50M
-    .clk_200M(clk200),  // output clk_200M
-    .clk_250M(clk250),
-    // Status and control signals
-    .reset(1'b0),      // input reset
-    .locked()          // output locked
-  );
-
-//  wire clkin_buf, clk50;
-//  IBUF IBUF_clkin (.I(clkin), .O(clkin_buf));
-//  BUFG BUFG_clk50 (.I(clkin_buf), .O(clk50));
-  
-  // differential clock buffer - This should get shared between the Aurora channel interfaces
-  // and other internal logic.
-  IBUFDS_GTE2 clk125_IBUFDS_GTE2 (.I(xcvr_clk), .IB(xcvr_clk_N), .O(gt_clk125), .CEB(1'b0), .ODIV2());
-  BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
-
-  
-  // synchronous reset logic
-  startup_reset startup_reset(
-    .clk50(clk50),              // 50 MHz buffered clock 
-    .reset_clk50(reset_clk50),  // active-high reset output, goes low after startup
-    .clk125(clk125),			      // 125 MHz buffered clock
-    .reset_clk125(reset_clk125)	// active-high reset output, goes low after startup
-  );
-
-
-  ////////////////////////////////////////////////////////////////////////////
-  // dummy assignments to keep logic around
-  assign debug[8] = io[3] & io[2] & io[1] & io[0] & ch_addr[2] & ch_addr[1] & ch_addr[0] & power_good;
-  IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
-  
-  
-//  ////////////////////////////////////////////////////////////////////////////
-//  // Connect the ADC signals
-//  // assert 'adc_reset' until the clock is stable
-//  adc_startup_reset adc_startup_reset(
-//    .adc_clk(adc_clk),			// buffered clock, 250 MHz
-//    .reset_adc_clk(reset_adc_clk)	// active-high reset output, goes low after startup
-//  );
-
-  // A good note on DDR timing
-  // http://forums.xilinx.com/t5/Timing-Analysis/XDC-constraints-Source-Synchronous-ADC-DDR/td-p/292807
-  // Combine the ADC data 'p' pins and 'n' pins. Put the over-range into the LSB
-  wire [12:0] adc_in_p, adc_in_n;
-  wire [25:0] packed_adc_dat;    // two samples packed in one wide-word
-  assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d5p, adc_d4p, adc_d3p, adc_d2p, adc_d1p, adc_d0p, adc_dovrp};
-  assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n, adc_dovrn};
-  // Use a SelectIO Wizard DDR input buffer
-  selectio_wiz_0 adc_dat_buf (
-    .data_in_from_pins_p(adc_in_p),             // input wire [12 : 0] data_in_from_pins_p
-    .data_in_from_pins_n(adc_in_n),             // input wire [12 : 0] data_in_from_pins_n
-    .clk_in_p(adc_clk_p),                       // input wire clk_in_p
-    .clk_in_n(adc_clk_n),                       // input wire clk_in_n
-    .io_reset(reset_clk50),                     // input wire io_reset
-
-    .delay_clk(clk200),                         // input wire delay_clk
-    .in_delay_reset(delay_data_reset),          // input wire in_delay_reset
-    .in_delay_tap_in({ 13 {data_delay[4:0]} }), // input wire [64 : 0] in_delay_tap_in
-    .in_delay_tap_out(current_data_delay),      // output wire [64 : 0] in_delay_tap_out
-    .in_delay_data_ce({ 13 {1'b0} }),           // input wire [12 : 0] in_delay_data_ce
-    .in_delay_data_inc({ 13 {1'b0} }),          // input wire [12 : 0] in_delay_data_inc
-
-    .ref_clock(clk200),                         // 200 MHz clock required to ensure tap value settings
-    .clk_out(real_adc_clk),                     // output wire clk_out
-    .data_in_to_device(packed_adc_dat)          // output wire [25 : 0] data_in_to_device
-  );
-
-  data_delay_reset data_delay_reset(
-    .clk(clk50),                              // input, 50 MHz buffered clock
-    .reset(reset_clk50),                      // input, start-up reset to initialize SM
-    .delay_tap(data_delay[4:0]),              // input [4:0], tap delay to set from register block
-    .wiz_delay_tap(current_data_delay[64:0]), // input [64:0], tap values according to the wizard
-    .delay_data_reset(delay_data_reset),      // output, active-high reset
-    .error(delay_data_error)                  // output, tap values not set properly
-  );
-
-  
-  // use clk125 to run the ADC memory, header FIFO, and acquisition controller
-  assign adc_clk = real_adc_clk;
-  // assign adc_clk = clk125;
-
-
-  // put the trigger and reset signals into the ADC clock domain
-  wire acq_trig_sync;
-  wire acq_arm_sync;
-  wire rst_from_master;
-
-  sync_2stage trig_sync(
-      .clk(adc_clk),
-      .in(acq_trig),
-      .out(acq_trig_sync)
-  );
-  
-  sync_2stage trig_arm_sync(
-      .clk(adc_clk),
-      .in(io[2]),
-      .out(acq_arm_sync)
-  );
-
-  sync_2stage rst_sync(
-      .clk(adc_clk),
-      .in(io[3]),
-      .out(rst_from_master)
-  );
-
-  
-  // put the packed 26-bit ADC data into a 32-bit word for writing to the memory
-  // try to do sign-extension of the 13-bit words to 16-bit words (if timing allows)
-  // comment out while registers are driving the memory
-  assign ADC_data_mem_dina[12:0]  = packed_adc_dat[12:0];
-  assign ADC_data_mem_dina[15:13] = (packed_adc_dat[12] == 1'b1) ? 3'b1: 3'b0;
-  assign ADC_data_mem_dina[28:16] = packed_adc_dat[25:13];
-  assign ADC_data_mem_dina[31:29] = (packed_adc_dat[25] == 1'b1) ? 3'b1: 3'b0;
- 
-   
-  ////////////////////////////////////////////////////////////////////////////
-  // Create a dual-port memory for the ADC data
-  // The write-only "A" port will be connected to the ADC acquisition controller.
-  // The read-only "B" port will be connected to the readout controller
-
-  // Use registers to write to the "A" side until there is an ADC controller
-  // Use 'clk125' with the registers, instead of 'adc_clk'
-  ADC_data_mem ADC_data_mem (	
-  .clka(adc_clk),    // input wire clka
-  .wea(ADC_data_mem_wea),      // input wire [0 : 0] wea
-  .addra(ADC_data_mem_addra),  // input wire [11 : 0] addra
-  .dina(ADC_data_mem_dina),    // input wire [31 : 0] dina
-  .clkb(clk125),    // input wire clkb
-  .addrb(ADC_data_mem_addrb),  // input wire [11 : 0] addrb
-  .doutb(ADC_data_mem_doutb)  // output wire [31 : 0] doutb
+g2_chan_clks clk_dcm_50_200 (
+	// Clock in ports
+	.clk_in1(clkin),		// input, unbuffered 50 MHz from pin 
+	// Clock out ports
+	.clk_50M(clk50),		// output, 50 MHz
+	.clk_200M(clk200),		// output, 200 MHz
+	.clk_250M(clk250)		// output, 250 MHz
+	// Status and control signals
+	//.reset(1'b0),			// input, unused reset
+	//.locked()				// output, unused locked
 );
 
-  ////////////////////////////////////////////////////////////////////////////
-  // Create a FIFO for the ADC header info
-  // The write port will be connected to the ADC acquisition controller.
-  // The read port will be connected to the readout controller
+// differential clock buffer - This should get shared between the Aurora channel interfaces
+// and other internal logic.
+wire gt_clk125, clk125;
+IBUFDS_GTE2 clk125_IBUFDS_GTE2 (.I(xcvr_clk), .IB(xcvr_clk_N), .O(gt_clk125), .CEB(1'b0), .ODIV2());
+BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
 
-  // Use registers to write to the FIFO until there is an ADC controller
-  // Use 'clk125' with the input side, instead of 'adc_clk'
-
-  ADC_header_fifo ADC_header_fifo (
-	.rst(reset_clk125),        // input wire rst
-	.wr_clk(adc_clk),  // input wire wr_clk
-	.rd_clk(clk125),  // input wire rd_clk
-	.din(ADC_header_fifo_din),        // input wire [31 : 0] din
-	.wr_en(ADC_header_fifo_wr_en),    // input wire wr_en
-	.rd_en(ADC_header_fifo_rd_en),    // input wire rd_en
-	.dout(ADC_header_fifo_dout),      // output wire [31 : 0] dout
-	.full(ADC_header_fifo_full),      // output wire full
-	.empty(ADC_header_fifo_empty)    // output wire empty
+// synchronous reset logic
+startup_reset startup_reset(
+	.clk50(clk50),              // 50 MHz buffered clock 
+	.reset_clk50(reset_clk50),  // active-high reset output, goes low after startup
+	.clk125(clk125),			// buffered clock, 125 MHz
+	.reset_clk125(reset_clk125)	// active-high reset output, goes low after startup
 );
 
-  ////////////////////////////////////////////////////////////////////////////
-  // Connect the ADC acquisition state machine
-  adc_acquisition_control_sm adc_acquisition_control_sm(
-	.clk(adc_clk),					// 400 MHz ADC clock !!! USE REAL ADC CLOCK WHEN AVAILABLE
-	.arm(acq_arm_sync),		  // arm or reset the acquisition controller
-	.trig(acq_trig_sync),		// we have been triggered
-	.done(acq_done),				// acquisition for the current trigger is complete
-	// interface to the ADC data memory and header FIFO
-	.data_mem_wea(ADC_data_mem_wea),					// enable writing to the ADC data memory
-	.data_mem_addra(ADC_data_mem_addra),				// address for writing to the ADC data memory
-	.header_fifo_wr_en(ADC_header_fifo_wr_en),			// enable writing to the ADC header FIFO
-	.header_data(ADC_header_fifo_din),					// data to put in the ADC header FIFO 
-	// data for the ADC header FIFO and/or for local control
-	// The buffer_size, channel_num, post_trig_size, and initial_trig_num are from the register block/
-	// They are stable during operation, so do not need synchronization. The 'initial_even_num_we' signal
-	// will need to be synched. The current_trig_num is provided for register readback
-	.buffer_size(ADC_buffer_size),			// number of words in the data stream (2 samples per word)
-	.channel_num(ADC_channel_num),			// the number for this channel
-	.post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
-	.initial_trig_num(ADC_initial_trig_num),// initial value for the event number
-	.trig_num_we(ADC_trig_num_we),			// enable saving of the initial value for the event number
-	.current_trig_num(ADC_current_trig_num),	// the current value for the event number
-  .rst(rst_from_master),
-  .led2(led2) // green led
- );
-  
+////////////////////////////////////////////////////////////////////////////
+// dummy assignments to keep logic around
+// assign led2 = ~acq_trig;
+assign debug[8] = power_good;
+assign debug[9] = 1'b0;
+
+IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
+ 
+////////////////////////////////////////////////////////////////////////////
+// connect the ADC acquisition controller
+// Combine the ADC data 'p' pins and 'n' pins into arrays.
+wire [11:0] adc_in_p, adc_in_n;
+assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d5p, adc_d4p, adc_d3p, adc_d2p, adc_d1p, adc_d0p};
+assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
+ 
+adc_acq_top adc_acq_top (
+	// inputs
+	.adc_in_p(adc_in_p[11:0]),                  // [11:0] array of ADC 'p' data pins
+	.adc_in_n(adc_in_n[11:0]),                  // [11:0] array of ADC 'n' data pins
+	.adc_ovr_p(adc_dovrp),                      // ADC 'p' over-range pin
+	.adc_ovr_n(adc_dovrn),                      // ADC 'n' over-range pin
+	.adc_clk_p(adc_clk_p),                       // ADC 'p' clk pin
+	.adc_clk_n(adc_clk_n),                       // ADC 'n' clk pin
+	.reset_clk50(reset_clk50),                  // synchronously negated  
+	.clk200(clk200),                            // for input pin timing delay settings
+	.channel_tag(channel_tag[15:0]), 		   // stuff about the channel to put in the header
+	.num_muon_bursts(num_muon_bursts[20:0]),  // number of sample bursts in a MUON fill
+	.num_laser_bursts(num_laser_bursts[20:0]),// number of sample bursts in a LASER fill
+	.num_ped_bursts(num_ped_bursts[20:0]),    // number of sample bursts in a PEDESTAL fill
+	.initial_fill_num(initial_fill_num[23:0]),  // event number to assign to the first fill
+	.initial_fill_num_wr(initial_fill_num_wr),  // write-strobe to store the initial_fill_num
+    .acq_enable0(acq_enable0),              // indicates enabled for triggers, and fill type
+	.acq_enable1(acq_enable1),              // indicates enabled for triggers, and fill type
+	.acq_trig(acq_trig),                        // trigger the logic to start collecting data
+	.acq_reset(acq_reset),                      // reset all of the acquisition logic
+	.adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
+	.adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
+	// outputs
+	.adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
+	.fill_num(fill_num[23:0]),			         // fill number for this fill
+	.adc_acq_out_dat(adc_acq_out_dat[127:0]),   // 128-bit header or ADC data
+	.adc_acq_out_valid(adc_acq_out_valid),      // current data should be stored in the FIFO
+	.adc_clk(adc_clk),					          // ADC clock used by the FIFO
+	.adc_acq_full_reset(adc_acq_full_reset),	// reset all aspects of data collection/storage/readout
+	.acq_done(acq_done)                         // acquisition is done
+);
+        
+////////////////////////////////////////////////////////////////////////////
+// Create a FIFO to buffer the data between the ADC block and the DDR3 block
+ddr3_write_fifo ddr3_write_fifo (
+	// inputs
+	.rst(adc_acq_full_reset),       // reset at startup or when requested
+	.wr_clk(adc_clk), 		       // clock extracted from ADC DDR clock
+	.rd_clk(ddr3_domain_clk),       // clock extracted from DDR3 block
+	.din(adc_acq_out_dat[127:0]),   // 128-bit header or ADC data
+	.wr_en(adc_acq_out_valid),      // current data should be stored in the FIFO
+	.rd_en(ddr3_wr_fifo_rd_en),     // use and remove the data on the FIFO head
+	.dout(ddr3_wr_dat[127:0]),      // data to be written to the DDR3
+	.full(),                        // we don't currently use this
+	.empty(ddr3_wr_fifo_empty)		// data is available when this is not asserted
+);
+
+////////////////////////////////////////////////////////////////////////////
+// Connect the DDR3 interface
+ddr3_intf ddr3_intf(
+	// clocks and resets
+	.refclk(clk200),							// input, 200 MHz for I/O timing adjustments
+	.sysclk(clk250),							// input, drives the Xilinx DDR3 IP
+	.reset(adc_acq_full_reset),					// input, reset at startup or when requested by master FPGA 
+	.ddr3_domain_clk(ddr3_domain_clk),			// output, the DDR3 user-interface synchronous clock
+	// writing connections
+	.ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),	// input, data is available when this is not asserted
+	.ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),	// output, use and remove the data on the FIFO head
+	.ddr3_wr_dat(ddr3_wr_dat[127:0]),			// input, data from the ddr3_write_fifo, to be written to the DDR3
+	// reading connections
+	.local_domain_clk(clk125),							// input, the local user synchronous clock
+	.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
+	.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
+	.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
+	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
+	.ddr3_rd_one_burst(ddr3_rd_one_burst),				// input, get one 128-bit burst from the DDR3
+	.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// output, the requested 128-bit burst is ready
+	.ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
+	// connections to the DDR3 chips
+	.ddr3_addr(ddr3_addr[12:0]),
+	.ddr3_ba(ddr3_ba[2:0]),
+	.ddr3_dq(ddr3_dq[15:0]),
+	.ddr3_ck_p(ddr3_ck_p[0:0]),
+	.ddr3_ck_n(ddr3_ck_n[0:0]),
+	.ddr3_dqs_p(ddr3_dqs_p[1:0]),
+	.ddr3_dqs_n(ddr3_dqs_n[1:0]),
+	.ddr3_we_n(ddr3_we_n),
+	.ddr3_cke(ddr3_cke[0:0]),
+	.ddr3_ras_n(ddr3_ras_n),
+	.ddr3_cas_n(ddr3_cas_n),
+	.ddr3_reset_n(ddr3_reset_n),
+	.ddr3_dm(ddr3_dm[1:0]),
+	.ddr3_odt(ddr3_odt[0:0])
+);
+
+    
+
+ 
   ////////////////////////////////////////////////////////////////////////////
   // flash the led
   led_flasher led_flasher(.clk(clk50), .led(led1));
@@ -326,7 +276,9 @@ module channel_main(
     .c0_m_axi_rx_tready(c0_rx_axi_tready),            // input wire m_axis_tready
     // serial I/O pins
     .c0_rxp(c0_rx), .c0_rxn(c0_rx_N),                   // receive from channel 0 FPGA
-    .c0_txp(c0_tx), .c0_txn(c0_tx_N)                   // transmit to channel 0 FPGA
+    .c0_txp(c0_tx), .c0_txn(c0_tx_N),                   // transmit to channel 0 FPGA
+    .debug(debug[7:0])
+
   );
 
   // We need to swap the bit order for the RX and TX data
@@ -337,8 +289,12 @@ module channel_main(
   ///////////////////////////////////////////////////////////////////////////////////
   // Connect the command processor. This will receive commands from the Aurora serial
   // link and process them
+ 
+  
   command_top command_top(
     // clocks and reset
+	.clk50(clk50),              // 50 MHz buffered clock 
+    .reset_clk50(reset_clk50),  // active-high reset output, goes low after startup
     .clk(clk125),                        // clock for the interconnect side of the FIFOs
     .resetN(reset_clk125N),          // active-lo reset for the interconnect side of the FIFOs
     // channel 0 connections
@@ -355,33 +311,36 @@ module channel_main(
     .tx_tvalid(c0_tx_axi_tvalid),
     .tx_tlast(c0_tx_axi_tlast),
     .tx_tready(c0_tx_axi_tready),
-	  // interface to the ADC data memory and header FIFO
-	  .ADC_data_mem_addrb(ADC_data_mem_addrb),		// output wire [11 : 0] addrb
-    .ADC_data_mem_doutb(ADC_data_mem_doutb),		// input wire [31 : 0] doutb
-	  .ADC_header_fifo_rd_en(ADC_header_fifo_rd_en),	// output wire rd_en
-	  .ADC_header_fifo_dout(ADC_header_fifo_dout),	// input wire [31 : 0] dout
-	  .ADC_header_fifo_empty(ADC_header_fifo_empty),	// input wire empty
-	  // temporary use of registers to write to the ADC memory and ADC header FIFO
-	  // Signal connection have been removed in order to use the real ADC acquisition controller
-	  .ADC_data_mem_wea(), 						    // WAS .ADC_data_mem_wea(ADC_data_mem_wea),
-	  .ADC_data_mem_addra(),                          // WAS .ADC_data_mem_addra(ADC_data_mem_addra),
-	  .ADC_data_mem_dina(),				    		// WAS .ADC_data_mem_dina(ADC_data_mem_dina),
-	  .ADC_header_fifo_din(),							// WAS .ADC_header_fifo_din(ADC_header_fifo_din),
-	  .ADC_header_fifo_wr_en(),						// WAS .ADC_header_fifo_wr_en(ADC_header_fifo_wr_en),
-	  // Registers to/from the ADC acquisition state machine
-	  .ADC_buffer_size(ADC_buffer_size),		// number of words in the data stream (2 samples per word)
-	  .ADC_channel_num(ADC_channel_num),		// the number for this channel
-	  .ADC_post_trig_size(ADC_post_trig_size),	// number of words to continue acquiring after a trigger
-	  .ADC_initial_trig_num(ADC_initial_trig_num),	// initial value for the event number
-	  .ADC_trig_num_we(ADC_trig_num_we),				// enable saving of the initial value for the event number
-	  .ADC_current_trig_num(ADC_current_trig_num),	// the current value for the event number
-	  .genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
-	  .genreg_wr_data(genreg_wr_data[31:0]),
-	  .genreg_rd_data(genreg_rd_data[31:0]),
-    .data_delay(data_delay[31:0]),
-    .current_data_delay(current_data_delay[64:0]),
-    .data_delay_error(delay_data_error)
+	.readout_pause(readout_pause),		// stop sending fill data to the Aurora
+
+	// interface to the ADC data memory and header FIFO
+	.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
+	.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
+	.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
+	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
+	.ddr3_rd_one_burst(ddr3_rd_one_burst),				// input, get one 128-bit burst from the DDR3
+	.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// output, the requested 128-bit burst is ready
+	.ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
+
+	// Registers to/from the ADC acquisition state machine
+	.fill_num(fill_num[23:0]),			         // fill number for this fill
+	.channel_tag(channel_tag[15:0]), 		   // stuff about the channel to put in the header
+	.num_muon_bursts(num_muon_bursts[20:0]),  // number of sample bursts in a MUON fill
+	.num_laser_bursts(num_laser_bursts[20:0]),// number of sample bursts in a LASER fill
+	.num_ped_bursts(num_ped_bursts[20:0]),    // number of sample bursts in a PEDESTAL fill
+	.initial_fill_num(initial_fill_num[23:0]),  // event number to assign to the first fill
+	.initial_fill_num_wr(initial_fill_num_wr),  // write-strobe to store the initial_fill_num
+	.ch_addr(ch_addr[2:0]),						// the channel address jumpers
+	.adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
+	.adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
+	.adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
+ 
+	.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
+	.genreg_wr_data(genreg_wr_data[31:0]),
+	.genreg_rd_data(genreg_rd_data[31:0])
+
 );
+
 
 gen_reg gen_reg(
 	.clk(clk50),
@@ -408,79 +367,7 @@ adc_intf adc_intf(
   	.sdenb(adc_sdenb),
   	.sresetb(adc_sresetb),
   	.enable(adc_enable),
-	.debug(debug_wires[7:0])
+	.debug()
 );
-
-
-
-
-///// COMMENT OUT DDR3 MEMORY
-//  // Make 200 MHz from 125 MHz, needed by the DDR3 function
-//  wire clk200;
-//  clk_wiz_0 clk_wiz_200 (
-//   // Clock in ports
-//    .clk_in1(clk125),      // input clk_in1
-//    // Clock out ports
-//    .clk_out1(clk200));    // output clk_out1
-//
-//  wire tg_compare_error, init_calib_complete;
-// assign led2 = tg_compare_error | init_calib_complete;
-//  ////////////////////////////////////////////////////////////////////////
-//  // Connect the example DDR3 memory files.
-//  // Inouts
-//  example_top ddr3_example_top (
-//    .ddr3_dq(ddr3_dq),
-//    .ddr3_dqs_n(ddr3_dqs_n),
-//    .ddr3_dqs_p(ddr3_dqs_p),
-//    // Outputs
-//    .ddr3_addr(ddr3_addr),
-//    .ddr3_ba(ddr3_ba),
-//    .ddr3_ras_n(ddr3_ras_n),
-//    .ddr3_cas_n(ddr3_cas_n),
-//    .ddr3_we_n(ddr3_we_n),
-//    .ddr3_reset_n(ddr3_reset_n),
-//    .ddr3_ck_p(ddr3_ck_p),
-//    .ddr3_ck_n(ddr3_ck_n),
-//    .ddr3_cke(ddr3_cke),
-//    .ddr3_dm(ddr3_dm),
-//    .ddr3_odt(ddr3_odt),
-//    // Inputs
-//    // Single-ended system clock
-//   .sys_clk_i(clk125),
-//    // Single-ended iodelayctrl clk (reference clock)
-//    .clk_ref_i(clk200),
-//    .tg_compare_error(tg_compare_error),
-//    .init_calib_complete(init_calib_complete),
-//    // System reset - Default polarity of sys_rst pin is Active Low.
-//    // System reset polarity will change based on the option 
-//    // selected in GUI.
-//    .sys_rst(reset_clk125N)
-//  );
-
-  ////////////////////////////////////////////////////////////////////////////
-  // dummy logic for DDR3 SDRAM
-  // internal wires associated with differential buffers
-  wire ddr_ckp_OBUFDS_in;
-  wire ddr_ldqsp_OBUFDS_in;
-  wire ddr_udqsp_OBUFDS_in;
-  // differential buffers
-  OBUFDS ddr_ckp_OBUFDS (.I(ddr_ckp_OBUFDS_in), .O(ddr3_ck_p), .OB(ddr3_ck_n));
-  OBUFDS ddr_ldqsp_OBUFDS (.I(ddr_ldqsp_OBUFDS_in), .O(ddr3_dqs_p[0]), .OB(ddr3_dqs_n[0]));
-  OBUFDS ddr_udqsp_OBUFDS (.I(ddr_udqsp_OBUFDS_in), .O(ddr3_dqs_p[1]), .OB(ddr3_dqs_n[1]));
-  // assignments to keep memory chip inactive
-  assign ddr3_addr[12:0] = 13'h0000;
-  assign ddr3_ba[2:0] = 3'h0;
-  assign ddr_ckp_OBUFDS_in = clk50;  // may not be needed, but run a clock to the memory 
-  assign ddr3_cke = 1'b0;               // this should put chip in power-down mode
-  assign ddr3_dm[1:0] = 2'b0;
-  assign ddr3_odt[0] = 1'b0;
-  assign ddr3_cas_n = 1'b1;
-  assign ddr3_ras_n = 1'b1;
-  assign ddr3_we_n = 1'b1;
-  assign ddr3_reset_n = 1'b1;
-  assign ddr3_dq[15:0] = 16'hzzzz;
-  assign ddr_ldqsp_OBUFDS_in = 1'b0;
-  assign ddr_udqsp_OBUFDS_in = 1'b0;
-
 
 endmodule

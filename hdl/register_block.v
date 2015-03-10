@@ -1,82 +1,37 @@
 // register_block.v
 //
-// This module provides access to 16 32-bit registers. R/W = read/write, RO = read-only
+// This module provides access to 32 32-bit registers. R/W = read/write, RO = read-only
 //
-// ADC data comes in pairs of 800 MHz samples. All references to ADC data counts is in terms
-// of pairs of words packed into a 32-bit word.
-//
-// R0: R/W Initial Trigger Number - ADC events will be numbered starting with this value. This
-//             is a 32-bit register that will wrap around. Large numbers may appear negative
-//             to some programs.
-//
-// R1: RO  Next Trigger Number - The next ADC event will be assigned this value. Needs at least
-//             one 'arm' event after reset to become valid. This is a 32-bit register that will
-//             wrap around. Large numbers may appear negative to some programs.
-//
-// R2: R/W ADC Buffer Size - This register controls the number of 32-bit ADC data words that are
-//            transmitted in response to a 'CC_RD_FILL' command. It is limited to 4095. 
-//
-// R3: R/W ADC Channel Number - This register controls the value of the channel number that is in
-//             the ADC data header. It is a 32-bit number. Initialization code may want to insert
-//             board numbers and crate numbers along with the actual channel number.
-//
-// R4: R/W ADC Post Trigger Count - This register control the number of ADC data words that
-//             continue to be stored after a trigger is received. It is a 32-bit number that will
-//             allow one to collect data long after the trigger has been seen. The amount of data
-//             will still be limited by the ADC buffer size and the actual memory size.
-// R5:  generic register address and control
-// R6:  generic register wr
-// R7:  generic register rd
-// R8: R/W Data Delay - This register holds the variable loadable tap value (0-31) for the data
-//			   delay line in the SelectIO Interface Wizard.
-// R9: RO Data Delay - The tap value for the data bus delay line as outputted by the SelectIO
-//			   Interface Wizard, bits 0-4.
-// R10: RO Data Delay - The tap value for the data bus delay line as outputted by the SelectIO
-//			   Interface Wizard, bits 5-9.
-// R11: RO Data Delay - The tap value for the data bus delay line as outputted by the SelectIO
-//			   Interface Wizard, bits 10-12.
-// R12: RO Data Delay Error
-//
-// R13: R/W Test Memory Address - This register holds the address in the Test Memory that will be
-//              used for the next memory access using register R14. Only the low 12 bits are used.
-//
-// R14: R/W Test Memory Data - This register is used to write data to the Test Memory, at the
-//              address specified by register R13. It is a 32-bit number.
-//
-// R15: R/W Test FIFO Data - This register is used to write data to the Test FIFO. It is a 32-bit
-//              number.
-
-
 
 module register_block(
 	// clocks and reset
-    input clk,                        // 125 MHz, clock for the interconnect side of the FIFOs
-    input reset,                      // reset 
+	input clk50,              // 50 MHz buffered clock 
+	input reset_clk50,  // active-high reset output, goes low after startup
+    input clk,                   // 125 MHz, clock for the interconnect side of the FIFOs
+    input reset,                 // reset 
     // data from/to Master FPGA
-    input  [31:0] rx_data,            // note index order
+    input  [31:0] rx_data,       // note index order
 	output [31:0] tx_data,
-	input rd_en,		              // enable reading of the specific register
-	input wr_en,			   	      // enable writing to the specific register
-	input reg_num_le,				  // enable saving of the selected register number
-	output illegal_reg_num,		 	  // The desired register does not exist
-	// temporary use of registers to write to the ADC memory and ADC header FIFO
-	output ADC_data_mem_wea,          // input wire [0 : 0] wea
-	output [11:0] ADC_data_mem_addra, // input wire [11 : 0] addra
-	output ADC_header_fifo_wr_en,     // input wire wr_en
+	input rd_en,			// enable reading of the specific register
+	input wr_en,			// enable writing to the specific register
+	input reg_num_le,		// enable saving of the selected register number
+	output illegal_reg_num,	// The desired register does not exist
 	// Register to/from the ADC acquisition state machine
-	output [31:0] buffer_size,		  // number of words in the data stream (2 samples per word)
-	output [31:0] channel_num,		  // the number for this channel
-	output [31:0] post_trig_size,	  // number of words to continue acquiring after a trigger
-	output [31:0] initial_trig_num,	  // initial value for the event number
-	output trig_num_we,				  // enable saving of the initial value for the event number
-	input [31:0] current_trig_num,	  // the current value for the event number
-	output [31:0] genreg_addr_ctrl,	  // generic register address and control output
-	output [31:0] genreg_wr_data,	  // generic register data written from Master FPGA 
-	input [31:0] genreg_rd_data,	  // generic register data read by Master FPGA
-	// Register to the SelectIO Interface Wizard
-	output [31:0] data_delay,         // data bus delay tap value (0-31)
-	input [64:0] current_data_delay,  // current data bus delay tap value
-	input data_delay_error            // error in setting the data delay tap values
+	input [23:0] fill_num,	         // fill number for this fill
+    output [15:0] channel_tag,		// stuff about the channel to put in the header
+	output [20:0] num_muon_bursts,	// number of sample bursts in a MUON fill
+	output [20:0] num_laser_bursts,	// number of sample bursts in a LASER fill
+	output [20:0] num_ped_bursts,	// number of sample bursts in a OPEDESTAL fill
+	output [23:0] initial_fill_num,  // event number to assign to the first fill
+    output initial_fill_num_wr,      // write-strobe to store the initial_fill_num
+	input [2:0] ch_addr,			// the channel address jumpers
+	output adc_buf_delay_data_reset,	// use the new delay settings
+	output [4:0] adc_buf_data_delay,	// 5 delay-tap-bits per line, all lines always all the same
+	input [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
+ 
+	output [31:0] genreg_addr_ctrl,	//generic register address and control output
+	output [31:0] genreg_wr_data,	//generic register data written from Master FPGA 
+	input [31:0] genreg_rd_data		//generic register data read by Master FPGA
 );
 			
 	// make a register to hold the number of the selected register.
@@ -93,55 +48,76 @@ module register_block(
 			reg_num[31:0] <= reg_num[31:0];
 	end
 	// set the illegal flag if any upper bit is non-zero
-	assign illegal_reg_num = (reg_num[31:4] == 28'h0000000) ? 1'b0 : 1'b1;
-
+	assign illegal_reg_num = (reg_num[31:5] == 28'h0000000) ? 1'b0 : 1'b1;
+	
 	//  make a block of 16 32-bit registers
 	reg [31:0] reg0_, reg1_, reg2_, reg3_, 
 				reg4_, reg5_, reg6_, reg7_,
-				reg9_, reg10_, reg11_,
-				reg12_, reg13_, reg14_, reg15_;
-	reg [31:0] reg8_ = 32'b11111; // default tap value of 31
+				reg8_, reg9_, reg10_, reg11_,
+				reg12_, reg13_, reg14_, reg15_,
+				reg16_, reg17_, reg18_, reg19_,
+				reg20_, reg21_, reg22_, reg23_,
+				reg24_, reg25_, reg26_, reg27_,
+				reg28_, reg29_, reg30_, reg31_;
 
 	// write to the writable registers
 	always @ (posedge clk) begin
-		if (wr_en && (reg_num[3:0] == 4'h0)) reg0_[31:0] <= rx_data[31:0];
-		// R1 is read-only
-		// if (wr_en && (reg_num[3:0] == 4'h1)) reg1_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'h2)) reg2_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'h3)) reg3_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'h4)) reg4_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'h5)) reg5_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'h6)) reg6_[31:0] <= rx_data[31:0];
-		// R7 is read only
-		// if (wr_en && (reg_num[3:0] == 4'h7)) reg7_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'h8)) reg8_[31:0] <= rx_data[31:0];
-		// R9-11 is read only
-		// if (wr_en && (reg_num[3:0] == 4'h9)) reg9_[31:0] <= rx_data[31:0];
-		// if (wr_en && (reg_num[3:0] == 4'ha)) reg10_[31:0] <= rx_data[31:0];
-		// if (wr_en && (reg_num[3:0] == 4'hb)) reg11_[31:0] <= rx_data[31:0];
-		// R12 is read only
-		// if (wr_en && (reg_num[3:0] == 4'hc)) reg12_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'hd)) reg13_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'he)) reg14_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[3:0] == 4'hf)) reg15_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h00)) reg0_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h01)) reg1_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h02)) reg2_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h03)) reg3_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h04)) reg4_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h05)) reg5_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h06)) reg6_[31:0] <= rx_data[31:0];
+		//R7 is read only
+		//if (wr_en && (reg_num[3:0] == 4'h7)) reg7_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h08)) reg8_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h09)) reg9_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h0a)) reg10_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h0b)) reg11_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h0c)) reg12_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h0d)) reg13_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h0e)) reg14_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h0f)) reg15_[31:0] <= rx_data[31:0];
+
+		if (wr_en && (reg_num[4:0] == 5'h10)) reg16_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h11)) reg17_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h12)) reg18_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h13)) reg19_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h14)) reg20_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h15)) reg21_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h16)) reg22_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h17)) reg23_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h18)) reg24_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h19)) reg25_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h1a)) reg26_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h1b)) reg27_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h1c)) reg28_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h1d)) reg29_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h1e)) reg30_[31:0] <= rx_data[31:0];
+		if (wr_en && (reg_num[4:0] == 5'h1f)) reg31_[31:0] <= rx_data[31:0];
+
 	end
 
 	// Register to/from the ADC acquisition state machine
-	// R0
-	assign initial_trig_num[31:0] = reg0_[31:0];	// initial value for the event number
+	// R0 - initial value for the fill number
+	assign initial_fill_num[23:0] = reg0_[23:0];
 	// Send R0 'wr_en' to the ADC acquisition controller
-	assign trig_num_we  = (wr_en && (reg_num[3:0] == 4'h0)) ? 1'b1 : 1'b0;
+	assign initial_fill_num_wr  = (wr_en && (reg_num[4:0] == 5'h0)) ? 1'b1 : 1'b0;
 
-	// R1 is read-only
+	// R1 - channel tag
+	// bits [2:0] from configuration jumpers
+	assign channel_tag[2:0] = ch_addr[2:0];					// the channel address jumpers
+	assign channel_tag[15:3] = reg1_[15:3];
 	
-	// R2
-	assign buffer_size[31:0]      = reg2_[31:0];		// number of words in the data stream (2 samples per word)
+	// R2 - Muon fill burst count
+	assign num_muon_bursts[20:0] = reg2_[20:0];
 
-	// R3
-	assign channel_num[31:0]      = reg3_[31:0];		// the number for this channel
+	// R3- Laser fill burst count
+	assign num_laser_bursts[20:0] = reg3_[20:0];
 
-	// R4
-	assign post_trig_size[31:0]   = reg4_[31:0];	// number of words to continue acquiring after a trigger
+	// R4- Pedestal fill burst count
+	assign num_ped_bursts[20:0] = reg4_[20:0];
 
 	// R5
 	assign genreg_addr_ctrl[31:0] = reg5_[31:0];	//address and control for the generic register interface
@@ -150,39 +126,61 @@ module register_block(
 	assign genreg_wr_data[31:0]  = reg6_[31:0];	//data written TO generic register interface
 
 	// R7 is read only
-	
+
 	// R8
-	assign data_delay[31:0] = reg8_[31:0]; // tap value for the data bus delay
-
-	// temporary use of registers to write to the ADC memory and ADC header FIFO
-	// Use R13 for the memory address
-	assign ADC_data_mem_addra[11:0] = reg13_[11:0]; 
-
-	// Use R14 'wr_en' for the memory write_enable
-	assign ADC_data_mem_wea = (wr_en && (reg_num[3:0] == 4'he)) ? 1'b1 : 1'b0;
-
-	// Use R15 'wr_en' for the header FIFO write_enable
-	assign ADC_header_fifo_wr_en  = (wr_en && (reg_num[3:0] == 4'hf)) ? 1'b1 : 1'b0;
+	assign adc_buf_data_delay[4:0] = reg8_[4:0]; // tap value for the data bus delay
+	// When we write a new delay, we need to assert 'adc_buf_delay_data_reset'. Us this SM
+	data_delay_reset data_delay_reset(
+	    .clk(clk50),                              // input, 50 MHz buffered clock
+	    .reset(reset_clk50),                      // input, start-up reset to initialize SM
+	    .delay_tap(adc_buf_data_delay[4:0]),              // input [4:0], tap delay to set from register block
+	    .wiz_delay_tap(adc_buf_current_data_delay[64:0]), // input [64:0], tap values according to the wizard
+	    .delay_data_reset(adc_buf_delay_data_reset),      // output, active-high reset
+	    .error(adc_buf_delay_data_error)                  // output, tap values not set properly
+	  );
 	
+
 	reg [31:0] rdbk_reg;
 	assign tx_data[31:0] = rdbk_reg[31:0];
 	always @ (posedge clk) begin
-		if (rd_en && (reg_num[3:0] == 4'h0)) rdbk_reg[31:0] <= reg0_[31:0];
-		// R1 is read-only from outside of this module
-		if (rd_en && (reg_num[3:0] == 4'h1)) rdbk_reg[31:0] <= current_trig_num[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h2)) rdbk_reg[31:0] <= reg2_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h3)) rdbk_reg[31:0] <= reg3_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h4)) rdbk_reg[31:0] <= reg4_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h5)) rdbk_reg[31:0] <= reg5_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h6)) rdbk_reg[31:0] <= reg6_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h7)) rdbk_reg[31:0] <= genreg_rd_data[31:0]; //data read from generic register interface
-		if (rd_en && (reg_num[3:0] == 4'h8)) rdbk_reg[31:0] <= reg8_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'h9)) rdbk_reg[31:0] <= {7'b0,current_data_delay[24:0]};   // R9 is read only
-		if (rd_en && (reg_num[3:0] == 4'ha)) rdbk_reg[31:0] <= {7'b0,current_data_delay[49:25]};  // R10 is read only
-		if (rd_en && (reg_num[3:0] == 4'hb)) rdbk_reg[31:0] <= {17'b0,current_data_delay[64:50]}; // R11 is read only
-		if (rd_en && (reg_num[3:0] == 4'hc)) rdbk_reg[31:0] <= {31'b0,data_delay_error}; // R12 is read only
-		if (rd_en && (reg_num[3:0] == 4'hd)) rdbk_reg[31:0] <= reg13_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'he)) rdbk_reg[31:0] <= reg14_[31:0];
-		if (rd_en && (reg_num[3:0] == 4'hf)) rdbk_reg[31:0] <= reg15_[31:0];
+		// R0 is read back from the fill counter outside of this module
+		if (rd_en && (reg_num[4:0] == 5'h00)) rdbk_reg[31:0] <= {8'b0, fill_num[23:0]};
+		// R1 bits [2:0] from the channel address jumpers
+		// R1 bits [31:16] always read back as zero
+		if (rd_en && (reg_num[4:0] == 5'h01)) rdbk_reg[31:0] <= {16'h0000, reg1_[15:3], ch_addr[2:0]};
+		// R2, R3, R4 bits [31:21] always read back as zero
+		if (rd_en && (reg_num[4:0] == 5'h02)) rdbk_reg[31:0] <= {11'h0000, reg2_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h03)) rdbk_reg[31:0] <= {11'h0000, reg3_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h04)) rdbk_reg[31:0] <= {11'h0000, reg4_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h05)) rdbk_reg[31:0] <= reg5_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h06)) rdbk_reg[31:0] <= reg6_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h07)) rdbk_reg[31:0] <= genreg_rd_data[31:0];  //data read from generic register interface
+		if (rd_en && (reg_num[4:0] == 5'h08)) rdbk_reg[31:0] <= reg8_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h09)) rdbk_reg[31:0] <= {7'b0,adc_buf_current_data_delay[24:0]};   // R9 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0a)) rdbk_reg[31:0] <= {7'b0,adc_buf_current_data_delay[49:25]};  // R10 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0b)) rdbk_reg[31:0] <= {17'b0,adc_buf_current_data_delay[64:50]}; // R11 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0c)) rdbk_reg[31:0] <= {31'b0,adc_buf_delay_data_error}; // R12 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0d)) rdbk_reg[31:0] <= reg13_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h0e)) rdbk_reg[31:0] <= reg14_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h0f)) rdbk_reg[31:0] <= reg15_[31:0];
+		
+		if (rd_en && (reg_num[4:0] == 5'h10)) rdbk_reg[31:0] <= reg16_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= reg17_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= reg18_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= reg19_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= reg20_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= reg21_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= reg22_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= reg23_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= reg24_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h19)) rdbk_reg[31:0] <= reg25_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h1a)) rdbk_reg[31:0] <= reg26_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h1b)) rdbk_reg[31:0] <= reg27_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h1c)) rdbk_reg[31:0] <= reg28_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h1d)) rdbk_reg[31:0] <= reg29_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h1e)) rdbk_reg[31:0] <= reg30_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h1f)) rdbk_reg[31:0] <= reg31_[31:0];
+
+//		else rdbk_reg[31:0] <= rdbk_reg[31:0];
 	end
 endmodule	

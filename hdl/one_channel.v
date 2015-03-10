@@ -34,7 +34,7 @@ module one_channel(
   input gt_qpllrefclk_quad2,          // input
   output gt0_qpllreset,                // output
   // status
-  output [8:0] live_status
+  output [7:0] debug
  );
 
   wire local_axis_resetn;                 // a local reset synched to the Aurora 'user_clk'
@@ -104,7 +104,7 @@ module one_channel(
  
   // Connect a channel instance of aurora_8b10b_0.xci
   // until a programmable register is available, set the 'loopback' bits here in code.
-  assign loopback_set[2:0] = 3'b000;
+  assign loopback_set[2:0] = 3'b010;
   aurora_8b10b_0 aurora (
     // AXI TX Interface from transmit FIFO
     .s_axi_tx_tdata(local_axis_tx_tdata),   // input [0:15], from TX FIFO
@@ -208,21 +208,16 @@ module one_channel(
   assign lane_up_reduce_i  = &lane_up_r2;
   assign rst_cc_module_i   = !lane_up_reduce_i;
 
-  // status register
-  reg [8:0] live_status_reg;
-  always @ (posedge aurora_user_clk) begin
-    live_status_reg[0] <=  channel_up;                 // 
-    live_status_reg[1] <=  lane_up;                    // 
-    live_status_reg[2] <= frame_err;                   // 
-    live_status_reg[3] <=  hard_err;                   // 
-    live_status_reg[4] <=  soft_err;                   // 
-    live_status_reg[5] <=  pll_not_locked;             // 
-    live_status_reg[6] <=  tx_resetdone;           // 
-    live_status_reg[7] <=  rx_resetdone;           // 
-    live_status_reg[8] <=  link_reset;             // 
-  end
-  assign live_status[8:0] = live_status_reg[8:0];
-  
+  // debug outputs
+  assign   debug[0] =  channel_up;                 // 
+  assign   debug[1] =  lane_up;                    // 
+  assign   debug[2] =  frame_err;                   // 
+  assign   debug[3] =  hard_err;                   // 
+  assign   debug[4] =  soft_err;                   // 
+  assign   debug[5] =  clk50;             // 
+  assign   debug[6] =  gt_refclk;           // 
+  assign   debug[7] =  aurora_user_clk;           // 
+   
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // connect the programming interface
 //  chan_io_block io_block(

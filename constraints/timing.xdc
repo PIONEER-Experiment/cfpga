@@ -1,31 +1,31 @@
 # define our input clocks
-create_clock -period 20.000 -name clk50 [get_ports clkin]
+# The 50 MHz 'clkin' is created in in 'g2_chan_clks.xdc'?
+#create_clock -period 20.000 -name clkin [get_ports clkin]
+
+# The 125 MHz oscillator
+# crs - I think this is only for XMIT
 create_clock -period 8.000 -name xcvr_clk [get_ports xcvr_clk]
 
 # Aurora USER_CLK Constraint : Value is selected based on the line rate (5.0 Gbps) and lane width (4-Byte)
+# crs - I think this is for RECV, and is extracted from the incoming signal 
 create_clock -period 8.000 -name user_clk_chan0 [get_pins channels/chan0/clock_module/user_clk_buf_i/O]
 
-###### CDC in RESET_LOGIC from INIT_CLK to USER_CLK ##############
-set_max_delay -datapath_only -from [get_clocks clk50] -to [get_clocks user_clk_chan0] 8.000
+# 400 MHz ADC clock
+# This cones from the ADC
+create_clock -period 2.500 -name adc_clk [get_ports adc_clk_p]
 
-# input delays have to be specified
-#set_input_delay -clock [get_clocks adc_clk] 1.000 [get_ports adc_d*]
-#set_input_delay -clock [get_clocks adc_clk] 1.000 [get_ports adc_o*]
-#
-#http://forums.xilinx.com/t5/Timing-Analysis/XDC-constraints-Source-Synchronous-ADC-DDR/td-p/292807
-# ADS5463 DATA to DRY skew -350 to +650 ps
-#For the input_delay, 'max' is the setup time and 'min' is the hold time
-create_clock -period 40.000 -name adc_clk -waveform {0.000 20.000} [get_ports adc_clk_p]
-#create_clock -name virt -period 4
-#OK create_clock -name adc_clk -waveform {0.7 2.7} -period 4.000 [get_ports adc_clk_p]
-#FAIL create_clock -name adc_clk -waveform {0.0 2.0} -period 4.000 [get_ports adc_clk_p]
-#create_clock -name adc_clk -waveform {0.0 2.0} -period 4.000 [get_ports adc_clk_p]
-set_input_delay -clock [get_clocks adc_clk] -max 1.850 [get_ports adc_d*]
-set_input_delay -clock [get_clocks adc_clk] -min 2.050 [get_ports adc_d*]
-#set_input_delay -clock $vclk -max  1.850 -clock_fall $ins -add_delay
-#set_input_delay -clock $vclk -min  2.050 -clock_fall $ins -add_delay
-
-# everything from the 50 MHz 'clkin' (clk50) signal is asynchronous to everything from the 100 MHz 'xcvr_clk' signal
-set_clock_groups -asynchronous -group [get_clocks clk50]
+# Asynchronous clock groups
+# Each group should be generally be isolated from the others with FIFOs or 2-stage synchronizers.
+# The are quasi-DC signals, like configuration registers, that span clock domains without synchronizers.
+# The use of the registers is synchronized by way of how the logic operates.
 set_clock_groups -asynchronous -group [get_clocks xcvr_clk]
 set_clock_groups -asynchronous -group [get_clocks user_clk_chan0]
+set_clock_groups -asynchronous -group [get_clocks adc_clk]
+set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks clkin]
+
+# This path is in the 'clkin' group, but is crossing from 250 MHz to 200 MHz
+set_false_path -from [get_pins ddr3_intf/reset_sync2_reg/C] -to [all_registers]
+
+# These are DDR registers with a 400 MHz clock, so the time between edges is 1.25 nsec. Vivado complains
+# about these. It can't assure that the 'reset' signals all happen within 1.25 nsec. 
+set_false_path -from [get_pins adc_acq_top/adc_acq_sm/adc_acq_full_reset_reg/C] -to [all_registers]
