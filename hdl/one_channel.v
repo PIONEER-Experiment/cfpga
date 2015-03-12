@@ -104,7 +104,7 @@ module one_channel(
  
   // Connect a channel instance of aurora_8b10b_0.xci
   // until a programmable register is available, set the 'loopback' bits here in code.
-  assign loopback_set[2:0] = 3'b010;
+  assign loopback_set[2:0] = 3'b000;
   aurora_8b10b_0 aurora (
     // AXI TX Interface from transmit FIFO
     .s_axi_tx_tdata(local_axis_tx_tdata),   // input [0:15], from TX FIFO

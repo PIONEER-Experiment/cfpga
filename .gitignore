@@ -16,8 +16,8 @@ projects/
 !hdl/*.txt
 
 # IPs
-!ip/**/*.xci
-!ip/**/*.prj
+!ip/*/*.xci
+!ip/*/*.prj
 
 ip/**/*.v
 ip/**/*.vhd

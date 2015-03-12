@@ -11,8 +11,6 @@ set proj_dir [get_property directory [current_project]]
 set obj [get_projects WFD_Channel]
 set_property "default_lib" "xil_defaultlib" $obj
 set_property "part" "xc7k70tfbg484-2" $obj
-set_property "simulator_language" "Mixed" $obj
-set_property "source_mgmt_mode" "None" $obj
 
 # Create 'sources_1' fileset (if not found)
 if {[string equal [get_filesets -quiet sources_1] ""]} {
@@ -30,7 +28,7 @@ add_files -norecurse -fileset $obj [glob $origin_dir/hdl/*.v]
 
 # Set 'sources_1' fileset file properties for remote files
 foreach file [glob $origin_dir/ip/*/*.xci] {
-    set file [file normalize $file]
+  set file [file normalize $file]
 	set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 	if { ![get_property "is_locked" $file_obj] } {
   		set_property "synth_checkpoint_mode" "Singular" $file_obj
@@ -38,7 +36,7 @@ foreach file [glob $origin_dir/ip/*/*.xci] {
 }
 
 foreach file [glob $origin_dir/hdl/*.txt] {
-    set file [file normalize $file]
+  set file [file normalize $file]
 	set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 	set_property "file_type" "Verilog Header" $file_obj
 }
@@ -99,6 +97,8 @@ if {[string equal [get_runs -quiet synth_1] ""]} {
 }
 set obj [get_runs synth_1]
 set_property "part" "xc7k70tfbg484-2" $obj
+set_property "steps.synth_design.args.flatten_hierarchy" "none" $obj
+set_property "steps.synth_design.args.fsm_extraction" "one_hot" $obj
 
 # set the current synth run
 current_run -synthesis [get_runs synth_1]
