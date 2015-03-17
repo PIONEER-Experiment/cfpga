@@ -7,9 +7,11 @@ module ddr3_intf(
 	input reset,								// input, reset at startup or when requested by master FPGA 
 	output ddr3_domain_clk,						// output, the DDR3 user-interface synchronous clock
 	// writing connections
+	input acq_enabled,							// the system is in acquisition mode, rather than readout mode
 	input ddr3_wr_fifo_empty,					// input, data is available when this is not asserted
 	output ddr3_wr_fifo_rd_en,					// output, use and remove the data on the FIFO head
-	input [127:0] ddr3_wr_dat,					// input, data from the ddr3_write_fifo, to be written to the DDR3
+	input [127:0] ddr3_wr_fifo_dat,				// input, data from the ddr3_write_fifo, to be written to the DDR3
+	output ddr3_wr_sync_err,					// synchronization error flag
 	// reading connections
 	input local_domain_clk,						// input, the local interface synchronous clock
 	output fill_header_fifo_empty,				// output, a header is available when not asserted
@@ -33,7 +35,8 @@ module ddr3_intf(
 	output ddr3_cas_n,
 	output ddr3_reset_n,
 	output [1:0] ddr3_dm,
-	output [0:0] ddr3_odt
+	output [0:0] ddr3_odt,
+	output app_rdy				// output, PHY calibration is done
 );
 
 //synchronize the 'reset' signal
@@ -42,6 +45,14 @@ always @(posedge sysclk) begin
 	reset_sync1 <= reset;
 	reset_sync2 <= reset_sync1;
 end
+
+//synchronize the 'acq_enabled' signal
+reg acq_enabled_sync1, acq_enabled_sync2;
+always @(posedge ddr3_domain_clk) begin
+	acq_enabled_sync1 <= acq_enabled;
+	acq_enabled_sync2 <= acq_enabled_sync1;
+end
+
 //reg rd_enS1;
 //reg wr_enS1;
 //reg rd_enS;
@@ -74,19 +85,20 @@ wire [127:0] fill_header_rd_dat;
 wire [26:0] app_addr;
 wire [2:0] app_cmd;
 wire [127:0] ddr3_rd_dat;
+wire [127:0] ddr3_wr_dat;
 
 ///////////////////////////////////////////////////////////////////////////
 // Connect the module that manages the address and command ports
 ddr3_addr_control ddr3_addr_control (
 	// 'write' ports
 	.wr_addr(ddr3_wr_addr[25:0]),			// input, next 'write' address
-	.wr_addr_ack(wr_addr_ack),				// output, increment the 'write' address
-	.wr_request(ddr3_wr_request),			// input, request to perform a 'write'	
-	.wr_mode(wr_mode),						// input, writing has priority
+	.wr_app_rdy(wr_app_rdy),				// output, increment the 'write' address
+	.wr_app_en(wr_app_en),					// input, request to perform a 'write'	
+	.acq_enabled(acq_enabled_sync2),		// input, writing is enabled
 	// 'read' ports
 	.rd_addr(ddr3_rd_addr[25:0]),			// input, next 'read' address
-	.rd_addr_ack(rd_addr_ack),				// output, increment the 'read' address
-	.rd_request(ddr3_rd_request),			// input, request to perform a 'read'	
+	.rd_app_rdy(rd_app_rdy),				// output, increment the 'read' address
+	.rd_app_en(rd_app_en),					// input, request to perform a 'read'	
 	// 'memory' ports
 	.app_addr(app_addr[26:0]),	
 	.app_cmd(app_cmd[2:0]),
@@ -100,22 +112,24 @@ ddr3_wr_control ddr3_wr_control (
 	// User interface clock and reset   
 	.clk(ddr3_domain_clk),
 	.reset(ddr3_domain_reset),
+	.acq_enabled(acq_enabled_sync2),		// input, writing is enabled
 	// Connections to the FIFO from the ADC
-	.ddr3_wr_dat(ddr3_wr_dat[127:0]),			// input, next 'write' data from the ADC FIFO
+	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),	// input, next 'write' data from the ADC FIFO
 	.ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),	// input, data is available when this is not asserted
 	.ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),	// output, use and remove the data on the FIFO head
 	// 'write' ports to memory
+	.ddr3_wr_dat(ddr3_wr_dat[127:0]),	// input, next 'write' data from the ADC FIFO
 	.app_wdf_end(app_wdf_end),					// output, last data cycle
 	.app_wdf_rdy(app_wdf_rdy),					// input, memory can accept data
 	.app_wdf_wren(app_wdf_wren),				// output, request to perform a 'write'	
 	// 'write' ports to address controller
 	.ddr3_wr_addr(ddr3_wr_addr[25:0]),			// output, next 'write' address
-	.wr_addr_ack(wr_addr_ack),					// input, increment the 'write' address
-	.wr_request(ddr3_wr_request),			// output, request to perform a 'write'	
-	.wr_mode(wr_mode),							// output, writing has priority
+	.wr_app_rdy(wr_app_rdy),					// input, increment the 'write' address
+	.wr_app_en(wr_app_en),						// output, request to perform a 'write'	
 	// 'write' ports to the fill_header_fifo
 	.fill_header_wr_dat(fill_header_wr_dat[127:0]),	// header data
-	.fill_header_wr_en(fill_header_wr_en)			// store header in FIFO
+	.fill_header_wr_en(fill_header_wr_en),			// store header in FIFO
+	.ddr3_wr_sync_err(ddr3_wr_sync_err)				// synchronization error flag
 );
 
 ///////////////////////////////////////////////////////////////////////////
@@ -124,20 +138,20 @@ ddr3_rd_control ddr3_rd_control (
 	// User interface clock and reset   
 	.clk(ddr3_domain_clk),
 	.reset(ddr3_domain_reset),							// reset at startup or when requested
-	.wr_mode(wr_mode),									// input, must be negated to read from memory
+	.acq_enabled(acq_enabled_sync2),		// input, writing is enabled
 	// connections to the 'rd_fill' command logic
 	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
 	.rd_one_burst(ddr3_rd_one_burst),					// input, get one 128-bit burst from the DDR3
 	.one_burst_rdy(ddr3_one_burst_rdy),					// output, the requested 128-bit burst is ready
 	.ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
 	// 'read' ports to memory
-	.app_rd_data_end(app_rd_data_end),				// input, last data cycle
-	.app_rd_data_valid(app_rd_data_valid),			// input, memory data is valid	
-	.app_rd_data(ddr3_rd_dat[127:0]),				// input, memory data	
+	.app_rd_data_end(app_rd_data_end),					// input, last data cycle
+	.app_rd_data_valid(app_rd_data_valid),				// input, memory data is valid	
+	.app_rd_data(ddr3_rd_dat[127:0]),					// input, memory data	
 	// 'read' ports to address controller
-	.rd_addr(ddr3_rd_addr[25:0]),					// output, next 'read' address
-	.rd_addr_ack(rd_addr_ack),						// input, increment the 'read' address
-	.rd_request(ddr3_rd_request)					// output, request to perform a 'read'	
+	.rd_addr(ddr3_rd_addr[25:0]),						// output, next 'read' address
+	.rd_app_rdy(rd_app_rdy),							// input, increment the 'read' address
+	.rd_app_en(rd_app_en)								// output, request to perform a 'read'	
 );
 
 ////////////////////////////////////////////////////////////////////////////

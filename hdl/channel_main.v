@@ -75,7 +75,7 @@ wire [20:0]	num_laser_bursts;		// number of sample bursts in a LASER fill
 wire [20:0]	num_ped_bursts;			// number of sample bursts in a PEDESTAL fill
 wire [23:0]	initial_fill_num;		// event number to assign to the first fill
 wire [127:0] adc_acq_out_dat;		// 128-bit header or ADC data to 'ddr3_write_fifo'
-wire [127:0] ddr3_wr_dat;			// 128-bit header or ADC data from 'ddr3_write_fifo'
+wire [127:0] ddr3_wr_fifo_dat;		// 128-bit header or ADC data from 'ddr3_write_fifo'
 wire [127:0] ddr3_rd_dat;			// 128-bit header or ADC data from DDR3 memory
 wire [23:0] fill_num;				// fill number for this fill
 
@@ -172,6 +172,7 @@ adc_acq_top adc_acq_top (
 	.adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
 	.adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
 	// outputs
+	.acq_enabled(acq_enabled),					// the system is in acquisition mode, rather than readout mode
 	.adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
 	.fill_num(fill_num[23:0]),			         // fill number for this fill
 	.adc_acq_out_dat(adc_acq_out_dat[127:0]),   // 128-bit header or ADC data
@@ -191,7 +192,7 @@ ddr3_write_fifo ddr3_write_fifo (
 	.din(adc_acq_out_dat[127:0]),   // 128-bit header or ADC data
 	.wr_en(adc_acq_out_valid),      // current data should be stored in the FIFO
 	.rd_en(ddr3_wr_fifo_rd_en),     // use and remove the data on the FIFO head
-	.dout(ddr3_wr_dat[127:0]),      // data to be written to the DDR3
+	.dout(ddr3_wr_fifo_dat[127:0]), // data to be written to the DDR3
 	.full(),                        // we don't currently use this
 	.empty(ddr3_wr_fifo_empty)		// data is available when this is not asserted
 );
@@ -205,9 +206,10 @@ ddr3_intf ddr3_intf(
 	.reset(adc_acq_full_reset),					// input, reset at startup or when requested by master FPGA 
 	.ddr3_domain_clk(ddr3_domain_clk),			// output, the DDR3 user-interface synchronous clock
 	// writing connections
+	.acq_enabled(acq_enabled),					// the system is in acquisition mode, rather than readout mode
 	.ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),	// input, data is available when this is not asserted
 	.ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),	// output, use and remove the data on the FIFO head
-	.ddr3_wr_dat(ddr3_wr_dat[127:0]),			// input, data from the ddr3_write_fifo, to be written to the DDR3
+	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),			// input, data from the ddr3_write_fifo, to be written to the DDR3
 	// reading connections
 	.local_domain_clk(clk125),							// input, the local user synchronous clock
 	.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted

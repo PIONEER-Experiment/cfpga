@@ -6,7 +6,7 @@ module ddr3_rd_control (
 	// User interface clock and reset   
 	input clk,								// DDR3 domain user clock
 	input reset,							// reset at startup or when requested
-	input wr_mode,							// must be negated to read from memory 
+	input acq_enabled,						// input, writing is enabled
 	// connections to the 'rd_fill' command logic
 	input [22:0] ddr3_rd_burst_addr,		// input, the address of the requested 128-bit burst
 	input rd_one_burst,						// input, get one 128-bit burst from the DDR3
@@ -17,9 +17,9 @@ module ddr3_rd_control (
 	input app_rd_data_valid,				// input, memory data is valid	
 	input [127:0] app_rd_data,				// input, memory data	
 	// 'read' ports to address controller
-	input rd_addr_ack,						// input, increment the 'read' address
+	input rd_app_rdy,						// input, increment the 'read' address
 	output [25:0] rd_addr,					// output, next 'read' address
-	output reg rd_request					// output, request to perform a 'read'	
+	output reg rd_app_en					// output, request to perform a 'read'	
 );
 
 // synchronize the 'rd_one_burst' request to the DDR3 clock domain
@@ -58,14 +58,14 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or wr_mode or rd_one_burst_sync2 or rd_addr_ack or app_rd_data_valid) 	begin
+always @ (CS or acq_enabled or rd_one_burst_sync2 or rd_app_rdy or app_rd_data_valid) 	begin
 	NS = 4'b0;					// default all bits to zero; will overrride one bit
 
 	case (1'b1) //synopsys full_case parallel_case
 
 		// Stay in the IDLE state until a read is requested and we are not in 'write_mode'.
 		CS[IDLE]: begin
-			if (rd_one_burst_sync2 && !wr_mode)
+			if (rd_one_burst_sync2 && !acq_enabled)
 				NS[SEND_ADDR] = 1'b1;
 			else
 				NS[IDLE] = 1'b1;
@@ -73,7 +73,7 @@ always @ (CS or wr_mode or rd_one_burst_sync2 or rd_addr_ack or app_rd_data_vali
 
 		// Stay in the SEND_ADDR state until an address ack is received.
 		CS[SEND_ADDR]: begin
-			if (rd_addr_ack)
+			if (rd_app_rdy)
 				NS[WAIT_DATA] = 1'b1;
 			else
 				NS[SEND_ADDR] = 1'b1;
@@ -89,10 +89,10 @@ always @ (CS or wr_mode or rd_one_burst_sync2 or rd_addr_ack or app_rd_data_vali
 		
 		// Stay in the DONE state until the read request is negated.
 		CS[DONE]: begin
-			if (app_rd_data_valid)
-				NS[IDLE] = 1'b1;
-			else
+			if (rd_one_burst_sync2)
 				NS[DONE] = 1'b1;
+			else
+				NS[IDLE] = 1'b1;
 		end
 	endcase
 end // combinational always block to determine next state
@@ -101,7 +101,7 @@ end // combinational always block to determine next state
 // Use the NS[] array.
 always @ (posedge clk) begin
 	// defaults
-	rd_request  <= 1'b0;
+	rd_app_en  <= 1'b0;
 	one_burst_rdy  <= 1'b0;
 
 	// next states
@@ -110,13 +110,10 @@ always @ (posedge clk) begin
 		
 	if (NS[SEND_ADDR]) begin
 	   // activate the address control block 
-		rd_request	<= 1'b1;
+		rd_app_en	<= 1'b1;
 	end
 
 	if (NS[WAIT_DATA]) begin
-		// update the storage register on every clock. The final time, when 'data_valid"
-		// is asserted, will latch and hold the valid data.
-		ddr3_one_burst_data[127:0] <= app_rd_data[127:0];
 	end
 		
 	if (NS[DONE]) begin
@@ -124,6 +121,10 @@ always @ (posedge clk) begin
 		one_burst_rdy	<= 1'b1;
 	end
 end // output block
+
+always @(posedge clk) begin
+	if (app_rd_data_valid) ddr3_one_burst_data[127:0] <= app_rd_data[127:0];
+end
 
 endmodule
 

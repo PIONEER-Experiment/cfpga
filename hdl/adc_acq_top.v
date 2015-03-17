@@ -24,6 +24,7 @@ module adc_acq_top(
  	input adc_buf_delay_data_reset,	// use the new delay settings
 	input [4:0] adc_buf_data_delay,	// 5 delay-tap-bits per line, all lines always all the same
     // outputs
+	output acq_enabled,				// the system is in acquisition mode, rather than readout mode
 	output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
 	output [23:0] fill_num,         // fill number for this fill
     output [127:0] adc_acq_out_dat, // 128-bit header or ADC data
@@ -42,6 +43,10 @@ wire [25:0] packed_adc_dat;    // two samples, with over-range bits,  packed in 
 wire [20:0] num_fill_bursts;    // number of 8(or 10)-sample bursts in a fill
 wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Tell the DDR3 block when either 'acq_enable0' or 'acq_enable1' is not zero.
+// This will switch the mode to 'write'
+assign acq_enabled = acq_enable0 | acq_enable1;
                                  
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a DDR input block that will produce an output twice-as-wide and a rising edge clock
