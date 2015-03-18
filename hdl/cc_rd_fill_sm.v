@@ -415,6 +415,8 @@ always @ (posedge clk) begin
 		send_csn				<= 1'b1;
 		// enable transmission of the serial number
 		tx_tvalid <= 1'b1;
+		// increment the burst counter to account for the checksum
+		burst_count[20:0] <= burst_count[20:0] + 1'b1;
 	end
 
 	if (NS[ECHO_CC1]) begin
