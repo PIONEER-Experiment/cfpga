@@ -103,7 +103,7 @@ module ddr3_model (
     odt
 );
 
-    `include "ddr3_model_parameters.vh"
+    `include "ddr3_model_parameters.v"
 
     parameter check_strict_mrbits = 1;
     parameter check_strict_timing = 1;
