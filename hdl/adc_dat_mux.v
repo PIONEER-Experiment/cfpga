@@ -38,7 +38,7 @@ assign header[111:96]	= channel_tag[15:0];            		  // 16-bit channel info
 assign header[113:112]	= fill_type[1:0];                       // 2-bit fill type
 assign header[125:114]	= 12'b0;                                // filler, always zero
 // make the last 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
-assign header[127:126]	= 2'b10;
+assign header[127:126]	= 2'b01;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // assemble the data
