@@ -355,8 +355,8 @@ module command_top(
 		.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
 		.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
 		.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
-		.ddr3_rd_one_burst(ddr3_rd_one_burst),				// input, get one 128-bit burst from the DDR3
-		.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// output, the requested 128-bit burst is ready
+		.ddr3_rd_one_burst(ddr3_rd_one_burst),				// output, get one 128-bit burst from the DDR3
+		.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// input, the requested 128-bit burst is ready
 		.ddr3_one_burst_data(ddr3_one_burst_data[127:0])	// output, the requested 128-bit burst
 	);
 

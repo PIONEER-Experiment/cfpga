@@ -12,8 +12,8 @@ module channel_main(
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  (* mark_debug = "true" *) input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
-  (* mark_debug = "true" *) output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+  input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
+  output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> , [1=0,2=1]-> , [1=1,2=0]-> , [1=1,2=1]->  
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
@@ -75,6 +75,7 @@ wire [20:0]	num_laser_bursts;		// number of sample bursts in a LASER fill
 wire [20:0]	num_ped_bursts;			// number of sample bursts in a PEDESTAL fill
 wire [23:0]	initial_fill_num;		// event number to assign to the first fill
 wire [127:0] adc_acq_out_dat;		// 128-bit header or ADC data to 'ddr3_write_fifo'
+wire adc_acq_out_valid;
 wire [127:0] ddr3_wr_fifo_dat;		// 128-bit header or ADC data from 'ddr3_write_fifo'
 wire [127:0] ddr3_rd_dat;			// 128-bit header or ADC data from DDR3 memory
 wire [23:0] fill_num;				// fill number for this fill
@@ -320,8 +321,8 @@ ddr3_intf ddr3_intf(
 	.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
 	.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
 	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
-	.ddr3_rd_one_burst(ddr3_rd_one_burst),				// input, get one 128-bit burst from the DDR3
-	.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// output, the requested 128-bit burst is ready
+	.ddr3_rd_one_burst(ddr3_rd_one_burst),				// output, get one 128-bit burst from the DDR3
+	.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// input, the requested 128-bit burst is ready
 	.ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
 
 	// Registers to/from the ADC acquisition state machine

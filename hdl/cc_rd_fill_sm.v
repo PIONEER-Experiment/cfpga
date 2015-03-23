@@ -90,24 +90,22 @@ parameter [4:0]
 	CHK_FIFO_EMPTY	= 5'd1,
 	ERROR1			= 5'd2,
 	GET_FIFO_HDR	= 5'd3,
-	GET_MEM_HEADER1	= 5'd4,
-	GET_MEM_HEADER2	= 5'd5,
-	COMPARE_HDR		= 5'd6,
-	ECHO_CSN1		= 5'd7,
-	ECHO_CSN2		= 5'd8,
-	ECHO_CC1		= 5'd9,
-	ECHO_CC2		= 5'd10,
-	GET_DAT_BURST1	= 5'd11,
-	GET_DAT_BURST2	= 5'd12,
-	XMIT_DAT_BURST1	= 5'd13,
-	XMIT_DAT_BURST2	= 5'd14,
-	XMIT_DAT_BURST3	= 5'd15,
-	XMIT_DAT_BURST4	= 5'd16,
-	XMIT_DAT_BURST5	= 5'd17,
-	XMIT_DAT_BURST6	= 5'd18,
-	XMIT_DAT_BURST7	= 5'd19,
-	XMIT_DAT_BURST8	= 5'd20,
-	DONE			= 5'd21;
+	GET_MEM_HEADER	= 5'd4,
+	COMPARE_HDR		= 5'd5,
+	ECHO_CSN1		= 5'd6,
+	ECHO_CSN2		= 5'd7,
+	ECHO_CC1		= 5'd8,
+	ECHO_CC2		= 5'd9,
+	GET_DAT_BURST	= 5'd10,
+	XMIT_DAT_BURST1	= 5'd11,
+	XMIT_DAT_BURST2	= 5'd12,
+	XMIT_DAT_BURST3	= 5'd13,
+	XMIT_DAT_BURST4	= 5'd14,
+	XMIT_DAT_BURST5	= 5'd15,
+	XMIT_DAT_BURST6	= 5'd16,
+	XMIT_DAT_BURST7	= 5'd17,
+	XMIT_DAT_BURST8	= 5'd18,
+	DONE			= 5'd19;
 				
 // Declare current state and next state variables
 reg [21:0] /* synopsys enum STATE_TYPE */ CS;
@@ -166,27 +164,21 @@ always @ (CS or fill_header_fifo_empty or one_burst_rdy_sync2 or tx_tready or er
 		// 'fill_header_fifo_rd_en' is asserted to remove the current header word from the head of the FIFO
 		CS[GET_FIFO_HDR]: begin
 			// Go get the header word that is in memory.
-			NS[GET_MEM_HEADER1] = 1'b1;
+			NS[GET_MEM_HEADER] = 1'b1;
 		end
 
-		// We enter the GET_MEM_HEADER1 state after we have latched the header from the FIFO.
+		// We enter the GET_MEM_HEADER state after we have latched the header from the FIFO.
 		// We assert 'ddr3_rd_one_burst' to ask the DDR3 memory block for 1 burst. It should
 		// be the memory-version of the header.
-		CS[GET_MEM_HEADER1]: begin
-			// go wait for the burst that contains the header
-			NS[GET_MEM_HEADER2] = 1'b1;
-		end
-
-		// We enter the GET_MEM_HEADER2 state after we have asked for a burst from the DDR3.
 		// We stay here until the DDR3 interface acknowledges the delivery of a new burst.
-		CS[GET_MEM_HEADER2]: begin
+		CS[GET_MEM_HEADER]: begin
 			// See if we have the new burst
 			if (one_burst_rdy_sync2)
 				// We got the header from memory. Go compare it with the header from the FIFO.
 				NS[COMPARE_HDR] = 1'b1;
 			else
 				// Stay here until we get the header from memory.
-				NS[GET_MEM_HEADER2] = 1'b1;
+				NS[GET_MEM_HEADER] = 1'b1;
 		end
 
 		// We enter the COMPARE_HDR state after we have received the header from the memory.
@@ -249,24 +241,18 @@ always @ (CS or fill_header_fifo_empty or one_burst_rdy_sync2 or tx_tready or er
 				NS[XMIT_DAT_BURST1] = 1'b1;
 		end
 
-		// We enter the GET_DAT_BURST1 state when we want to get a data burst from the DDR3 memory.
+		// We enter the GET_DAT_BURST state when we want to get a data burst from the DDR3 memory.
 		// We assert 'ddr3_rd_one_burst' to ask the DDR3 memory block for 1 burst. It should
 		// be ADC data or the final checksum.
-		CS[GET_DAT_BURST1]: begin
-				// go wait for a burst that contains the ADC data
-				NS[GET_DAT_BURST2] = 1'b1;
-		end
-
-		// We enter the GET_DAT_BURST2 state after we have asked for a burst from the DDR3.
 		// We stay here until the DDR3 interface acknowledges the delivery of a new burst.
-		CS[GET_DAT_BURST2]: begin
+		CS[GET_DAT_BURST]: begin
 			// See if we have the new burst
 			if (one_burst_rdy_sync2)
 				// We got the ADC data from memory. Send it to the Aurora.
 				NS[XMIT_DAT_BURST1] = 1'b1;
 			else
 				// Stay here until we get the header from memory.
-				NS[GET_DAT_BURST2] = 1'b1;
+				NS[GET_DAT_BURST] = 1'b1;
 		end
 
 		// We enter the XMIT_DAT_BURST1 state when we have a burst of DDR3 data to send.
@@ -345,7 +331,7 @@ always @ (CS or fill_header_fifo_empty or one_burst_rdy_sync2 or tx_tready or er
 				NS[DONE] = 1'b1;
 			else 
 				// More bursts to send.
-				NS[GET_DAT_BURST1] = 1'b1;
+				NS[GET_DAT_BURST] = 1'b1;
 		end
 			
 		// We enter the DONE state whenever we have finished this command.
@@ -396,12 +382,9 @@ always @ (posedge clk) begin
  		fill_header_fifo_rd_en <= 1'b1;
 	end
 
-	if (NS[GET_MEM_HEADER1]) begin
+	if (NS[GET_MEM_HEADER]) begin
 		// ask DDR3 memory reader for a burst, it will contain the memory copy of the header 
         ddr3_rd_one_burst <= 1'b1;
-	end
-
-	if (NS[GET_MEM_HEADER2]) begin
 	end
 
 	if (NS[COMPARE_HDR]) begin
@@ -415,8 +398,8 @@ always @ (posedge clk) begin
 		send_csn				<= 1'b1;
 		// enable transmission of the serial number
 		tx_tvalid <= 1'b1;
-		// increment the burst counter to account for the checksum
-		burst_count[20:0] <= burst_count[20:0] + 1'b1;
+		// increment the burst counter by two to account for the header and checksum
+		burst_count[20:0] <= burst_count[20:0] + 2'b10;
 	end
 
 	if (NS[ECHO_CC1]) begin
@@ -438,12 +421,9 @@ always @ (posedge clk) begin
  			send_cmd <= 1'b1;
 	end
 
-	if (NS[GET_DAT_BURST1]) begin
+	if (NS[GET_DAT_BURST]) begin
 		// ask DDR3 memory reader for a burst, it will contain ADC data 
         ddr3_rd_one_burst <= 1'b1;
-	end
-
-	if (NS[GET_DAT_BURST2]) begin
 	end
 
 	if (NS[XMIT_DAT_BURST1]) begin
@@ -456,6 +436,7 @@ always @ (posedge clk) begin
 	if (NS[XMIT_DAT_BURST2]) begin
 		// signal 'command_top' to use data from this module
 		send_fill_data	<= 1'b1;
+		tx_tvalid <= 1'b1;
 		// ... and this is the data to send
 		tx_data <= ddr3_one_burst_data[31:0];
 		// decrement the burst counter
@@ -474,6 +455,7 @@ always @ (posedge clk) begin
 	if (NS[XMIT_DAT_BURST4]) begin
 		// signal 'command_top' to use data from this module
 		send_fill_data	<= 1'b1;
+		tx_tvalid <= 1'b1;
 		// ... and this is the data to send
 		tx_data <= ddr3_one_burst_data[63:32];
 	end
@@ -488,6 +470,7 @@ always @ (posedge clk) begin
 	if (NS[XMIT_DAT_BURST6]) begin
 		// signal 'command_top' to use data from this module
 		send_fill_data	<= 1'b1;
+		tx_tvalid <= 1'b1;
 		// ... and this is the data to send
 		tx_data <= ddr3_one_burst_data[95:64];
 	end
@@ -502,6 +485,7 @@ always @ (posedge clk) begin
 	if (NS[XMIT_DAT_BURST8]) begin
 		// signal 'command_top' to use data from this module
 		send_fill_data	<= 1'b1;
+		tx_tvalid <= 1'b1;
 		// ... and this is the data to send
 		tx_data <= ddr3_one_burst_data[127:96];
 	 	// is this the last word?

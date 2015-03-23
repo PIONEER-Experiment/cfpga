@@ -19,10 +19,10 @@ parameter S1 = 2'b00; // idle
 parameter S2 = 2'b01; // active-high reset
 parameter S3 = 2'b10; // check tap delay
 
-(* mark_debug = "true" *) reg [1:0] state = S1;
-(* mark_debug = "true" *) reg [4:0] curr_delay_tap = 5'b0;
-(* mark_debug = "true" *) reg [3:0] counter = 4'b0; // 15 clk cycles max
-(* mark_debug = "true" *) reg [3:0] iter = 4'b0; // 15 checks/attempts max
+reg [1:0] state = S1;
+reg [4:0] curr_delay_tap = 5'b0;
+reg [3:0] counter = 4'b0; // 15 clk cycles max
+reg [3:0] iter = 4'b0; // 15 checks/attempts max
 
 always @ (posedge clk)
 begin
