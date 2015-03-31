@@ -58,5 +58,7 @@ WFD_Channel/
 	|		`-- <generated IP files>
 	|-- scripts/
 	|		|-- build_project.tcl
-	|		`-- export_bitstream.tcl 
+	|		`-- export_bitstream.tcl
+	|-- sim/
+	|   	`-- <simulation files>
 	`-- README.txt

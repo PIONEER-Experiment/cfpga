@@ -1,5 +1,5 @@
 # Set the reference directory for source file relative paths (by default the value is script directory path)
-set origin_dir [file dirname [info script]]/../
+set origin_dir [file dirname [info script]]/..
 
 # Create project
 create_project WFD_Channel $origin_dir/project
@@ -83,10 +83,18 @@ if {[string equal [get_filesets -quiet sim_1] ""]} {
 
 # Set 'sim_1' fileset object
 set obj [get_filesets sim_1]
-# Empty (no sources present)
+add_files -norecurse -fileset $obj [glob $origin_dir/sim/*.v]
+
+# Set 'sim_1' fileset file properties
+set file "$origin_dir/sim/channel_main_tb1.v"
+set file [file normalize $file]
+set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
+set_property "used_in_implementation" "0" $file_obj
+set_property "used_in_synthesis" "0" $file_obj
 
 # Set 'sim_1' fileset properties
 set obj [get_filesets sim_1]
+set_property "xsim.simulate.runtime" "1us" $obj
 
 # Create 'synth_1' run (if not found)
 if {[string equal [get_runs -quiet synth_1] ""]} {

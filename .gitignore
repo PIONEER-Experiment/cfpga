@@ -17,7 +17,7 @@ ip/**/
 !hdl/*.txt
 
 # IPs
-!ip/*/*.xci
+!ip/*.xci
 !ip/*/*.prj
 
 ip/**/*.v
