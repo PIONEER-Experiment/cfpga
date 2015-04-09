@@ -9,10 +9,10 @@ module ddr3_wr_control (
 	input acq_enabled,						// input, writing is enabled
 	// Connections to the FIFO from the ADC
 	input [127:0] ddr3_wr_fifo_dat,			// input, next 'write' data from the ADC FIFO
+	input ddr3_wr_fifo_near_empty,				// asserted at less than 4, negated at more than 10 
 	input ddr3_wr_fifo_empty,				// input, data is available when this is not asserted
-	output reg ddr3_wr_fifo_rd_en,			// output, use and remove the data on the FIFO head
+	output ddr3_wr_fifo_rd_en,			// output, use and remove the data on the FIFO head
 	// 'write' ports to memory
-	output reg [127:0] ddr3_wr_dat,			// delayed version of data from the fifo
 	output reg app_wdf_wren,				// output, request to perform a 'write'	
 	input app_wdf_rdy,						// input, memory can accept data
 	output reg app_wdf_end,					// output, last data cycle
@@ -37,45 +37,51 @@ always @ (posedge clk) begin
 end
 assign fill_header_wr_dat[127:0] = fill_header_wr_dat_reg[127:0];
 
-// Create a register to hold the FIFO output for one additional clock period
-// after the address has been accepted, since we will send the data to the memory
-// one period later
-reg fifo_hold_en;
+// Create an address generator
+// Initialize it from the 'start_address' in the header
+// Increment it whenever we get a 'wr_app_rdy' while asserting 'wr_app_en' 
+reg [22:0] address_gen;
+reg init_address_gen;	// will be asserted by the state machine
 always @ (posedge clk) begin
-	if (fifo_hold_en) ddr3_wr_dat[127:0] <= ddr3_wr_fifo_dat[127:0];
+	if (reset) address_gen[22:0] <= 23'b0;
+	else if (init_address_gen) address_gen[22:0] <= ddr3_wr_fifo_dat[57:35];
+	else if (wr_app_en && wr_app_rdy) address_gen[22:0] <= address_gen[22:0] + 23'b1;
 end
-always @ (posedge clk) begin
-	// if an address has been accepted, indicate that we have data to write 
-	app_wdf_wren <= fifo_hold_en;
-	// assert 'app_wdf_end' with every operation
-	app_wdf_end  <= fifo_hold_en;
-end
+assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 
 // Create an address counter
-// Initialize it from the header
-// Increment it whenever we get a 'wr_app_rdy' while asserting 'wr_app_en' 
-reg [22:0] address_cntr;
+// Initialize it from the 'burst_cnt' in the header
+// Decrement it whenever an address is accepted. This happens when
+// we are asserting 'wr_app_en' and receiving 'wr_app_rdy'.
+reg [20:0] address_cntr;
 reg init_address_cntr;	// will be asserted by the state machine
+reg adjust_address_cntr;	// add 2 to account for header and checksum
 always @ (posedge clk) begin
-	if (reset) address_cntr[22:0] <= 23'b0;
-	else if (init_address_cntr) address_cntr[22:0] <= ddr3_wr_fifo_dat[57:35];
-	else if (wr_app_en && wr_app_rdy) address_cntr[22:0] <= address_cntr[22:0] + 23'b1;
+	if (reset) address_cntr[20:0] <= 21'b0;
+	else if (init_address_cntr) address_cntr[20:0] <= ddr3_wr_fifo_dat[84:64];
+	else if (adjust_address_cntr) address_cntr[20:0] <= address_cntr[20:0] + 2;
+	else if (wr_app_en & wr_app_rdy) address_cntr[20:0] <= address_cntr[20:0] - 1;
 end
-assign ddr3_wr_addr[25:0] = {address_cntr[22:0], 3'b0};
+// create a flag that gets set when the address counter is down to zero
+wire address_cntr_zero;
+assign address_cntr_zero = (address_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
 
 // Create a burst counter
 // Initialize it from the header
-// Deccrement it whenever we get a successful write. This happens when
-// we are asserting 'wr_app_en' and receiving 'wr_app_rdy'.
+// Decrement it whenever we get a successful write. This happens when
+// we are asserting 'wdf_wren' and receiving 'wdf_rdy'.
 reg [20:0] burst_cntr;
 reg init_burst_cntr;	// will be asserted by the state machine
-reg adjust_burst_cntr;	// add 1 to account for header and checksum
+reg adjust_burst_cntr;	// add 2 to account for header and checksum
 always @ (posedge clk) begin
 	if (reset) burst_cntr[20:0] <= 21'b0;
 	else if (init_burst_cntr) burst_cntr[20:0] <= ddr3_wr_fifo_dat[84:64];
-	else if (adjust_burst_cntr) burst_cntr[20:0] <= burst_cntr[20:0] + 1;
-	else if (wr_app_en & wr_app_rdy) burst_cntr[20:0] <= burst_cntr[20:0] - 1;
+	else if (adjust_burst_cntr) burst_cntr[20:0] <= burst_cntr[20:0] + 2;
+	else if (app_wdf_wren & app_wdf_rdy) burst_cntr[20:0] <= burst_cntr[20:0] - 1;
 end
+// create a flag that gets set when the burst counter is down to zero
+wire burst_cntr_zero;
+assign burst_cntr_zero = (burst_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
 
 // 
 //  Leave the comments containing "synopsys" in your HDL code.
@@ -89,17 +95,20 @@ parameter [3:0]
 	INIT		= 4'd3,
 	ADJ_CNT		= 4'd4,
 	WRITE		= 4'd5,
-	DONE		= 4'd6;
+	FIN_WRITE1	= 4'd6,
+	TST_EMPTY	= 4'd7,
+	RD_FIFO		= 4'd8,
+	DONE		= 4'd9;
 	
 // Declare current state and next state variables
-reg [6:0] /* synopsys enum STATE_TYPE */ CS;
-reg [6:0] /* synopsys enum STATE_TYPE */ NS;
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
 	if (reset || !acq_enabled) begin
-		CS <= 7'b0;				// set all state bits to 0
+		CS <= 10'b0;				// set all state bits to 0
 		CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
 	end
 	else
@@ -107,8 +116,8 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr) 	begin
-	NS = 7'b0;					// default all bits to zero; will overrride one bit
+always @ (CS or ddr3_wr_fifo_near_empty or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr) 	begin
+	NS = 10'b0;					// default all bits to zero; will overrride one bit
 
 	case (1'b1) //synopsys full_case parallel_case
 
@@ -149,19 +158,51 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr) 	begin
 		end
 
 		// Stay in ADJ_CNT state for one period.
-		// Make necessary adjustments to the burst counter to account for
+		// Make necessary adjustments to the address and burst counters to account for
 		// how we determine when we are done 
 		CS[ADJ_CNT]: begin
 				NS[WRITE] = 1'b1;
 		end
 
-		// Stay in WRITE state until all of the data has been written to memory.
+		// Generally stay in WRITE state until all of the data has been written to memory.
+		// However, if the FIFO is 'near_empty', change to a mode where we finish up the
+		//current write and then test the 'empty' status every time.
 		CS[WRITE]: begin
-			if (burst_cntr[20:0] == 21'b0)
-				// we have written the requested number of bursts
+			if (burst_cntr_zero && address_cntr_zero)
+				// we have written the requested number of addresses and bursts
 				NS[DONE] = 1'b1;
+			else if (!burst_cntr_zero && ddr3_wr_fifo_near_empty)
+				// more data may be coming. Leave until we know that we have a new data sample
+				NS[FIN_WRITE1] = 1'b1;
 			else
-				// More data to write, stay here
+				// More addresses or data to write, stay here
+				NS[WRITE] = 1'b1;
+		end
+
+		// Stay in FIN_WRITE1 state for one period.
+		// Allow time for the current write operation to be accepted 
+		CS[FIN_WRITE1]: begin
+				NS[TST_EMPTY] = 1'b1;
+		end
+
+		// Unless we are finished with data, stay here until we know that the fifo has data.
+		// We cannot afford to test the 'empty' flag on every clock, so we only test it
+		// when we know that the fifo is low on data.
+		CS[TST_EMPTY]: begin
+			if (burst_cntr_zero)
+				// we have written the requested number of bursts, but there may still be addresses to write
+				NS[WRITE] = 1'b1;
+			else if (!ddr3_wr_fifo_empty)
+				// we have data
+				NS[RD_FIFO] = 1'b1;
+			else
+				// More data expected, but not arrived yet, so stay here
+				NS[TST_EMPTY] = 1'b1;
+		end
+
+		// Stay in RD_FIFO state for one period.
+		// Get new data from the FIFO
+		CS[RD_FIFO]: begin
 				NS[WRITE] = 1'b1;
 		end
 		
@@ -180,12 +221,15 @@ end // combinational always block to determine next state
 always @ (posedge clk) begin
 	// defaults
 		latch_header		<= 1'b0;
+		init_address_gen	<= 1'b0;
 		init_address_cntr	<= 1'b0;
 		init_burst_cntr		<= 1'b0;
 		adjust_burst_cntr	<= 1'b0;
+		adjust_address_cntr	<= 1'b0;
 		wr_app_en			<= 1'b0;
-		ddr3_wr_fifo_rd_en	<= 1'b0;
-		fifo_hold_en		<= 1'b0;
+		app_wdf_wren		<= 1'b0;
+		app_wdf_end			<= 1'b0;
+		//ddr3_wr_fifo_rd_en	<= 1'b0;
  		ddr3_wr_sync_err	<= 1'b0;
         fill_header_wr_en	<= 1'b0;
 
@@ -200,24 +244,46 @@ always @ (posedge clk) begin
 
 	if (NS[INIT]) begin
 		// initialize the address counter from the header
+		init_address_gen	<= 1'b1;
+		// initialize the address counter from the header
 		init_address_cntr	<= 1'b1;
 		// initialize the burst counter from the header
 		init_burst_cntr	<= 1'b1;
 	end
  
 	if (NS[ADJ_CNT]) begin
+		// increment the address counter to adjust for the checksum
+		adjust_address_cntr	<= 1'b1;
 		// increment the burst counter to adjust for the checksum
 		adjust_burst_cntr	<= 1'b1;
     end
 
  	if (NS[WRITE]) begin
-		// if the fifo has data, indicate that we want to supply an address and a command 
- 		wr_app_en	<= ~ddr3_wr_fifo_empty;
-		// read the next FIFO data if the current address was accepted
-		// We will write the current data on the next clock
-		ddr3_wr_fifo_rd_en	<= wr_app_rdy;
-		// If the address was accepted, Save the current FIFO output for presentation to the memory
-		fifo_hold_en <= wr_app_rdy;
+		// maybe indicate that we want to supply an address and a command 
+ 		wr_app_en <= ~address_cntr_zero;
+		// maybe indicate that we want to supply data 
+ 		app_wdf_wren <= ~burst_cntr_zero;
+ 		app_wdf_end <= ~burst_cntr_zero;
+	end
+
+	if (NS[FIN_WRITE1]) begin
+		// If the previous data write was not accepted, try again
+		// ASSUME THAT 2 CLOCK PERIODS IS THE MOST THAT IS EVER NEEDED!!!
+		if (!app_wdf_rdy) begin
+ 			app_wdf_wren <= ~burst_cntr_zero;
+			app_wdf_end <= ~burst_cntr_zero;
+		end
+		// If the previous address write was not accepted, try again
+		// ASSUME THAT 2 CLOCK PERIODS IS THE MOST THAT IS EVER NEEDED!!!
+		if (!wr_app_rdy) begin
+			wr_app_en <= ~address_cntr_zero;
+		end 
+	end
+
+	if (NS[TST_EMPTY]) begin
+	end
+
+	if (NS[RD_FIFO]) begin
 	end
 
 	if (NS[SYNC_ERR]) begin
@@ -233,6 +299,7 @@ always @ (posedge clk) begin
 	
 end
 
-
+// if the current data was accepted then bring the next FIFO data to the front 
+assign ddr3_wr_fifo_rd_en	= app_wdf_wren && app_wdf_rdy;
 
 endmodule

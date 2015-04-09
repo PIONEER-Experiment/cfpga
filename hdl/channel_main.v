@@ -195,6 +195,7 @@ ddr3_write_fifo ddr3_write_fifo (
 	.rd_en(ddr3_wr_fifo_rd_en),     // use and remove the data on the FIFO head
 	.dout(ddr3_wr_fifo_dat[127:0]), // data to be written to the DDR3
 	.full(),                        // we don't currently use this
+	.prog_empty(ddr3_wr_fifo_near_empty),		// asserted at less than 4, negated at more than 10 
 	.empty(ddr3_wr_fifo_empty)		// data is available when this is not asserted
 );
 
@@ -208,6 +209,7 @@ ddr3_intf ddr3_intf(
 	.ddr3_domain_clk(ddr3_domain_clk),			// output, the DDR3 user-interface synchronous clock
 	// writing connections
 	.acq_enabled(acq_enabled),					// the system is in acquisition mode, rather than readout mode
+	.ddr3_wr_fifo_near_empty(ddr3_wr_fifo_near_empty),		// asserted at less than 4, negated at more than 10 
 	.ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),	// input, data is available when this is not asserted
 	.ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),	// output, use and remove the data on the FIFO head
 	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),			// input, data from the ddr3_write_fifo, to be written to the DDR3
