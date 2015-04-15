@@ -56,14 +56,15 @@ assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 reg [20:0] address_cntr;
 reg init_address_cntr;	// will be asserted by the state machine
 reg adjust_address_cntr;	// add 2 to account for header and checksum
+wire address_cntr_zero;
 always @ (posedge clk) begin
 	if (reset) address_cntr[20:0] <= 21'b0;
 	else if (init_address_cntr) address_cntr[20:0] <= ddr3_wr_fifo_dat[84:64];
 	else if (adjust_address_cntr) address_cntr[20:0] <= address_cntr[20:0] + 2;
+	else if (address_cntr_zero) address_cntr[20:0] <= 21'b0; 
 	else if (wr_app_en & wr_app_rdy) address_cntr[20:0] <= address_cntr[20:0] - 1;
 end
 // create a flag that gets set when the address counter is down to zero
-wire address_cntr_zero;
 assign address_cntr_zero = (address_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
 
 // Create a burst counter
@@ -73,14 +74,15 @@ assign address_cntr_zero = (address_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
 reg [20:0] burst_cntr;
 reg init_burst_cntr;	// will be asserted by the state machine
 reg adjust_burst_cntr;	// add 2 to account for header and checksum
+wire burst_cntr_zero;
 always @ (posedge clk) begin
 	if (reset) burst_cntr[20:0] <= 21'b0;
 	else if (init_burst_cntr) burst_cntr[20:0] <= ddr3_wr_fifo_dat[84:64];
 	else if (adjust_burst_cntr) burst_cntr[20:0] <= burst_cntr[20:0] + 2;
+	else if (burst_cntr_zero) burst_cntr[20:0] <= 21'b0; 
 	else if (app_wdf_wren & app_wdf_rdy) burst_cntr[20:0] <= burst_cntr[20:0] - 1;
 end
 // create a flag that gets set when the burst counter is down to zero
-wire burst_cntr_zero;
 assign burst_cntr_zero = (burst_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
 
 // 
@@ -116,7 +118,7 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or ddr3_wr_fifo_near_empty or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr) 	begin
+always @ (CS or ddr3_wr_fifo_near_empty or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero) 	begin
 	NS = 10'b0;					// default all bits to zero; will overrride one bit
 
 	case (1'b1) //synopsys full_case parallel_case
