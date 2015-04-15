@@ -23,6 +23,7 @@ module adc_acq_top(
     input acq_reset,                // reset all of the acquisition logic
  	input adc_buf_delay_data_reset,	// use the new delay settings
 	input [4:0] adc_buf_data_delay,	// 5 delay-tap-bits per line, all lines always all the same
+	input ddr3_wr_busy,				// asserted whenever the 'ddr3_wr_control' is not idle
     // outputs
 	output acq_enabled,				// the system is in acquisition mode, rather than readout mode
 	output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
@@ -82,7 +83,7 @@ always @(posedge adc_clk) begin
 		dummy_dat[11:0] <= 12'b0;
 	else
 		// increment on every adc_clk
-		dummy_dat[11:0] <= dummy_dat[11:0] + 1'b1;
+		dummy_dat[11:0] <= dummy_dat[11:0] + 1;
 end
 		
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,6 +200,7 @@ adc_acq_sm adc_acq_sm (
     .acq_reset(acq_reset),		           // reset from the Master FPGA
     .reset_clk50(reset_clk50),             // synchronously negated
     .burst_cntr_zero(burst_cntr_zero),     // all sample bursts have been saved
+    .ddr3_wr_busy(ddr3_wr_busy),  			// asserted whenever the 'ddr3_wr_control' is not idle
     // outputs
     .fill_type(fill_type[1:0]),				// determine which burst count to use
     .fill_size_mux_en(fill_size_mux_en),	// enable choosing one of the burst counts

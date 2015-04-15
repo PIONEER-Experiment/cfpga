@@ -11,6 +11,7 @@ module adc_acq_sm (
     input acq_reset,            	 // reset from the Master FPGA
     input reset_clk50,				 // reset from internal logic, synched to CLK50
     input burst_cntr_zero,      	 // all sample bursts have been saved
+    input ddr3_wr_busy,				// asserted whenever the 'ddr3_wr_control' is not idle
     // outputs
     output reg [1:0] fill_type,		// determine which burst count to use
     output reg fill_size_mux_en,
@@ -48,6 +49,13 @@ always @(posedge clk) begin
     adc_acq_full_reset <= acq_reset_sync2 | reset_clk50_sync2;
 end
 
+// synchronize 'ddr3_wr_busy'
+reg ddr3_wr_busy_sync1, ddr3_wr_busy_sync2;
+always @ (posedge clk) begin
+	ddr3_wr_busy_sync1 <= ddr3_wr_busy;
+	ddr3_wr_busy_sync2 <= ddr3_wr_busy_sync1;
+end
+
 // We are in acquisition mode whenever the ENABLE inputs are not both zero.
 // When they are both zero, we are in readout mode.
 reg adc_acq_mode_enabled;	// we are enabled to accept triggers and store data
@@ -78,17 +86,18 @@ parameter [3:0]
 	RUN4		= 4'd7,
 	CHECKSUM1	= 4'd8,
 	CHECKSUM2	= 4'd9,
-	DONE		= 4'd10;
+	DDR3_WAIT	= 4'd10,
+	DONE		= 4'd11;
 	
 // Declare current state and next state variables
-reg [10:0] /* synopsys enum STATE_TYPE */ CS;
-reg [10:0] /* synopsys enum STATE_TYPE */ NS;
+reg [11:0] /* synopsys enum STATE_TYPE */ CS;
+reg [11:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
 	if (adc_acq_full_reset) begin
-		CS <= 11'b0;				// set all state bits to 0
+		CS <= 12'b0;				// set all state bits to 0
 		CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
 	end
 	else
@@ -96,8 +105,8 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero) 	begin
-	NS = 11'b0;					// default all bits to zero; will overrride one bit
+always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr3_wr_busy_sync2) 	begin
+	NS = 12'b0;					// default all bits to zero; will overrride one bit
 
 	case (1'b1) //synopsys full_case parallel_case
 
@@ -154,7 +163,15 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero) 	begi
 
 		// Stay in CHECKSUM2 state for one period.
 		CS[CHECKSUM2]: begin
-				NS[DONE] = 1'b1;
+				NS[DDR3_WAIT] = 1'b1;
+		end
+
+		// Stay in DDR3_WAIT state until writing to the DDR3 is done.
+		CS[DDR3_WAIT]: begin
+			if (ddr3_wr_busy_sync2)
+                NS[DDR3_WAIT] = 1'b1;
+            else
+                NS[DONE] = 1'b1;
 		end
 
 		// Stay in DONE state until the trigger is negated.
@@ -238,6 +255,9 @@ always @ (posedge clk) begin
 		address_cntr_en		<= 1'b1;
 	    // increment the fill counter
 		fill_cntr_en		<= 1'b1;
+	end
+
+	if (NS[DDR3_WAIT]) begin
 	end
 
     if (NS[DONE]) begin

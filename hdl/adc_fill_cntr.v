@@ -26,7 +26,7 @@ always @(posedge clk) begin
         fill_num[23:0] <= initial_fill_num[23:0];
     end
    else if (enable) begin
-         fill_num[23:0] <= fill_num[23:0] + 1'b1;
+         fill_num[23:0] <= fill_num[23:0] + 1;
    end
 end
 

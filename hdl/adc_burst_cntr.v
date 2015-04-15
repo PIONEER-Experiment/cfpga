@@ -28,7 +28,7 @@ always @(posedge clk) begin
         burst_cntr[20:0] <= num_fill_bursts[20:0];
     end
    else if (enable && !at_zero) begin
-         burst_cntr[20:0] <= burst_cntr[20:0] - 1'b1;
+         burst_cntr[20:0] <= burst_cntr[20:0] - 1;
    end
 end
     

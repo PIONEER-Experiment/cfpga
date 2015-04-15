@@ -13,6 +13,7 @@ module ddr3_intf(
 	output ddr3_wr_fifo_rd_en,					// output, use and remove the data on the FIFO head
 	input [127:0] ddr3_wr_fifo_dat,				// input, data from the ddr3_write_fifo, to be written to the DDR3
 	output ddr3_wr_sync_err,					// synchronization error flag
+	output ddr3_wr_busy,					// asserted whenever the 'ddr3_wr_control' is not idle
 	// reading connections
 	input local_domain_clk,						// input, the local interface synchronous clock
 	output fill_header_fifo_empty,				// output, a header is available when not asserted
@@ -130,7 +131,10 @@ ddr3_wr_control ddr3_wr_control (
 	// 'write' ports to the fill_header_fifo
 	.fill_header_wr_dat(fill_header_wr_dat[127:0]),	// header data
 	.fill_header_wr_en(fill_header_wr_en),			// store header in FIFO
-	.ddr3_wr_sync_err(ddr3_wr_sync_err)				// synchronization error flag
+	.ddr3_wr_sync_err(ddr3_wr_sync_err),			// synchronization error flag
+	// status flag back to the ADC acquisition machine
+	.ddr3_wr_busy(ddr3_wr_busy)					// asserted whenever the 'ddr3_wr_control' is not idle
+
 );
 
 ///////////////////////////////////////////////////////////////////////////

@@ -23,6 +23,8 @@ module ddr3_wr_control (
 	// 'write' ports to the fill_header_fifo
 	output [127:0] fill_header_wr_dat,		// header data
 	output reg fill_header_wr_en,			// store header in FIFO
+	// status flag back to the ADC acquisition machine
+	output reg ddr3_wr_busy,				// asserted whenever the 'ddr3_wr_control' is not idle
 	// synchronization error flag
 	output reg ddr3_wr_sync_err
 
@@ -45,7 +47,7 @@ reg init_address_gen;	// will be asserted by the state machine
 always @ (posedge clk) begin
 	if (reset) address_gen[22:0] <= 23'b0;
 	else if (init_address_gen) address_gen[22:0] <= ddr3_wr_fifo_dat[57:35];
-	else if (wr_app_en && wr_app_rdy) address_gen[22:0] <= address_gen[22:0] + 23'b1;
+	else if (wr_app_en && wr_app_rdy) address_gen[22:0] <= address_gen[22:0] + 1;
 end
 assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 
@@ -222,6 +224,7 @@ end // combinational always block to determine next state
 // Use the NS[] array.
 always @ (posedge clk) begin
 	// defaults
+		ddr3_wr_busy		<= 1'b1; // busy unless we are IDLE
 		latch_header		<= 1'b0;
 		init_address_gen	<= 1'b0;
 		init_address_cntr	<= 1'b0;
@@ -237,6 +240,7 @@ always @ (posedge clk) begin
 
 	// next states
 	if (NS[IDLE]) begin
+		ddr3_wr_busy		<= 1'b0; // only not busy when IDLE
 	end
 	
 	if (NS[TST_HDR_TAG]) begin

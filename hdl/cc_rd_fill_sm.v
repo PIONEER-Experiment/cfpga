@@ -108,15 +108,15 @@ parameter [4:0]
 	DONE			= 5'd19;
 				
 // Declare current state and next state variables
-reg [21:0] /* synopsys enum STATE_TYPE */ CS;
-reg [21:0] /* synopsys enum STATE_TYPE */ NS;
+reg [19:0] /* synopsys enum STATE_TYPE */ CS;
+reg [19:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 // Reset the sm whenever we are not enabled
 always @ (posedge clk) begin
 	if (!run_sm) begin
-		CS <= 22'b0;			// set all state bits to 0
+		CS <= 20'b0;			// set all state bits to 0
 		CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
 	end
 	else  CS <= NS;			// set state bits to next state
@@ -125,7 +125,7 @@ end
 // combinational always block to determine next state  (use blocking [=] assignments) 
 always @ (CS or fill_header_fifo_empty or one_burst_rdy_sync2 or tx_tready or error_found 
 			or burst_count_zero or header_match or readout_pause_sync2) begin
-	NS = 22'b0;					// default all bits to zero; will overrride one bit
+	NS = 20'b0;					// default all bits to zero; will overrride one bit
 
 	case (1'b1) //synopsys full_case parallel_case
 
@@ -399,7 +399,7 @@ always @ (posedge clk) begin
 		// enable transmission of the serial number
 		tx_tvalid <= 1'b1;
 		// increment the burst counter by two to account for the header and checksum
-		burst_count[20:0] <= burst_count[20:0] + 2'b10;
+		burst_count[20:0] <= burst_count[20:0] + 2;
 	end
 
 	if (NS[ECHO_CC1]) begin
@@ -442,7 +442,7 @@ always @ (posedge clk) begin
 		// decrement the burst counter
 		burst_count[20:0] <= burst_count[20:0] - 1'b1;
 		// increment the address pointer
-		ddr3_rd_burst_addr[22:0] <= ddr3_rd_burst_addr[22:0] + 1'b1;
+		ddr3_rd_burst_addr[22:0] <= ddr3_rd_burst_addr[22:0] + 1;
 	end
 
 	if (NS[XMIT_DAT_BURST3]) begin
