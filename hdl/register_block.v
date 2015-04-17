@@ -53,12 +53,13 @@ module register_block(
 	//  make a block of 16 32-bit registers
 	reg [31:0] reg0_, reg1_, reg2_, reg3_, 
 				reg4_, reg5_, reg6_, reg7_,
-				reg8_, reg9_, reg10_, reg11_,
+				reg9_, reg10_, reg11_,
 				reg12_, reg13_, reg14_, reg15_,
 				reg16_, reg17_, reg18_, reg19_,
 				reg20_, reg21_, reg22_, reg23_,
 				reg24_, reg25_, reg26_, reg27_,
 				reg28_, reg29_, reg30_, reg31_;
+	reg [31:0] reg8_ = 32'b01110; // default tap value of 14
 
 	// write to the writable registers
 	always @ (posedge clk) begin

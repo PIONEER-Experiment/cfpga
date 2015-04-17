@@ -1,0 +1,28 @@
+// Registers values for ADC (ADS5401) configurations
+
+// Be sure to use [ `include "clk_synth_regs.txt" ] whenever any of these constants are needed.
+// Also, be sure to use the backtic [ ` ] when the constant is actually used.
+
+// Only define these constants once.
+`ifndef ADC_REGS_INCLUDED
+  `define ADC_REGS_INCLUDED
+
+	// Define 24-bit payload values for ADC
+
+	// ===========================================
+	// Default payload values (format: value_addr)
+	// ===========================================
+	`define	ADC_DEF_REG00		24'h8000_00		// Enable 4-wire communication
+	`define	ADC_DEF_REG01		24'h8002_01		// Disable interleaving correction, enable HP mode
+	`define	ADC_DEF_REG02		24'h0f80_02		//
+	`define	ADC_DEF_REG03		24'h4b18_03		//
+	`define	ADC_DEF_REG0E		24'haaa8_0e		//
+	`define	ADC_DEF_REG0F		24'ha000_0f		//
+	`define	ADC_DEF_REG2B		24'h003d_2b		// Temperature reading, could be removed
+	`define	ADC_DEF_REG2C		24'h0000_2c		//
+	`define	ADC_DEF_REG37		24'h0000_37		//
+	`define	ADC_DEF_REG38		24'hffff_38		//
+	`define	ADC_DEF_REG3A		24'hd81b_3a		// 3.5 mA LVDS current strength, 2 kOhm LVDS internal termination
+	`define	ADC_DEF_REG66		24'hffff_66		//
+
+`endif

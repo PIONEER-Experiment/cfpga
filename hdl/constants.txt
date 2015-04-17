@@ -1,6 +1,6 @@
 // Collection of constants for the G-2 
 
-// Be sure to use [ `include "constants.txt' ] whenever any of these constants are needed.
+// Be sure to use [ `include "constants.txt" ] whenever any of these constants are needed.
 // Also, be sure to use the backtic [ ` ] when the constant is actually used.
 
 // Only define these constants once.
