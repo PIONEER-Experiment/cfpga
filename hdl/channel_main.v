@@ -183,6 +183,8 @@ adc_acq_top adc_acq_top (
 	.adc_acq_full_reset(adc_acq_full_reset),	// reset all aspects of data collection/storage/readout
 	.acq_done(acq_done)                         // acquisition is done
 );
+
+wire ddr3_write_fifo_full;
         
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
@@ -195,7 +197,7 @@ ddr3_write_fifo ddr3_write_fifo (
 	.wr_en(adc_acq_out_valid),      // current data should be stored in the FIFO
 	.rd_en(ddr3_wr_fifo_rd_en),     // use and remove the data on the FIFO head
 	.dout(ddr3_wr_fifo_dat[127:0]), // data to be written to the DDR3
-	.full(),                        // we don't currently use this
+	.full(ddr3_write_fifo_full),    // we don't currently use this
 	.prog_empty(ddr3_wr_fifo_near_empty),		// asserted at less than 4, negated at more than 10 
 	.empty(ddr3_wr_fifo_empty)		// data is available when this is not asserted
 );
@@ -205,7 +207,7 @@ ddr3_write_fifo ddr3_write_fifo (
 ddr3_intf ddr3_intf(
 	// clocks and resets
 	.refclk(clk200),							// input, 200 MHz for I/O timing adjustments
-	.sysclk(clk250),							// input, drives the Xilinx DDR3 IP
+	.sysclk(clk200),							// input, drives the Xilinx DDR3 IP
 	.reset(adc_acq_full_reset),					// input, reset at startup or when requested by master FPGA 
 	.ddr3_domain_clk(ddr3_domain_clk),			// output, the DDR3 user-interface synchronous clock
 	// writing connections
