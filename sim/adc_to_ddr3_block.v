@@ -62,7 +62,10 @@ module adc_to_ddr3_block(
 	// ADC pins
 	input [11:0] adc_in_p, adc_in_n,
 	input adc_clk_n, adc_clk_p,     // up to 400 MHz sample clock from ADC chip
-	input adc_ovr_n, adc_ovr_p     // over-range
+	input adc_ovr_n, adc_ovr_p,     // over-range
+	output ddr3_domain_clk,			// output, the DDR3 user-interface synchronous clock
+	output app_rdy
+
 );
 
 ////////////////////////////////////////////////////////////////////////////
@@ -90,6 +93,7 @@ adc_acq_top adc_acq_top (
 	.acq_reset(acq_reset),                      // reset all of the acquisition logic
 	.adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
 	.adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
+	.ddr3_wr_busy(ddr3_wr_busy),					// asserted whenever the 'ddr3_wr_control' is not idle
 	// outputs
 	.acq_enabled(acq_enabled),					// the system is in acquisition mode, rather than readout mode
 	.adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
@@ -131,6 +135,7 @@ ddr3_intf ddr3_intf(
 	.ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),	// input, data is available when this is not asserted
 	.ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),	// output, use and remove the data on the FIFO head
 	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),			// input, data from the ddr3_write_fifo, to be written to the DDR3
+	.ddr3_wr_busy(ddr3_wr_busy),					// asserted whenever the 'ddr3_wr_control' is not idle
 	// reading connections
 	.local_domain_clk(clk125),							// input, the local user synchronous clock
 	.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
@@ -154,7 +159,8 @@ ddr3_intf ddr3_intf(
 	.ddr3_cas_n(ddr3_cas_n),
 	.ddr3_reset_n(ddr3_reset_n),
 	.ddr3_dm(ddr3_dm[1:0]),
-	.ddr3_odt(ddr3_odt[0:0])
+	.ddr3_odt(ddr3_odt[0:0]),
+	.app_rdy(app_rdy)
 );
 
 

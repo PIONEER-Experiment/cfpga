@@ -1,4 +1,4 @@
-`timescale 1ns / 1ps
+`timescale 1ns / 10ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
 // Engineer: 
@@ -78,10 +78,13 @@ module adc_to_ddr3_tb1;
 	wire [0:0] ddr3_odt;
 	// Bidirs
 	wire [15:0] ddr3_dq;
-	wire app_rdy;				// output, PHY calibration is done
 
+	wire app_rdy;				// output, PHY calibration is done
+	wire ddr3_domain_clk;
+	reg measure_eff;	
 	reg [31:0] count;			// dummy counter to make all data words be unique
-	
+	reg [31:0] app_rdy_cnt;		// count the number of DDR3 burst periods where 'app_rdy' is asserted
+			
 	// Connect the DDR3 memory model
 	ddr3_model u_comp_ddr3(
 		.rst_n   (ddr3_reset_n),
@@ -158,7 +161,10 @@ adc_to_ddr3_block uut(
    .ddr3_cas_n(ddr3_cas_n), 
    .ddr3_reset_n(ddr3_reset_n), 
    .ddr3_dm(ddr3_dm), 
-   .ddr3_odt(ddr3_odt) 
+   .ddr3_odt(ddr3_odt),
+   .ddr3_domain_clk(ddr3_domain_clk),			// output, the DDR3 user-interface synchronous clock
+   .app_rdy(app_rdy)
+ 
 );
 
 	initial begin
@@ -188,23 +194,23 @@ adc_to_ddr3_block uut(
 		fill_header_fifo_rd_en = 1'b0;
 		ddr3_rd_burst_addr[22:0] = 23'h000000;				
 		ddr3_rd_one_burst = 1'b0;
-
+		measure_eff = 1'b0;
 
 		// Wait 100 ns for global reset to finish
 		#100;
 	    #20 reset_clk50 = 1'b0;
 	    #20	acq_reset = 1'b0;                // reset all of the acquisition logic
          
-	    #20 num_muon_bursts[20:0] = 21'h000064;  // number of sample bursts in a MUON fill
-            num_laser_bursts[20:0] = 21'h000008; // number of sample bursts in a LASER fill
+	    #20 num_muon_bursts[20:0] = 21'h0f4240;  // number of sample bursts in a MUON fill
+            num_laser_bursts[20:0] = 21'h000064; // number of sample bursts in a LASER fill
             num_ped_bursts[20:0] = 21'h00000b;   // number of sample bursts in a PEDESTAL fill
             initial_fill_num[23:0] = 24'h000055;  // event number to assign to the first fill
             channel_tag[15:0] = 16'h0008;   // stuff about the channel to put in the header
         #10 initial_fill_num_wr = 1'b1;      // write-strobe to store the initial_fill_num
         #10 initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
 
-        #20 acq_enable0 = 1'b1;                  // arm the logic to accept triggers
-			acq_enable1 = 1'b0;                  // arm the logic to accept triggers
+        #20 acq_enable0 = 1'b0;                  // arm the logic to accept triggers
+			acq_enable1 = 1'b1;                  // arm the logic to accept triggers
      end        
 
     // clocks
@@ -212,14 +218,14 @@ adc_to_ddr3_block uut(
         #2.5 clk200 = ~clk200;   // 200 MHz
     end
 	always begin
-        #2.0 clk250 = ~clk250;   // 250 MHz
+        #2.5 clk250 = ~clk250;   // !!! set to 200 MHz for now!!! 250 MHz
     end
 	always begin
         #4.0 clk125 = ~clk125;   // 125 MHz
     end
 	always begin
-       //#1.25 adc_clk_p = ~adc_clk_p; adc_clk_n = ~adc_clk_n;  // 400 MHz
-       #2.0 adc_clk_p = ~adc_clk_p; adc_clk_n = ~adc_clk_n;  // 250 MHz
+       #1.25 adc_clk_p = ~adc_clk_p; adc_clk_n = ~adc_clk_n;  // 400 MHz
+       //#2.0 adc_clk_p = ~adc_clk_p; adc_clk_n = ~adc_clk_n;  // 250 MHz
     end
 
     // ADC DDR input
@@ -228,423 +234,438 @@ adc_to_ddr3_block uut(
         adc_in_n[11:0] <= adc_in_n[11:0] - 12'h001;
     end
 
+	// count ddr3 periods when memory can accept new addresses
+	always @ (posedge ddr3_domain_clk) begin
+		if (!measure_eff) app_rdy_cnt[31:0] <= 0;
+		else if (app_rdy) app_rdy_cnt[31:0] <= app_rdy_cnt[31:0] + 1;
+	end
+	  
 	initial begin
 		// start an acquisition
-		#200000 acq_trig = 1'b1;                 // trigger the logic to start collecting data
+		#105000 acq_trig = 1'b1; measure_eff=1'b1;                 // trigger the logic to start collecting data
 		#100	acq_trig = 1'b0;
+
+        //#6000 acq_enable0 = 1'b0;                  // arm the logic to accept triggers
+		//	acq_enable1 = 1'b0;                  // arm the logic to accept triggers
+
+        //#100 acq_enable0 = 1'b0;                  // arm the logic to accept triggers
+		//	acq_enable1 = 1'b1;                  // arm the logic to accept triggers
+
+		//#100 acq_trig = 1'b1; measure_eff=1'b1;                 // trigger the logic to start collecting data
+		//#100	acq_trig = 1'b0;
 		
 		// disable triggers and enable readout
-		#3000	acq_enable0 = 1'b0;                  // arm the logic to accept triggers
-				acq_enable1 = 1'b0;                  // arm the logic to accept triggers
+		//#6000	acq_enable0 = 1'b0;                  // change to readout mode
+		//		acq_enable1 = 1'b0;                  // 
 
-		// start a readout				
-		#100	ddr3_rd_burst_addr[22:0] = fill_header_fifo_out[57:35];				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		// start a readout				
+//		#100	ddr3_rd_burst_addr[22:0] = fill_header_fifo_out[57:35];				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 		
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
-		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
- 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-				ddr3_rd_one_burst = 1'b1;
-		#50		ddr3_rd_one_burst = 1'b0;
+// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
+//				ddr3_rd_one_burst = 1'b1;
+//		#50		ddr3_rd_one_burst = 1'b0;
 				
     
     end
