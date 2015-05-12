@@ -1,7 +1,9 @@
-# Export the bitstream file
+# Export the bitstream file and create the .mcs file
 if {[file exists ./channel_main.bit]} {
   file copy -force ./channel_main.bit [file dirname [info script]]/../bitstreams/wfd_channel.bit
   puts "INFO: Bitstream copied: wfd_channel.bit"
+  write_cfgmem -force -format MCS -size 32 -interface SPIx1 \
+      -loadbit "up 0xCE0000 ./channel_main.bit" [file dirname [info script]]/../bitstreams/wfd_channel
 } else {
   puts "ERROR: Bitstream not found: channel_main.bit"
 }
