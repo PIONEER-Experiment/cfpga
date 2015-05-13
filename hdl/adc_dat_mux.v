@@ -72,14 +72,25 @@ assign data[127:124]	= {dat3_[25], dat3_[25], dat3_[25], dat3_[25]};   // 7 samp
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // create a checksum register
 reg [127:0] checksum;
+reg [1:0] checksum_cnt;
 always @(posedge clk) begin
 	if (!select_dat && !select_checksum) begin
 		// initialize the checksum 
 		checksum[127:0] <= header[127:0];
+
+		// initialize the counter
+		checksum_cnt[1:0] <= 2'b01;
 	end
-	else if (select_dat && !select_checksum) begin
+	else if (select_dat && !select_checksum && (checksum_cnt[1:0] == 2'b00)) begin
 		// XOR the data with the checksum
+		// but only with a new full burst of data
 		checksum[127:0] <= checksum[127:0] ^ data[127:0];
+		checksum_cnt[1:0] <= checksum_cnt[1:0] + 1'b1;
+	end
+	else if (select_dat && !select_checksum && (checksum_cnt[1:0] != 2'b00)) begin
+		// we don't have the next full burst of data yet
+		// increment counter
+		checksum_cnt[1:0] <= checksum_cnt[1:0] + 1'b1;
 	end
 end
 
@@ -126,7 +137,7 @@ endmodule
  
 //        assign data[80]      = dat2_[13];                           // 5 sample overrange bit
 //        assign data[92:81]   = dat2_[25:14];                        // 5 sample data
-// /      assign data[95:93]   = {dat2_[25], dat2_[25], dat2_[25]};   // 5 sample sign extension
+//        assign data[95:93]   = {dat2_[25], dat2_[25], dat2_[25]};   // 5 sample sign extension
  
 //        assign data[96]      = dat3_[0];                            // 6 sample overrange bit
 //        assign data[108:97]  = dat3_[12:1];                         // 6 sample data
