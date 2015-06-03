@@ -15,7 +15,7 @@ module channel_main(
   input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
   output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
-  output led1, led2,            // multi color LED, [1=0,2=0]-> , [1=0,2=1]-> , [1=1,2=0]-> , [1=1,2=1]->  
+  output led1, led2,            // multi color LED, [1=0,2=0]-> red + green = orange, [1=0,2=1]-> red, [1=1,2=0]-> green, [1=1,2=1]-> off 
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
   input bbus_sda, //SHOULD BE INPUT//               // I2C bus data, connected to Atmel Chip, MAster FPGA, and to other Channel FPGAs
   // serial interfaces
@@ -104,6 +104,11 @@ wire [64:0] adc_buf_current_data_delay;
 //wire [7:0] debug_wires;
 //assign debug[7:0] = debug_wires[7:0];
 
+// status signals for front panel LED
+wire aurora_channel_up;
+wire adc_acq_sm_idle;
+wire command_sm_idle;
+
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
 // Connect an input buffer and a global clock buffer to the 50 MHz clock
@@ -156,32 +161,33 @@ adc_acq_top adc_acq_top (
 	.adc_in_n(adc_in_n[11:0]),                  // [11:0] array of ADC 'n' data pins
 	.adc_ovr_p(adc_dovrp),                      // ADC 'p' over-range pin
 	.adc_ovr_n(adc_dovrn),                      // ADC 'n' over-range pin
-	.adc_clk_p(adc_clk_p),                       // ADC 'p' clk pin
-	.adc_clk_n(adc_clk_n),                       // ADC 'n' clk pin
+	.adc_clk_p(adc_clk_p),                      // ADC 'p' clk pin
+	.adc_clk_n(adc_clk_n),                      // ADC 'n' clk pin
 	.reset_clk50(reset_clk50),                  // synchronously negated  
 	.clk200(clk200),                            // for input pin timing delay settings
-	.channel_tag(channel_tag[15:0]), 		   // stuff about the channel to put in the header
-	.num_muon_bursts(num_muon_bursts[20:0]),  // number of sample bursts in a MUON fill
-	.num_laser_bursts(num_laser_bursts[20:0]),// number of sample bursts in a LASER fill
-	.num_ped_bursts(num_ped_bursts[20:0]),    // number of sample bursts in a PEDESTAL fill
+	.channel_tag(channel_tag[15:0]), 		        // stuff about the channel to put in the header
+	.num_muon_bursts(num_muon_bursts[20:0]),    // number of sample bursts in a MUON fill
+	.num_laser_bursts(num_laser_bursts[20:0]),  // number of sample bursts in a LASER fill
+	.num_ped_bursts(num_ped_bursts[20:0]),      // number of sample bursts in a PEDESTAL fill
 	.initial_fill_num(initial_fill_num[23:0]),  // event number to assign to the first fill
 	.initial_fill_num_wr(initial_fill_num_wr),  // write-strobe to store the initial_fill_num
-    .acq_enable0(acq_enable0),              // indicates enabled for triggers, and fill type
-	.acq_enable1(acq_enable1),              // indicates enabled for triggers, and fill type
+    .acq_enable0(acq_enable0),                // indicates enabled for triggers, and fill type
+	.acq_enable1(acq_enable1),                  // indicates enabled for triggers, and fill type
 	.acq_trig(acq_trig),                        // trigger the logic to start collecting data
 	.acq_reset(acq_reset),                      // reset all of the acquisition logic
 	.adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
 	.adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
-	.ddr3_wr_busy(ddr3_wr_busy),					// asserted whenever the 'ddr3_wr_control' is not idle
+	.ddr3_wr_busy(ddr3_wr_busy),					      // asserted whenever the 'ddr3_wr_control' is not idle
 	// outputs
-	.acq_enabled(acq_enabled),					// the system is in acquisition mode, rather than readout mode
+	.acq_enabled(acq_enabled),					        // the system is in acquisition mode, rather than readout mode
 	.adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
-	.fill_num(fill_num[23:0]),			         // fill number for this fill
+	.fill_num(fill_num[23:0]),			            // fill number for this fill
 	.adc_acq_out_dat(adc_acq_out_dat[127:0]),   // 128-bit header or ADC data
 	.adc_acq_out_valid(adc_acq_out_valid),      // current data should be stored in the FIFO
-	.adc_clk(adc_clk),					          // ADC clock used by the FIFO
-	.adc_acq_full_reset(adc_acq_full_reset),	// reset all aspects of data collection/storage/readout
-	.acq_done(acq_done)                         // acquisition is done
+	.adc_clk(adc_clk),					                // ADC clock used by the FIFO
+	.adc_acq_full_reset(adc_acq_full_reset),	  // reset all aspects of data collection/storage/readout
+	.acq_done(acq_done),                        // acquisition is done
+  .adc_acq_sm_idle(adc_acq_sm_idle)           // ADC acquisition state machine is idle (used for front panel LED status)
 );
 
 wire ddr3_write_fifo_full;
@@ -247,8 +253,15 @@ ddr3_intf ddr3_intf(
 
  
   ////////////////////////////////////////////////////////////////////////////
-  // flash the led
-  led_flasher led_flasher(.clk(clk50), .led(led1));
+  // status LED
+  led_status led_status(
+    .clk(clk50),
+    .red_led(led1),
+    .green_led(led2),
+    .aurora_channel_up(aurora_channel_up),
+    .adc_acq_sm_idle(adc_acq_sm_idle),
+    .command_sm_idle(command_sm_idle)
+  );
 
   ////////////////////////////////////////////////////////////////////////////
   // Connect the serial link to the Master FPGA.
@@ -286,7 +299,8 @@ ddr3_intf ddr3_intf(
     // serial I/O pins
     .c0_rxp(c0_rx), .c0_rxn(c0_rx_N),                   // receive from channel 0 FPGA
     .c0_txp(c0_tx), .c0_txn(c0_tx_N),                   // transmit to channel 0 FPGA
-    .debug(debug[7:0])
+    .debug(debug[7:0]),
+    .channel_up(aurora_channel_up)
 
   );
 
@@ -320,7 +334,7 @@ ddr3_intf ddr3_intf(
     .tx_tvalid(c0_tx_axi_tvalid),
     .tx_tlast(c0_tx_axi_tlast),
     .tx_tready(c0_tx_axi_tready),
-	.readout_pause(readout_pause),		// stop sending fill data to the Aurora
+	  .readout_pause(readout_pause),		// stop sending fill data to the Aurora
 
 	// interface to the ADC data memory and header FIFO
 	.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
@@ -346,8 +360,10 @@ ddr3_intf ddr3_intf(
  
 	.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 	.genreg_wr_data(genreg_wr_data[31:0]),
-	.genreg_rd_data(genreg_rd_data[31:0])
+	.genreg_rd_data(genreg_rd_data[31:0]),
 
+  // Status signal for front panel LED
+  .command_sm_idle(command_sm_idle)
 );
 
 

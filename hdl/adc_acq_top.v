@@ -32,7 +32,8 @@ module adc_acq_top(
     output adc_acq_out_valid,       // current data should be stored in the FIFO
     output adc_clk,          		// ADC clock used by the FIFO
 	output adc_acq_full_reset,		// reset all aspects of data collection/storage/readout
-    output acq_done                 // acquisition is done
+    output acq_done,                // acquisition is done
+    output adc_acq_sm_idle          // ADC acquisition state machine is idle (used for front panel LED status)
 );
 
 wire [1:0] fill_type;          // to determine how much data to collect
@@ -194,12 +195,12 @@ adc_fill_cntr adc_fill_cntr (
 adc_acq_sm adc_acq_sm (
     // inputs
     .clk(adc_clk),
-	.acq_enable0(acq_enable0),             // enable the logic to accept triggers
-    .acq_enable1(acq_enable1),             // enable the logic to accept triggers
-    .acq_trig(acq_trig),                   // trigger the logic to start collecting data
-    .acq_reset(acq_reset),		           // reset from the Master FPGA
-    .reset_clk50(reset_clk50),             // synchronously negated
-    .burst_cntr_zero(burst_cntr_zero),     // all sample bursts have been saved
+	.acq_enable0(acq_enable0),              // enable the logic to accept triggers
+    .acq_enable1(acq_enable1),              // enable the logic to accept triggers
+    .acq_trig(acq_trig),                    // trigger the logic to start collecting data
+    .acq_reset(acq_reset),		            // reset from the Master FPGA
+    .reset_clk50(reset_clk50),              // synchronously negated
+    .burst_cntr_zero(burst_cntr_zero),      // all sample bursts have been saved
     .ddr3_wr_busy(ddr3_wr_busy),  			// asserted whenever the 'ddr3_wr_control' is not idle
     // outputs
     .fill_type(fill_type[1:0]),				// determine which burst count to use
@@ -212,8 +213,9 @@ adc_acq_sm adc_acq_sm (
     .burst_cntr_init(burst_cntr_init),  	// initialize when triggered
     .burst_cntr_en(burst_cntr_en),       	// will be enabled once per burst
     .fill_cntr_en(fill_cntr_en),           	// will be enabled once per fill
- 	.adc_acq_full_reset(adc_acq_full_reset),        // synchronously negated 
-    .acq_done(acq_done)                    	// acquisition is done
+ 	.adc_acq_full_reset(adc_acq_full_reset),// synchronously negated 
+    .acq_done(acq_done),                    // acquisition is done
+    .sm_idle(adc_acq_sm_idle)               // state machine is idle
 );      
 
 //	// create a register to hold the checksum

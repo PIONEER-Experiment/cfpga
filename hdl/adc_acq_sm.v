@@ -24,7 +24,8 @@ module adc_acq_sm (
     output reg fill_cntr_en,      	// will be enabled once per fill
     output reg adc_acq_out_valid, 	// current data should be stored in the FIFO
 	output reg adc_acq_full_reset,	// reset everything related to ADC acquisition and storage
-	output reg acq_done           	// acquisition is done
+	output reg acq_done,           	// acquisition is done
+	output reg sm_idle			    // signal that this state machine is idle (used for front panel LED status)
 );      
 
 
@@ -199,11 +200,13 @@ always @ (posedge clk) begin
         adc_acq_out_valid		<= 1'b0;
 		adc_mux_checksum_select	<= 1'b0;
         acq_done				<= 1'b0;
+        sm_idle					<= 1'b0;
 
 	// next states
 	if (NS[IDLE]) begin
 		// reset the counter that provides dummy data
 		dummy_dat_reset			<= 1'b1;
+		sm_idle                 <= 1'b1;
 	end
 	
 	if (NS[INIT1]) begin

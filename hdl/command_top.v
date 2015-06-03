@@ -50,7 +50,10 @@ module command_top(
 
 	output [31:0] genreg_addr_ctrl,	//generic register address and control output
 	output [31:0] genreg_wr_data,	//generic register data written from Master FPGA 
-	input [31:0] genreg_rd_data	//generic register data read by Master FPGA
+	input [31:0] genreg_rd_data,	//generic register data read by Master FPGA
+
+	// status for front panel LED
+	output command_sm_idle
 
 );
 
@@ -207,7 +210,8 @@ module command_top(
 		.run_cmd_sm(run_cmd_sm),   		  // run a state machine
 		// control inputs
 		.cmd_sm_running(cmd_sm_running),  // someone is running
-		.cmd_sm_done(cmd_sm_done)		  // someone is finished
+		.cmd_sm_done(cmd_sm_done),		  // someone is finished
+		.sm_idle(command_sm_idle)         // state machine is idle
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////

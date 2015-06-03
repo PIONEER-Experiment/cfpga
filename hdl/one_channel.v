@@ -34,7 +34,8 @@ module one_channel(
   input gt_qpllrefclk_quad2,          // input
   output gt0_qpllreset,                // output
   // status
-  output [7:0] debug
+  output [7:0] debug,
+  output channel_up
  );
 
   wire local_axis_resetn;                 // a local reset synched to the Aurora 'user_clk'

@@ -25,7 +25,8 @@ module command_sm(
 	output command_le,          // latch the command
 	output run_cmd_sm,       	// run a state machine
 	input cmd_sm_running,		// someone running
-	input cmd_sm_done			// someone finished
+	input cmd_sm_done,			// someone finished
+	output sm_idle				// signal that this state machine is idle (used for front panel LED status)
 );
 
     // Everything is already synchronous to the clock.
@@ -182,5 +183,6 @@ module command_sm(
 	assign command_le = (CS[LATCH_CC] == 1'b1);
 	// run another state machine to process an individual command
 	assign run_cmd_sm = (CS[START_CC] == 1'b1 || CS[PAUSE] == 1'b1 || CS[TEST_RUNNING] == 1'b1 || CS[WAIT_FOR_DONE] == 1'b1);
+	assign sm_idle    = (CS[IDLE] == 1'b1);
 
 endmodule
