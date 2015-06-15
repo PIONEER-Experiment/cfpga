@@ -291,17 +291,17 @@ always @ (posedge clk) begin
 		// ask DDR3 memory reader for all data 
         enable_reading <= 1'b1;
 		// tell the AXIS 2:1 MUX to send DDR3 data
-		use_ddr3_data			<= 1'b0;
+		use_ddr3_data			<= 1'b1;
 		// decrement the words_to_send counter when data is accepted by the Aurora
 		if (aurora_ddr3_accept) begin
-			ddr3_words_to_send[22:0] <= ddr3_words_to_send[22:0] -1;
+			ddr3_words_to_send[22:0] <= ddr3_words_to_send[22:0] - 1;
 		end
 	end
 
 	if (NS[DONE]) begin
 		// tell the AXIS 2:1 MUX to send DDR3 data
 	 	if (!error_found) begin
-			use_ddr3_data			<= 1'b0;
+			use_ddr3_data			<= 1'b1;
 		end
 		// notify calling logic that we are done
 		sm_done <= 1'b1;
