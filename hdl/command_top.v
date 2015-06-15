@@ -21,19 +21,17 @@ module command_top(
     output rx_tready,            // input wire m_axis_tready
     // TX interface to slave side of transmit FIFO for sending to the Master FPGA 
     output [31:0] tx_data,        // note index order
-    output [0:3] tx_tkeep,         // note index order
     output tx_tvalid,
     output tx_tlast,
     input  tx_tready,
-	input readout_pause,			// stop sending fill data to the Aurora
 	// interface to the ADC data memory and header FIFO
 	input fill_header_fifo_empty,				// input, a header is available when not asserted
 	output fill_header_fifo_rd_en,				// output, remove the current data from the FIFO
 	input [127:0] fill_header_fifo_out,			// input, data at the head of the FIFO
-	output [22:0] ddr3_rd_burst_addr,			// output, the address of the requested 128-bit burst
-	output ddr3_rd_one_burst,					// output, get one 128-bit burst from the DDR3
-	input ddr3_one_burst_rdy,					// input, the requested 128-bit burst is ready
-	input [127:0] ddr3_one_burst_data,			// input, the requested 128-bit burst
+	output [22:0] ddr3_rd_start_addr,			// the address of the first requested 128-bit burst
+	output [20:0] ddr3_rd_burst_cnt,         // input, the number of bursts to read
+	output enable_reading,      				// input, initialize the address generator and both counters, go
+    input reading_done,                       // output, reading is complete
 
 	// Register to/from the ADC acquisition state machine
 	input [23:0] fill_num,	         // fill number for this fill
@@ -52,6 +50,10 @@ module command_top(
 	output [31:0] genreg_wr_data,	//generic register data written from Master FPGA 
 	input [31:0] genreg_rd_data,	//generic register data read by Master FPGA
 
+	// interface to the AXIS 2:1 MUX
+	output use_ddr3_data,			// the data source is the DDR3 memory
+	input aurora_ddr3_accept,		// DDR3 data has been accepted by the Aurora
+
 	// status for front panel LED
 	output command_sm_idle
 
@@ -61,10 +63,8 @@ module command_top(
 	// make active-hi reset
 	wire reset;
 	assign reset = ~resetN;
-	// always drive all 4 'tx_tkeep' bits
-	assign tx_tkeep[0:3] = 4'b1111;
 	
-	wire [31:0] reg_data, fill_data;
+	wire [31:0] reg_data;
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect registers to hold the incoming serial number and command
@@ -158,7 +158,7 @@ module command_top(
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect a big mux to steer data to the TX FIFO
-	wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_fill_data;
+	wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data;
 	reg [31:0] tx_data_reg;
 	always @ (posedge clk) begin
 		if (send_csn) tx_data_reg[31:0] <= serial_num_reg[31:0];	// serial number
@@ -166,7 +166,6 @@ module command_top(
 		if (send_inv_cmd) tx_data_reg[31:0] <= ~command_reg[31:0];	// inverse of command
 		if (send_rx_data) tx_data_reg[31:0] <= rx_data[31:0];		// loopback
 		if (send_reg_data) tx_data_reg[31:0] <= reg_data[31:0];		// reading from a register
-		if (send_fill_data) tx_data_reg[31:0] <= fill_data[31:0];	// ADC herader/data from DDR3 memory
 	end
 	assign tx_data[31:0] = tx_data_reg[31:0];
 	
@@ -190,9 +189,6 @@ module command_top(
 	// Only the read_register state machine sends register data
 	assign send_reg_data = rd_reg_sm_send_reg_data;
 	
-	// Only the read_fill state machine sends fill data
-	assign send_fill_data = rd_fill_sm_send_fill_data;
-		
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that receives and dispatches commands
 	// This state machine never drives the transmit fifo 
@@ -332,6 +328,8 @@ module command_top(
 		.genreg_rd_data(genreg_rd_data[31:0])
 	);
 
+
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that processes the CC_RD_FILL command
 	cc_rd_fill_sm cc_rd_fill_sm (
@@ -346,22 +344,23 @@ module command_top(
 		.tx_tvalid(rd_fill_sm_tx_tvalid),		// the data we are presenting is valid
 		.tx_tlast(rd_fill_sm_tx_tlast),	    		// this is the final word in the frame
 		.tx_tready(tx_tready),				// the TX fifo is ready to accepted data
-		.tx_data(fill_data[31:0]),			// 32-bit chinks of DDR3 bursts
-		.readout_pause(readout_pause),		// stop sending fill data to the Aurora
 		// TX mux control
 		.send_csn(rd_fill_sm_send_csn),      		// send the CSN
 		.send_cmd(rd_fill_sm_send_cmd),  		// send the CC
 		.send_inv_cmd(rd_fill_sm_send_inv_cmd),  	// send the inverse CC
-		.send_fill_data(rd_fill_sm_send_fill_data),	// mux source is the ADC memory
 		//local controls
-		// interface to the DDR3 data memory and header FIFO
-		.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
-		.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
-		.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
-		.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
-		.ddr3_rd_one_burst(ddr3_rd_one_burst),				// output, get one 128-bit burst from the DDR3
-		.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// input, the requested 128-bit burst is ready
-		.ddr3_one_burst_data(ddr3_one_burst_data[127:0])	// output, the requested 128-bit burst
+		// interface to the header FIFO
+		.fill_header_fifo_empty(fill_header_fifo_empty),	// a header is available when not asserted
+		.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// remove the current data from the FIFO
+		.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// data at the head of the FIFO
+		// interface to the DDR3 memory 
+		.ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),		// the address of the requested 128-bit burst
+		.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),			// number of bursts to read from the DDR3
+		.enable_reading(enable_reading),     			// start the 'ddr3_rd_control'
+		.reading_done(reading_done),       				// reading is complete
+		// interface to the AXIS 2:1 MUX
+		.use_ddr3_data(use_ddr3_data),			// the data source is the DDR3 memory
+		.aurora_ddr3_accept(aurora_ddr3_accept)	// DDR3 data has been accepted by the Aurora
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////

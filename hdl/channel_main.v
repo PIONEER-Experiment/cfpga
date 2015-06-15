@@ -62,27 +62,34 @@ module channel_main(
 // Use io[3] for a 'acq_reset', io[2:1] for 'acq_enable', and io[0] for 'readout_pause'
 wire acq_reset;
 assign acq_reset = io[3];
-wire acq_enable0;              // indicates enabled for triggers, and fill type
-wire acq_enable1;              // indicates enabled for triggers, and fill type
+wire acq_enable0;						// indicates enabled for triggers, and fill type
+wire acq_enable1;						// indicates enabled for triggers, and fill type
 assign acq_enable0 = io[1];
 assign acq_enable1 = io[2];
 wire readout_pause;
-assign readout_pause = io[0];	// stop sending fill data to the Aurora
+assign readout_pause = io[0];			// stop sending fill data to the Aurora
 
-wire [15:0] channel_tag;			// stuff about the channel to put in the header
-wire [20:0] num_muon_bursts;		// number of sample bursts in a MUON fill
-wire [20:0]	num_laser_bursts;		// number of sample bursts in a LASER fill
-wire [20:0]	num_ped_bursts;			// number of sample bursts in a PEDESTAL fill
-wire [23:0]	initial_fill_num;		// event number to assign to the first fill
-wire [127:0] adc_acq_out_dat;		// 128-bit header or ADC data to 'ddr3_write_fifo'
+wire [15:0] channel_tag;				// stuff about the channel to put in the header
+wire [20:0] num_muon_bursts;			// number of sample bursts in a MUON fill
+wire [20:0]	num_laser_bursts;			// number of sample bursts in a LASER fill
+wire [20:0]	num_ped_bursts;				// number of sample bursts in a PEDESTAL fill
+wire [23:0]	initial_fill_num;			// event number to assign to the first fill
+wire [127:0] adc_acq_out_dat;			// 128-bit header or ADC data to 'ddr3_write_fifo'
 wire adc_acq_out_valid;
-wire [127:0] ddr3_wr_fifo_dat;		// 128-bit header or ADC data from 'ddr3_write_fifo'
-wire [127:0] ddr3_rd_dat;			// 128-bit header or ADC data from DDR3 memory
-wire [23:0] fill_num;				// fill number for this fill
+wire [127:0] ddr3_wr_fifo_dat;			// 128-bit header or ADC data from 'ddr3_write_fifo'
+wire [127:0] ddr3_rd_dat;				// 128-bit header or ADC data from DDR3 memory
+wire [23:0] fill_num;					// fill number for this fill
+wire [127:0] ddr3_rd_fifo_input_dat;	// memory burst headed toward 'ddr3_read_fifo'
+wire [127:0] ddr3_rd_fifo_output_dat;	// memory burst headed toward 'ddr3_read_data_width_converter'
+wire [31:0] ddr3_32bit_tx_tdata;		// 32-bit chunks of memory burst headed toward 'axis_interconnect'
+wire [22:0] ddr3_rd_start_addr;			// the address of the first requested 128-bit burst
+wire [20:0] ddr3_rd_burst_cnt;			// number of bursts to read from the DDR3
+wire [31:0] command_tx_tdata;			// data to Aurora from 'command_top'
+wire [31:0] rx_tdata_swap;				// bit-reversed data from Aurora
 
 // Define the AXIS-fifo inputs and outputs for chan 0
 wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
-wire [0:3] c0_rx_axi_tkeep, c0_tx_axi_tkeep;
+wire [0:3] c0_rx_axi_tkeep;
 wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
 wire c0_rx_axi_tlast, c0_tx_axi_tlast;
 wire c0_rx_axi_tready, c0_tx_axi_tready;
@@ -96,7 +103,6 @@ wire [31:0] adc_intf_wr_data;
 
 wire [127:0] fill_header_fifo_out;
 wire [22:0] ddr3_rd_burst_addr;
-wire [127:0] ddr3_one_burst_data;
 
 wire [4:0] adc_buf_data_delay;
 wire [64:0] adc_buf_current_data_delay;
@@ -204,7 +210,6 @@ ddr3_write_fifo ddr3_write_fifo (
 	.rd_en(ddr3_wr_fifo_rd_en),     // use and remove the data on the FIFO head
 	.dout(ddr3_wr_fifo_dat[127:0]), // data to be written to the DDR3
 	.full(ddr3_write_fifo_full),    // we don't currently use this
-	.prog_empty(ddr3_wr_fifo_near_empty),		// asserted at less than 4, negated at more than 10 
 	.empty(ddr3_wr_fifo_empty)		// data is available when this is not asserted
 );
 
@@ -218,20 +223,25 @@ ddr3_intf ddr3_intf(
 	.ddr3_domain_clk(ddr3_domain_clk),			// output, the DDR3 user-interface synchronous clock
 	// writing connections
 	.acq_enabled(acq_enabled),					// the system is in acquisition mode, rather than readout mode
-	.ddr3_wr_fifo_near_empty(ddr3_wr_fifo_near_empty),		// asserted at less than 4, negated at more than 10 
 	.ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),	// input, data is available when this is not asserted
 	.ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),	// output, use and remove the data on the FIFO head
 	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),			// input, data from the ddr3_write_fifo, to be written to the DDR3
+	.ddr3_wr_sync_err(),							// synchronization error flag
 	.ddr3_wr_busy(ddr3_wr_busy),					// asserted whenever the 'ddr3_wr_control' is not idle
 	// reading connections
 	.local_domain_clk(clk125),							// input, the local user synchronous clock
 	.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
 	.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
 	.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
-	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
-	.ddr3_rd_one_burst(ddr3_rd_one_burst),				// input, get one 128-bit burst from the DDR3
-	.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// output, the requested 128-bit burst is ready
-	.ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
+	.ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),		// input, the address of the first requested 128-bit burst
+	.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),         // input, the number of bursts to read
+	.enable_reading(enable_reading),      				// input, initialize the address generator and both counters, go
+    .reading_done(reading_done),                       // output, reading is complete
+	// ports to the 'read' fifo
+	.ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),				// data is valid, so put it in the READ FIFO    
+	.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]),	// output, memory data
+	.ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),		// there is not much room left    
+	.ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast),	// the last burst for this fill	
 	// connections to the DDR3 chips
 	.ddr3_addr(ddr3_addr[12:0]),
 	.ddr3_ba(ddr3_ba[2:0]),
@@ -246,13 +256,102 @@ ddr3_intf ddr3_intf(
 	.ddr3_cas_n(ddr3_cas_n),
 	.ddr3_reset_n(ddr3_reset_n),
 	.ddr3_dm(ddr3_dm[1:0]),
-	.ddr3_odt(ddr3_odt[0:0])
+	.ddr3_odt(ddr3_odt[0:0]),
+	.app_rdy()
 );
 
-    
+////////////////////////////////////////////////////////////////////////////
+// Create a FIFO to buffer the data from the DDR3 block
+ddr3_read_fifo ddr3_read_fifo(
+	.m_aclk(clk125),
+	.s_aclk(ddr3_domain_clk),
+	.s_aresetn(~adc_acq_full_reset),
+	.s_axis_tvalid(ddr3_rd_fifo_wr_en),
+	.s_axis_tready(),
+	.s_axis_tlast(ddr3_rd_fifo_input_tlast),
+	.s_axis_tdata(ddr3_rd_fifo_input_dat[127:0]),
+	.m_axis_tvalid(ddr3_rd_fifo_output_tvalid),
+	.m_axis_tready(ddr3_rd_fifo_output_tready),
+	.m_axis_tdata(ddr3_rd_fifo_output_dat[127:0]),
+	.m_axis_tlast(ddr3_rd_fifo_output_tlast),
+	.axis_prog_full(ddr3_rd_fifo_almost_full)
+);
 
+// Create a width converter to change the 128-bit data to 32-bit data
+ddr3_read_data_width_converter ddr3_read_data_width_converter(
+	.aclk(clk125),
+	.aresetn(~adc_acq_full_reset),
+	.s_axis_tvalid(ddr3_rd_fifo_output_tvalid),
+	.s_axis_tready(ddr3_rd_fifo_output_tready),
+	.s_axis_tdata(ddr3_rd_fifo_output_dat[127:0]),			// 128-bit
+	.s_axis_tlast(ddr3_rd_fifo_output_tlast),
+	.m_axis_tvalid(ddr3_32bit_tvalid),
+	.m_axis_tready(ddr3_32bit_tready),
+	.m_axis_tdata(ddr3_32bit_tx_tdata[31:0]),			// 32-bit
+	.m_axis_tlast(ddr3_32bit_tlast)
+);
+
+// COMMENT OUT THE "AXIS_INTERCONNECT AND REPLACE IT WITH A COMBINATORIAL 2:1 MUX
+// Create an AXI interconnect to merge the 'command' data with the DDR3 data.
+// 'command' data on port 'S00'
+// DDR3 data on port 'S01' 
+// This is configured in "fixed mode arbitration", where S00 has priority. This should prevent
+// the situation where the 'rd_fill' sm has sent out the CSN and CC, but they are not consumed
+// by the Aurora. Then the DDR3 data arrives and gets ahead of the CSN/CC.
+// The slave FIFO has been enabled for each port.
+//axis_interconnect_0 axis_interconnect (
+//  .ACLK(clk125),                                  // input wire ACLK
+//  .ARESETN(~adc_acq_full_reset),                            // input wire ARESETN
+//  .S00_AXIS_ACLK(clk125),                // input wire S00_AXIS_ACLK
+//  .S01_AXIS_ACLK(clk125),                // input wire S01_AXIS_ACLK
+//  .S00_AXIS_ARESETN(adc_acq_full_reset),          // input wire S00_AXIS_ARESETN
+//  .S01_AXIS_ARESETN(adc_acq_full_reset),          // input wire S01_AXIS_ARESETN
+//  .S00_AXIS_TVALID(command_tx_tvalid),            // input wire S00_AXIS_TVALID
+//  .S01_AXIS_TVALID(ddr3_32bit_tvalid),            // input wire S01_AXIS_TVALID
+//  .S00_AXIS_TREADY(command_tx_tready),            // output wire S00_AXIS_TREADY
+//  .S01_AXIS_TREADY(ddr3_32bit_tready),            // output wire S01_AXIS_TREADY
+//  .S00_AXIS_TDATA(command_tx_tdata[31:0]),              // input wire [31 : 0] S00_AXIS_TDATA
+//  .S01_AXIS_TDATA(ddr3_32bit_tx_tdata[31:0]),              // input wire [31 : 0] S01_AXIS_TDATA
+//  .S00_AXIS_TLAST(command_tx_tlast),              // input wire S00_AXIS_TLAST
+//  .S01_AXIS_TLAST(ddr3_32bit_tlast),              // input wire S01_AXIS_TLAST
+//  .M00_AXIS_ACLK(clk125),                // input wire M00_AXIS_ACLK
+//  .M00_AXIS_ARESETN(adc_acq_full_reset),          // input wire M00_AXIS_ARESETN
+//  .M00_AXIS_TVALID(c0_tx_axi_tvalid),            // output wire M00_AXIS_TVALID
+//  .M00_AXIS_TREADY(c0_tx_axi_tready),            // input wire M00_AXIS_TREADY
+//  .M00_AXIS_TDATA(tx_tdata_swap[31:0]),              // output wire [31 : 0] M00_AXIS_TDATA
+//  .M00_AXIS_TLAST(c0_tx_axi_tlast),              // output wire M00_AXIS_TLAST
+//  .S00_ARB_REQ_SUPPRESS(1'b0),  // input wire S00_ARB_REQ_SUPPRESS
+//  .S01_ARB_REQ_SUPPRESS(1'b0),  // input wire S01_ARB_REQ_SUPPRESS
+//  .S00_FIFO_DATA_COUNT(),    // output wire [31 : 0] S00_FIFO_DATA_COUNT
+//  .S01_FIFO_DATA_COUNT()    // output wire [31 : 0] S01_FIFO_DATA_COUNT
+//);
+
+// Synchronize  'readout_pause' to 'clk125'.
+reg readout_pause_sync1, readout_pause_sync2;
+always @(posedge clk125) begin
+	readout_pause_sync1 <= readout_pause;
+	readout_pause_sync2 <= readout_pause_sync1;
+end
+
+// We really want a 2:1 MUX to route data to the Aurora. It will normally send data from
+// 'command_top', but will switch to sending data from the DDR3 memory during 'rd_fill'.
+// We need to avoid causing changes in the order of data, or truncating a stream by switching
+// prematurely.
+// Switch 'tvalid' and 'tlast' between the DDR3 source and the 'command' source
+assign c0_tx_axi_tvalid = use_ddr3_data ? ddr3_32bit_tvalid : command_tx_tvalid;
+assign c0_tx_axi_tlast  = use_ddr3_data ? ddr3_32bit_tlast : command_tx_tlast;
+// Switch 'tdata[]' between the DDR3 source and the 'command' source
+// Swap the bit-order along the way
+assign c0_tx_axi_tdata[0:31] = use_ddr3_data ? ddr3_32bit_tx_tdata[31:0] : command_tx_tdata[31:0];
+// Only send 'tready' back to the active source.
+// Negate 'tready' when 'readout_pause' is asserted
+assign ddr3_32bit_tready = use_ddr3_data ? (c0_tx_axi_tready & !readout_pause_sync2) : 1'b0;
+assign command_tx_tready = use_ddr3_data ? 1'b0 : (c0_tx_axi_tready & !readout_pause_sync2);  
+// make an 'aurora_ddr3_accept' signal that is asserted whenever the Aurora accepts DDR3 data.
+// It will be sent to the 'rd_fill' state machine, which needs to know when to negate 'use_ddr3_data'
+assign aurora_ddr3_accept = use_ddr3_data & c0_tx_axi_tready & c0_tx_axi_tvalid;
  
-  ////////////////////////////////////////////////////////////////////////////
+ ////////////////////////////////////////////////////////////////////////////
   // status LED
   led_status led_status(
     .clk(clk50),
@@ -286,7 +385,7 @@ ddr3_intf ddr3_intf(
     // connections to 2-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
     // TX interface to slave side of transmit FIFO 
     .c0_s_axi_tx_tdata(c0_tx_axi_tdata[0:31]),        // note index order
-    .c0_s_axi_tx_tkeep(c0_tx_axi_tkeep[0:3]),         // note index order
+    .c0_s_axi_tx_tkeep(4'b1111),			         // always 1's
     .c0_s_axi_tx_tvalid(c0_tx_axi_tvalid),
     .c0_s_axi_tx_tlast(c0_tx_axi_tlast),
     .c0_s_axi_tx_tready(c0_tx_axi_tready),
@@ -304,10 +403,8 @@ ddr3_intf ddr3_intf(
 
   );
 
-  // We need to swap the bit order for the RX and TX data
-  wire [31:0] rx_tdata_swap, tx_tdata_swap;
+  // We need to swap the bit order for the RX  data
   assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
-  assign c0_tx_axi_tdata[0:31] = tx_tdata_swap[31:0];
   
   ///////////////////////////////////////////////////////////////////////////////////
   // Connect the command processor. This will receive commands from the Aurora serial
@@ -329,21 +426,19 @@ ddr3_intf ddr3_intf(
     .rx_tlast(c0_rx_axi_tlast),
     .rx_tready(c0_rx_axi_tready),            // input wire m_axis_tready
     // TX interface to slave side of transmit FIFO for sending to the Master FPGA 
-    .tx_data(tx_tdata_swap[31:0]),        // note index order
-    .tx_tkeep(c0_tx_axi_tkeep[0:3]),         // note index order
-    .tx_tvalid(c0_tx_axi_tvalid),
-    .tx_tlast(c0_tx_axi_tlast),
-    .tx_tready(c0_tx_axi_tready),
-	  .readout_pause(readout_pause),		// stop sending fill data to the Aurora
+    .tx_data(command_tx_tdata[31:0]),        // note index order
+    .tx_tvalid(command_tx_tvalid),
+    .tx_tlast(command_tx_tlast),
+    .tx_tready(command_tx_tready),
 
 	// interface to the ADC data memory and header FIFO
 	.fill_header_fifo_empty(fill_header_fifo_empty),	// output, a header is available when not asserted
 	.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// input, remove the current data from the FIFO
 	.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
-	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
-	.ddr3_rd_one_burst(ddr3_rd_one_burst),				// output, get one 128-bit burst from the DDR3
-	.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// input, the requested 128-bit burst is ready
-	.ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
+	.ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),		// input, the address of the first requested 128-bit burst
+	.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),         // input, the number of bursts to read
+	.enable_reading(enable_reading),      				// input, initialize the address generator and both counters, go
+    .reading_done(reading_done),                       // output, reading is complete
 
 	// Registers to/from the ADC acquisition state machine
 	.fill_num(fill_num[23:0]),			         // fill number for this fill
@@ -362,6 +457,10 @@ ddr3_intf ddr3_intf(
 	.genreg_wr_data(genreg_wr_data[31:0]),
 	.genreg_rd_data(genreg_rd_data[31:0]),
 
+	// interface to the AXIS 2:1 mux
+	.use_ddr3_data(use_ddr3_data),				// the data source is the DDR3 memory
+	.aurora_ddr3_accept(aurora_ddr3_accept),	// DDR3 data has been accepted by the Aurora
+	
   // Status signal for front panel LED
   .command_sm_idle(command_sm_idle)
 );

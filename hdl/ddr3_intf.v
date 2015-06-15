@@ -8,7 +8,6 @@ module ddr3_intf(
 	output ddr3_domain_clk,						// output, the DDR3 user-interface synchronous clock
 	// writing connections
 	input acq_enabled,							// the system is in acquisition mode, rather than readout mode
-	input ddr3_wr_fifo_near_empty,				// asserted at less than 4, negated at more than 10 
 	input ddr3_wr_fifo_empty,					// input, data is available when this is not asserted
 	output ddr3_wr_fifo_rd_en,					// output, use and remove the data on the FIFO head
 	input [127:0] ddr3_wr_fifo_dat,				// input, data from the ddr3_write_fifo, to be written to the DDR3
@@ -19,10 +18,15 @@ module ddr3_intf(
 	output fill_header_fifo_empty,				// output, a header is available when not asserted
 	input fill_header_fifo_rd_en,				// input, remove the current data from the FIFO
 	output [127:0] fill_header_fifo_out,		// output, data at the head of the FIFO
-	input [22:0] ddr3_rd_burst_addr,			// input, the address of the requested 128-bit burst
-	input ddr3_rd_one_burst,					// input, get one 128-bit burst from the DDR3
-	output ddr3_one_burst_rdy,					// output, the requested 128-bit burst is ready
-	output [127:0] ddr3_one_burst_data,			// output, the requested 128-bit burst
+	input [22:0] ddr3_rd_start_addr,			// input, the address of the first requested 128-bit burst
+	input [20:0] ddr3_rd_burst_cnt,         // input, the number of bursts to read
+	input enable_reading,      				// input, initialize the address generator and both counters, go
+    output reading_done,                       // output, reading is complete
+	// ports to the 'read' fifo
+    output ddr3_rd_fifo_wr_en,             // data is valid, so put it in the READ FIFO    
+    output [127:0] ddr3_rd_fifo_input_dat, // output, memory data
+    input ddr3_rd_fifo_almost_full,         // there is not much room left    
+    output ddr3_rd_fifo_input_tlast,			// the last burst for this fill	
 	// connections to the DDR3 chips
 	output [12:0] ddr3_addr,
 	output [2:0] ddr3_ba,
@@ -54,31 +58,6 @@ always @(posedge ddr3_domain_clk) begin
 	acq_enabled_sync1 <= acq_enabled;
 	acq_enabled_sync2 <= acq_enabled_sync1;
 end
-
-//reg rd_enS1;
-//reg wr_enS1;
-//reg rd_enS;
-//reg wr_enS;
-//reg [127:0] app_wdf_data;
-//reg [127:0] app_wdf_dataS;
-//reg [26:0] app_addr;
-//reg [26:0] app_addrS;
-
-//always @ (posedge ui_clk)
-//begin
-//	rd_enS1 <= rd_en;
-//	wr_enS1 <= wr_en;
-//	app_wdf_data[127:0] <= data_in[127:0];
-//	app_addr[26:0] <= {1'b0, address[25:0]}; 
-//end
-
-//always @ (posedge ui_clk)
-//begin
-//	rd_enS <= rd_enS1;
-//	wr_enS <= wr_enS1;
-//	app_wdf_dataS[127:0] <= app_wdf_data[127:0];
-//	app_addrS[26:0] <= app_addr[26:0];
-//end
 
 wire [25:0] ddr3_wr_addr;
 wire [25:0] ddr3_rd_addr;
@@ -117,7 +96,6 @@ ddr3_wr_control ddr3_wr_control (
 	.acq_enabled(acq_enabled_sync2),		// input, writing is enabled
 	// Connections to the FIFO from the ADC
 	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),	// input, next 'write' data from the ADC FIFO
-	.ddr3_wr_fifo_near_empty(ddr3_wr_fifo_near_empty),		// asserted at less than 4, negated at more than 10 
 	.ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),	// input, data is available when this is not asserted
 	.ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),	// output, use and remove the data on the FIFO head
 	// 'write' ports to memory
@@ -142,21 +120,26 @@ ddr3_wr_control ddr3_wr_control (
 ddr3_rd_control ddr3_rd_control (
 	// User interface clock and reset   
 	.clk(ddr3_domain_clk),
-	.reset(ddr3_domain_reset),							// reset at startup or when requested
-	.acq_enabled(acq_enabled_sync2),		// input, writing is enabled
+	.reset(ddr3_domain_reset),								// reset at startup or when requested
+	.acq_enabled(acq_enabled_sync2),						// input, writing is enabled
 	// connections to the 'rd_fill' command logic
-	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),		// input, the address of the requested 128-bit burst
-	.rd_one_burst(ddr3_rd_one_burst),					// input, get one 128-bit burst from the DDR3
-	.one_burst_rdy(ddr3_one_burst_rdy),					// output, the requested 128-bit burst is ready
-	.ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
+	.ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),			// input, the address of the first requested 128-bit burst
+	.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),         	// input, the number of bursts to read
+	.enable_reading(enable_reading),      					// input, initialize the address generator and both counters, go
+    .reading_done(reading_done),                       		// output, reading is complete
 	// 'read' ports to memory
-	.app_rd_data_end(app_rd_data_end),					// input, last data cycle
-	.app_rd_data_valid(app_rd_data_valid),				// input, memory data is valid	
-	.app_rd_data(ddr3_rd_dat[127:0]),					// input, memory data	
+	.app_rd_data_end(app_rd_data_end),						// input, last data cycle
+	.app_rd_data_valid(app_rd_data_valid),					// input, memory data is valid	
+	.app_rd_data(ddr3_rd_dat[127:0]),						// input, memory data	
 	// 'read' ports to address controller
-	.rd_addr(ddr3_rd_addr[25:0]),						// output, next 'read' address
-	.rd_app_rdy(rd_app_rdy),							// input, increment the 'read' address
-	.rd_app_en(rd_app_en)								// output, request to perform a 'read'	
+	.ddr3_rd_addr(ddr3_rd_addr[25:0]),						// output, next 'read' address
+	.rd_app_rdy(rd_app_rdy),								// input, increment the 'read' address
+	.rd_app_en(rd_app_en),									// output, request to perform a 'read'
+	// ports to the 'read' fifo
+	.ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),				// data is valid, so put it in the READ FIFO    
+	.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]),	// output, memory data
+	.ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),	// there is not much room left    
+	.ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)		// the last burst for this fill	
 );
 
 ////////////////////////////////////////////////////////////////////////////

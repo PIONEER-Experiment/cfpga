@@ -9,7 +9,6 @@ module ddr3_wr_control (
 	input acq_enabled,						// input, writing is enabled
 	// Connections to the FIFO from the ADC
 	input [127:0] ddr3_wr_fifo_dat,			// input, next 'write' data from the ADC FIFO
-	input ddr3_wr_fifo_near_empty,				// asserted at less than 4, negated at more than 10 
 	input ddr3_wr_fifo_empty,				// input, data is available when this is not asserted
 	output ddr3_wr_fifo_rd_en,			// output, use and remove the data on the FIFO head
 	// 'write' ports to memory
@@ -123,9 +122,6 @@ parameter [3:0]
 	INIT		= 4'd3,
 	ADJ_CNT		= 4'd4,
 	WRITE		= 4'd5,
-//	FIN_WRITE1	= 4'd6,
-//	TST_EMPTY	= 4'd7,
-//	RD_FIFO		= 4'd8,
 	DONE		= 4'd6;
 	
 // Declare current state and next state variables
@@ -192,47 +188,15 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
 				NS[WRITE] = 1'b1;
 		end
 
-		// Generally stay in WRITE state until all of the data has been written to memory.
-//		// However, if the FIFO is 'near_empty', change to a mode where we finish up the
-//		//current write and then test the 'empty' status every time.
+		// Stay in WRITE state until all of the data has been written to memory.
 		CS[WRITE]: begin
 			if (burst_cntr_zero && address_cntr_zero)
 				// we have written the requested number of addresses and bursts
 				NS[DONE] = 1'b1;
-//			else if (!burst_cntr_zero && ddr3_wr_fifo_near_empty)
-//				// more data may be coming. Leave until we know that we have a new data sample
-//				NS[FIN_WRITE1] = 1'b1;
 			else
 				// More addresses or data to write, stay here
 				NS[WRITE] = 1'b1;
 		end
-
-//		// Stay in FIN_WRITE1 state for one period.
-//		// Allow time for the current write operation to be accepted 
-//		CS[FIN_WRITE1]: begin
-//				NS[TST_EMPTY] = 1'b1;
-//		end
-
-//		// Unless we are finished with data, stay here until we know that the fifo has data.
-//		// We cannot afford to test the 'empty' flag on every clock, so we only test it
-//		// when we know that the fifo is low on data.
-//		CS[TST_EMPTY]: begin
-//			if (burst_cntr_zero)
-//				// we have written the requested number of bursts, but there may still be addresses to write
-//				NS[WRITE] = 1'b1;
-//			else if (!ddr3_wr_fifo_empty)
-//				// we have data
-//				NS[RD_FIFO] = 1'b1;
-//			else
-//				// More data expected, but not arrived yet, so stay here
-//				NS[TST_EMPTY] = 1'b1;
-//		end
-
-//		// Stay in RD_FIFO state for one period.
-//		// Get new data from the FIFO
-//		CS[RD_FIFO]: begin
-//				NS[WRITE] = 1'b1;
-//		end
 		
 		// Stay in DONE state for one period.
 		// Write the original header to the fill_header_fifo
@@ -255,10 +219,6 @@ always @ (posedge clk) begin
 		init_burst_cntr		<= 1'b0;
 		adjust_burst_cntr	<= 1'b0;
 		adjust_address_cntr	<= 1'b0;
-//		wr_app_en			<= 1'b0;
-//		app_wdf_wren		<= 1'b0;
-//		app_wdf_end			<= 1'b0;
-		//ddr3_wr_fifo_rd_en	<= 1'b0;
  		ddr3_wr_sync_err	<= 1'b0;
         fill_header_wr_en	<= 1'b0;
 
@@ -289,32 +249,7 @@ always @ (posedge clk) begin
     end
 
  	if (NS[WRITE]) begin
-		// maybe indicate that we want to supply an address and a command 
-// 		wr_app_en <= ~address_cntr_zero;
-		// indicate that we want to supply data if it is available 
-// 		app_wdf_wren <= ~ddr3_wr_fifo_empty; // was: ~burst_cntr_zero;
-//		app_wdf_end <= ~ddr3_wr_fifo_empty;	// was: ~burst_cntr_zero;
 	end
-
-//	if (NS[FIN_WRITE1]) begin
-//		// If the previous data write was not accepted, try again
-//		// ASSUME THAT 2 CLOCK PERIODS IS THE MOST THAT IS EVER NEEDED!!!
-//		if (!app_wdf_rdy) begin
-//			app_wdf_wren <= ~burst_cntr_zero;
-//			app_wdf_end <= ~burst_cntr_zero;
-//		end
-//		// If the previous address write was not accepted, try again
-//		// ASSUME THAT 2 CLOCK PERIODS IS THE MOST THAT IS EVER NEEDED!!!
-//		if (!wr_app_rdy) begin
-//			wr_app_en <= ~address_cntr_zero;
-//		end 
-//	end
-
-//	if (NS[TST_EMPTY]) begin
-//	end
-
-//	if (NS[RD_FIFO]) begin
-//	end
 
 	if (NS[SYNC_ERR]) begin
 		// assert an error flag
@@ -331,6 +266,7 @@ end
 
 // indicate that we want to supply an address if data has already been accepted
 assign wr_app_en = CS[WRITE] && address_allow && !address_cntr_zero;
+
 // indicate that we want to supply data if it is available 
 assign app_wdf_wren = CS[WRITE] && !ddr3_wr_fifo_empty && !burst_cntr_zero; // was: ~burst_cntr_zero;
 assign app_wdf_end = CS[WRITE] && !ddr3_wr_fifo_empty && !burst_cntr_zero;	// was: ~burst_cntr_zero;
