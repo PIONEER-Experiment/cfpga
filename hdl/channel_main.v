@@ -337,16 +337,16 @@ end
 // 'command_top', but will switch to sending data from the DDR3 memory during 'rd_fill'.
 // We need to avoid causing changes in the order of data, or truncating a stream by switching
 // prematurely.
-// Switch 'tvalid' and 'tlast' between the DDR3 source and the 'command' source
-assign c0_tx_axi_tvalid = use_ddr3_data ? ddr3_32bit_tvalid : command_tx_tvalid;
+// Switch 'tvalid' and 'tlast' between the DDR3 source and the 'command' source.
+// Do not pass 'tvalid' to the Aurora if 'readout_pause' is asserted
+assign c0_tx_axi_tvalid = use_ddr3_data ? (ddr3_32bit_tvalid && !readout_pause_sync2) : (command_tx_tvalid && !readout_pause_sync2);
 assign c0_tx_axi_tlast  = use_ddr3_data ? ddr3_32bit_tlast : command_tx_tlast;
 // Switch 'tdata[]' between the DDR3 source and the 'command' source
 // Swap the bit-order along the way
 assign c0_tx_axi_tdata[0:31] = use_ddr3_data ? ddr3_32bit_tx_tdata[31:0] : command_tx_tdata[31:0];
 // Only send 'tready' back to the active source.
-// Negate 'tready' when 'readout_pause' is asserted
-assign ddr3_32bit_tready = use_ddr3_data ? (c0_tx_axi_tready & !readout_pause_sync2) : 1'b0;
-assign command_tx_tready = use_ddr3_data ? 1'b0 : (c0_tx_axi_tready & !readout_pause_sync2);  
+assign ddr3_32bit_tready = use_ddr3_data ? c0_tx_axi_tready : 1'b0;
+assign command_tx_tready = use_ddr3_data ? 1'b0 : c0_tx_axi_tready;  
 // make an 'aurora_ddr3_accept' signal that is asserted whenever the Aurora accepts DDR3 data.
 // It will be sent to the 'rd_fill' state machine, which needs to know when to negate 'use_ddr3_data'
 assign aurora_ddr3_accept = use_ddr3_data & c0_tx_axi_tready & c0_tx_axi_tvalid;
