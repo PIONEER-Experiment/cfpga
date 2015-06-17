@@ -345,11 +345,11 @@ assign c0_tx_axi_tlast  = use_ddr3_data ? ddr3_32bit_tlast : command_tx_tlast;
 // Swap the bit-order along the way
 assign c0_tx_axi_tdata[0:31] = use_ddr3_data ? ddr3_32bit_tx_tdata[31:0] : command_tx_tdata[31:0];
 // Only send 'tready' back to the active source.
-assign ddr3_32bit_tready = use_ddr3_data ? c0_tx_axi_tready : 1'b0;
-assign command_tx_tready = use_ddr3_data ? 1'b0 : c0_tx_axi_tready;  
+assign ddr3_32bit_tready = use_ddr3_data ? (c0_tx_axi_tready && !readout_pause_sync2) : 1'b0;
+assign command_tx_tready = use_ddr3_data ? 1'b0 : (c0_tx_axi_tready && !readout_pause_sync2);  
 // make an 'aurora_ddr3_accept' signal that is asserted whenever the Aurora accepts DDR3 data.
 // It will be sent to the 'rd_fill' state machine, which needs to know when to negate 'use_ddr3_data'
-assign aurora_ddr3_accept = use_ddr3_data & c0_tx_axi_tready & c0_tx_axi_tvalid;
+assign aurora_ddr3_accept = use_ddr3_data & (c0_tx_axi_tready && !readout_pause_sync2) & c0_tx_axi_tvalid;
  
  ////////////////////////////////////////////////////////////////////////////
   // status LED
