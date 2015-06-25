@@ -38,12 +38,12 @@ module adc_acq_top(
 
 wire [1:0] fill_type;          // to determine how much data to collect
 wire [25:0] packed_adc_dat;    // two samples, with over-range bits,  packed in one wide-word
-                                // bit[0]       = first overrange
-                                // bits[11:1]   = first ADC sample
-                                // bit[12]      = second overrange
-                                // bits[25:13]  = second ADC sample
-wire [20:0] num_fill_bursts;    // number of 8(or 10)-sample bursts in a fill
-wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
+                               // bit[0]       = first overrange
+                               // bits[11:1]   = first ADC sample
+                               // bit[12]      = second overrange
+                               // bits[25:13]  = second ADC sample
+wire [20:0] num_fill_bursts;   // number of 8(or 10)-sample bursts in a fill
+wire [22:0] burst_start_adr;   // first DDR3 burst memory location for this fill (3 LSBs = 0)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Tell the DDR3 block when either 'acq_enable0' or 'acq_enable1' is not zero.
@@ -71,7 +71,6 @@ selectio_wiz_0 adc_dat_buf (
 	.clk_out(adc_clk),									// normal rising-edge clock
 	.data_in_to_device(packed_adc_dat),					// twice-as-wide SDR data
 	.delay_locked()										// not used
-
 );
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
