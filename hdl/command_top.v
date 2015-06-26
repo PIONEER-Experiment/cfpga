@@ -66,6 +66,16 @@ module command_top(
 	assign reset = ~resetN;
 	
 	wire [31:0] reg_data;
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// correct 'channel address' for channel 3 (hardware jumpers are set to 110 instead of 011)
+	reg[2:0] ch_addr_corrected;
+	always @ (posedge clk) begin
+		if (ch_addr[2:0] == 3'b110)
+			ch_addr_corrected[2:0] <= 3'b011;
+		else
+			ch_addr_corrected[2:0] <= ch_addr[2:0];
+	end
 	
 	///////////////////////////////////////////////////////////////////
 	// connect registers to hold the incoming serial number and command
@@ -319,7 +329,7 @@ module command_top(
 		.num_ped_bursts(num_ped_bursts[20:0]),    // number of sample bursts in a PEDESTAL fill
 		.initial_fill_num(initial_fill_num[23:0]),  // event number to assign to the first fill
 		.initial_fill_num_wr(initial_fill_num_wr),  // write-strobe to store the initial_fill_num
-		.ch_addr(ch_addr[2:0]),						// the channel address jumpers
+		.ch_addr(ch_addr_corrected[2:0]),						// the channel address jumpers
 	    .adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
 	    .adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
 	    .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
