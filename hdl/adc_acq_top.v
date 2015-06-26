@@ -71,7 +71,6 @@ selectio_wiz_0 adc_dat_buf (
     .clk_out(adc_clk),                                  // normal rising-edge clock
     .data_in_to_device(packed_adc_dat),                 // twice-as-wide SDR data
     .delay_locked()                                     // not used
-
 );
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

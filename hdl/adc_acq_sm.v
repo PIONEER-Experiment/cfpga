@@ -1,31 +1,32 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////
 // connect a state machine to coordinate everything
 
 module adc_acq_sm (
     // inputs
     input clk,
-    input acq_enable0,               // indicates enabled for triggers, and fill type
-    input acq_enable1,               // indicates enabled for triggers, and fill type
-    input acq_trig,                  // trigger the logic to start collecting data
-    input acq_reset,                 // reset from the Master FPGA
-    input reset_clk50,               // reset from internal logic, synched to CLK50
-    input burst_cntr_zero,           // all sample bursts have been saved
-    input ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
+    input acq_enable0,                  // indicates enabled for triggers, and fill type
+    input acq_enable1,                  // indicates enabled for triggers, and fill type
+    input acq_trig,                     // trigger the logic to start collecting data
+    input acq_reset,                    // reset from the Master FPGA
+    input reset_clk50,                  // reset from internal logic, synched to CLK50
+    input burst_cntr_zero,              // all sample bursts have been saved
+    input ddr3_wr_done,                 // asserted when the 'ddr3_wr_control' is in the DONE state
     // outputs
-    output reg [1:0] fill_type,      // determine which burst count to use
+    output reg [1:0] fill_type,         // determine which burst count to use
     output reg fill_size_mux_en,
-    output reg address_cntr_en,      // increment the next starting address
-    output reg dummy_dat_reset,      // reset the dummy data counter
-    output reg adc_mux_dat_sel,      // '0' selects header, '1' selects data
+    output reg address_cntr_en,         // increment the next starting address
+    output reg dummy_dat_reset,         // reset the dummy data counter
+    output reg adc_mux_dat_sel,         // '0' selects header, '1' selects data
     output reg adc_mux_checksum_select, // '0' selects data, '1' selects checksum, send the checksum to the FIFO 
-    output reg burst_cntr_init,      // initialize when triggered
-    output reg burst_cntr_en,        // will be enabled once per burst
-    output reg fill_cntr_en,         // will be enabled once per fill
-    output reg adc_acq_out_valid,    // current data should be stored in the FIFO
-    output reg adc_acq_full_reset,   // reset everything related to ADC acquisition and storage
-    output reg acq_done,             // acquisition is done
-    output reg sm_idle               // signal that this state machine is idle (used for front panel LED status)
+    output reg burst_cntr_init,         // initialize when triggered
+    output reg burst_cntr_en,           // will be enabled once per burst
+    output reg fill_cntr_en,            // will be enabled once per fill
+    output reg adc_acq_out_valid,       // current data should be stored in the FIFO
+    output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
+    output reg acq_done,                // acquisition is done
+    output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
 );      
 
 
@@ -98,25 +99,26 @@ reg [11:0] /* synopsys enum STATE_TYPE */ NS;
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
     if (adc_acq_full_reset) begin
-        CS <= 12'b0;                // set all state bits to 0
-        CS[IDLE] <= 1'b1;       // set IDLE state bit to 1
+        CS <= 12'b0;      // set all state bits to 0
+        CS[IDLE] <= 1'b1; // set IDLE state bit to 1
     end
     else
-        CS <= NS;           // set state bits to next state
+        CS <= NS;         // set state bits to next state
 end
+
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
 always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr3_wr_done_sync2)    begin
-    NS = 12'b0;                 // default all bits to zero; will overrride one bit
+    NS = 12'b0; // default all bits to zero; will overrride one bit
 
-    case (1'b1) //synopsys full_case parallel_case
+    case (1'b1) // synopsys full_case parallel_case
 
         // Stay in the IDLE state until we are both armed and triggered.
         CS[IDLE]: begin
             if (adc_acq_mode_enabled && acq_trig_sync2)
-                    NS[INIT1] = 1'b1;
+                NS[INIT1] = 1'b1;
             else
-                    NS[IDLE] = 1'b1;
+                NS[IDLE] = 1'b1;
         end
 
         // Stay in INIT1 state for one period. 
@@ -211,28 +213,28 @@ always @ (posedge clk) begin
     
     if (NS[INIT1]) begin
        // latch the current fill type size 
-        fill_size_mux_en    <= 1'b1;
+        fill_size_mux_en        <= 1'b1;
     end
 
     if (NS[INIT2]) begin
        // initialize the burst counter with the current fill size
-        burst_cntr_init <= 1'b1;
+        burst_cntr_init         <= 1'b1;
         // signal the mux to output the header info
-        adc_mux_dat_sel     <= 1'b0;
+        adc_mux_dat_sel         <= 1'b0;
     end
- 
+
     if (NS[INIT3]) begin
        // write the header to the FIFO
-       adc_acq_out_valid    <= 1'b1;
+       adc_acq_out_valid        <= 1'b1;
         // increment the next fill address
-       address_cntr_en      <= 1'b1;
+       address_cntr_en          <= 1'b1;
     end
 
     if (NS[RUN1]) begin
         // decrement the burst counter
-        burst_cntr_en   <= 1'b1;
+        burst_cntr_en           <= 1'b1;
         // increment the next fill address
-        address_cntr_en     <= 1'b1;
+        address_cntr_en         <= 1'b1;
     end
 
     if (NS[RUN2]) begin
@@ -255,9 +257,9 @@ always @ (posedge clk) begin
         // write the checksum burst to the FIFO
         adc_acq_out_valid       <= 1'b1;
         // increment the next fill address
-        address_cntr_en     <= 1'b1;
+        address_cntr_en         <= 1'b1;
         // increment the fill counter
-        fill_cntr_en        <= 1'b1;
+        fill_cntr_en            <= 1'b1;
     end
 
     if (NS[DDR3_WAIT]) begin
@@ -267,7 +269,7 @@ always @ (posedge clk) begin
         // signal the master that we are done
         acq_done  <= 1'b1;
     end
-    
+
 end
 
 endmodule

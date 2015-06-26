@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
-/////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////
 // connect a mux that will supply either header info or ADC data to the DDR3 write FIFO
 // All bit ordering is done in this mux
 module adc_dat_mux (
@@ -18,7 +19,7 @@ module adc_dat_mux (
     input select_dat,                  // '0' selects header, '1' selects data
     input select_checksum,             // '0' selects data, '1' selects checksum
     // outputs
-    output reg [127:0] adc_acq_out_dat     // 128-bit header or ADC data   
+    output reg [127:0] adc_acq_out_dat // 128-bit header or ADC data   
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,10 +35,10 @@ assign header[63:58]	= 6'b0;                                 // filler, always z
 assign header[84:64]	= num_fill_bursts[20:0];                // 21-bit burst count, 
 assign header[95:85]	= 11'b0;                                // filler, always zero
 // fourth 32-bit word
-assign header[111:96]	= channel_tag[15:0];            		  // 16-bit channel info, 
+assign header[111:96]	= channel_tag[15:0];            	    // 16-bit channel info, 
 assign header[113:112]	= fill_type[1:0];                       // 2-bit fill type
 assign header[125:114]	= 12'b0;                                // filler, always zero
-// make the last 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
+// make the last 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
 assign header[127:126]	= 2'b01;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,29 +46,29 @@ assign header[127:126]	= 2'b01;
 wire [127:0] data;
 // put 8 ADC samples into 8 16-bit words.
 // Omit the overrange bit and sign extend into the upper 4 bits of each word
-assign data[11:0]		= dat0_[12:1];                         // 0 oldest sample data
-assign data[15:12]		= {dat0_[12], dat0_[12], dat0_[12], dat0_[12]};   // 0 oldest sample sign extension
+assign data[11:0]	 = dat0_[12:1];                                  // 0 oldest sample data
+assign data[15:12]	 = {dat0_[12], dat0_[12], dat0_[12], dat0_[12]}; // 0 oldest sample sign extension
 
-assign data[27:16]		= dat0_[25:14];                         // 1 sample data
-assign data[31:28]		= {dat0_[25], dat0_[25], dat0_[25], dat0_[25]};   // 1 sample sign extension
+assign data[27:16]	 = dat0_[25:14];                                 // 1 sample data
+assign data[31:28]	 = {dat0_[25], dat0_[25], dat0_[25], dat0_[25]}; // 1 sample sign extension
 
-assign data[43:32]		= dat1_[12:1];                         // 2 oldest sample data
-assign data[47:44]		= {dat1_[12], dat1_[12], dat1_[12], dat1_[12]};   // 2 sample sign extension
+assign data[43:32]	 = dat1_[12:1];                                  // 2 oldest sample data
+assign data[47:44]	 = {dat1_[12], dat1_[12], dat1_[12], dat1_[12]}; // 2 sample sign extension
 
-assign data[59:48]		= dat1_[25:14];                         // 3 sample data
-assign data[63:60]		= {dat1_[25], dat1_[25], dat1_[25], dat1_[25]};   // 3 sample sign extension
+assign data[59:48]	 = dat1_[25:14];                                 // 3 sample data
+assign data[63:60]	 = {dat1_[25], dat1_[25], dat1_[25], dat1_[25]}; // 3 sample sign extension
 
-assign data[75:64]		= dat2_[12:1];                         // 4 sample data
-assign data[79:76]		= {dat2_[12], dat2_[12], dat2_[12], dat2_[12]};   // 4 sample sign extension
+assign data[75:64]	 = dat2_[12:1];                                  // 4 sample data
+assign data[79:76]	 = {dat2_[12], dat2_[12], dat2_[12], dat2_[12]}; // 4 sample sign extension
 
-assign data[91:80]		= dat2_[25:14];                         // 5 sample data
-assign data[95:92]		= {dat2_[25], dat2_[25], dat2_[25], dat2_[25]};   // 5 sample sign extension
+assign data[91:80]	 = dat2_[25:14];                                 // 5 sample data
+assign data[95:92]	 = {dat2_[25], dat2_[25], dat2_[25], dat2_[25]}; // 5 sample sign extension
 
-assign data[107:96]		= dat3_[12:1];                         // 6 sample data
-assign data[111:108]	= {dat3_[12], dat3_[12], dat3_[12], dat3_[12]};   // 6 sample sign extension
+assign data[107:96]	 = dat3_[12:1];                                  // 6 sample data
+assign data[111:108] = {dat3_[12], dat3_[12], dat3_[12], dat3_[12]}; // 6 sample sign extension
 
-assign data[123:112]	= dat3_[25:14];                       // 7 sample data
-assign data[127:124]	= {dat3_[25], dat3_[25], dat3_[25], dat3_[25]};   // 7 sample sign extension
+assign data[123:112] = dat3_[25:14];                                 // 7 sample data
+assign data[127:124] = {dat3_[25], dat3_[25], dat3_[25], dat3_[25]}; // 7 sample sign extension
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // create a checksum register
@@ -94,7 +95,7 @@ always @(posedge clk) begin
 	end
 end
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////
 // make a mux to select header, data, or checksum		
 always @(posedge clk) begin
 	if (!select_dat && !select_checksum) begin
@@ -109,7 +110,8 @@ always @(posedge clk) begin
 		// connect the checksum to the output
 		adc_acq_out_dat[127:0]   <= checksum[127:0];
 	end
-end                                
+end
+
 endmodule
 
 // connect data bits to the output
