@@ -9,6 +9,7 @@ module register_block(
 	input reset_clk50,                       // active-high reset output, goes low after startup
     input clk,                               // 125 MHz, clock for the interconnect side of the FIFOs
     input reset,                             // reset
+    input cnt_reset,                         // reset, for fill number count
 
     // data from/to Master FPGA
     input  [31:0] rx_data,                   // note index order
@@ -113,7 +114,7 @@ module register_block(
 	assign initial_fill_num[23:0] = reg0_[23:0];
 	// Send R0 'wr_en' to the ADC acquisition controller
 	// fill number will be set back to initial value after a reset
-	assign initial_fill_num_wr  = ((wr_en && (reg_num[4:0] == 5'h00)) | reset) ? 1'b1 : 1'b0;
+	assign initial_fill_num_wr  = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
 
 	// R1 - channel tag
 	// bits [2:0] from configuration jumpers

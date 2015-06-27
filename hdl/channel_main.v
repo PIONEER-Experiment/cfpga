@@ -29,7 +29,7 @@ module channel_main(
   output c0_tx, c0_tx_N,        // Serial data to the master for this channel
   input xcvr_clk, xcvr_clk_N,   // 125 MHz oscillator, connected to 'clk0' (not 'clk1') 
 
-  // DDR Memory
+  // DDR3 memory
   output [2:0] ddr3_ba,
   output [12:0] ddr3_addr,
   inout [15:0] ddr3_dq,
@@ -69,16 +69,16 @@ module channel_main(
 
 // Assignments for 'io' lines:
 //   io[0]   : 'readout_pause'
+wire readout_pause;
+assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1:2] : 'acq_enable'
-//   io[3]   : 'acq_reset'
-wire acq_reset;
-assign acq_reset = io[3];
 wire acq_enable0;                       // indicates enabled for triggers, and fill type
 wire acq_enable1;                       // indicates enabled for triggers, and fill type
 assign acq_enable0 = io[1];
 assign acq_enable1 = io[2];
-wire readout_pause;
-assign readout_pause = io[0];           // stop sending fill data to the Aurora
+//   io[3]   : 'rst_from_master'
+wire rst_from_master;
+assign rst_from_master = io[3];
 
 wire [15:0] channel_tag;                // stuff about the channel to put in the header
 wire [20:0] num_muon_bursts;            // number of sample bursts in a MUON fill
@@ -174,7 +174,6 @@ assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
  
 adc_acq_top adc_acq_top (
-
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
     .adc_in_n(adc_in_n[11:0]),                           // [11:0] array of ADC 'n' data pins
@@ -193,7 +192,7 @@ adc_acq_top adc_acq_top (
     .acq_enable0(acq_enable0),                           // indicates enabled for triggers, and fill type
     .acq_enable1(acq_enable1),                           // indicates enabled for triggers, and fill type
     .acq_trig(acq_trig),                                 // trigger the logic to start collecting data
-    .acq_reset(acq_reset),                               // reset all of the acquisition logic
+    .acq_reset(rst_from_master),                         // reset all of the acquisition logic
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
@@ -230,7 +229,6 @@ ddr3_write_fifo ddr3_write_fifo (
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
 ddr3_intf ddr3_intf(
-
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
     .sysclk(clk200),                    // input, drives the Xilinx DDR3 IP
@@ -436,10 +434,11 @@ assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 // link and process them
 command_top command_top(
     // clocks and reset
-    .clk50(clk50),              // 50 MHz buffered clock 
-    .reset_clk50(reset_clk50),  // active-high reset output, goes low after startup
-    .clk(clk125),               // clock for the interconnect side of the FIFOs
-    .resetN(reset_clk125N),     // active-lo reset for the interconnect side of the FIFOs
+    .clk50(clk50),               // 50 MHz buffered clock 
+    .reset_clk50(reset_clk50),   // active-high reset output, goes low after startup
+    .clk(clk125),                // clock for the interconnect side of the FIFOs
+    .resetN(reset_clk125N),      // active-lo reset for the interconnect side of the FIFOs
+    .cnt_reset(rst_from_master), // reset, for fill number count
 
     // channel 0 connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs

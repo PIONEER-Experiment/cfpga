@@ -11,6 +11,7 @@ module command_top(
 	input reset_clk50,  // active-high reset output, goes low after startup
     input clk,          // 125 MHz, clock for the interconnect side of the FIFOs
     input resetN,       // active-low reset for the interconnect side of the FIFOs
+    input cnt_reset,    // reset, for fill number count
 
     // channel connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
@@ -309,10 +310,11 @@ module command_top(
 	assign reg_num_le = rd_reg_sm_reg_num_le || wr_reg_sm_reg_num_le;
 	register_block register_block (
 		// clocks and reset
-		.clk50(clk50),              // 50 MHz buffered clock 
-		.reset_clk50(reset_clk50),  // active-high reset output, goes low after startup
-		.clk(clk),                   // 125 MHz, clock for the interconnect side of the FIFOs
-		.reset(reset),                 // reset 
+		.clk50(clk50),                 // 50 MHz buffered clock 
+		.reset_clk50(reset_clk50),     // active-high reset output, goes low after startup
+		.clk(clk),                     // 125 MHz, clock for the interconnect side of the FIFOs
+		.reset(reset),                 // reset
+    	.cnt_reset(cnt_reset),         // reset, for fill number count
 		// incoming and outgoing data
         .rx_data(rx_data[31:0]),       // note index order
 		.tx_data(reg_data[31:0]),
@@ -323,15 +325,15 @@ module command_top(
 		.illegal_reg_num(illegal_reg_num),		// The desired register does not exist
 		// Register to/from the ADC acquisition state machine
 		.fill_num(fill_num[23:0]),			         // fill number for this fill
-		.channel_tag(channel_tag[15:0]), 		   // stuff about the channel to put in the header
-		.num_muon_bursts(num_muon_bursts[20:0]),  // number of sample bursts in a MUON fill
-		.num_laser_bursts(num_laser_bursts[20:0]),// number of sample bursts in a LASER fill
-		.num_ped_bursts(num_ped_bursts[20:0]),    // number of sample bursts in a PEDESTAL fill
-		.initial_fill_num(initial_fill_num[23:0]),  // event number to assign to the first fill
-		.initial_fill_num_wr(initial_fill_num_wr),  // write-strobe to store the initial_fill_num
+		.channel_tag(channel_tag[15:0]), 		     // stuff about the channel to put in the header
+		.num_muon_bursts(num_muon_bursts[20:0]),     // number of sample bursts in a MUON fill
+		.num_laser_bursts(num_laser_bursts[20:0]),   // number of sample bursts in a LASER fill
+		.num_ped_bursts(num_ped_bursts[20:0]),       // number of sample bursts in a PEDESTAL fill
+		.initial_fill_num(initial_fill_num[23:0]),   // event number to assign to the first fill
+		.initial_fill_num_wr(initial_fill_num_wr),   // write-strobe to store the initial_fill_num
 		.ch_addr(ch_addr_corrected[2:0]),						// the channel address jumpers
 	    .adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
-	    .adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
+	    .adc_buf_data_delay(adc_buf_data_delay[4:0]),	        // 5 delay-tap-bits per line, all lines always all the same
 	    .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
 
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
