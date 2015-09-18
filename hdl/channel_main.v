@@ -226,6 +226,9 @@ ddr3_write_fifo ddr3_write_fifo (
     .empty(ddr3_wr_fifo_empty)      // data is available when this is not asserted
 );
 
+wire [22:0] fixed_ddr3_start_addr;
+wire en_fixed_ddr3_start_addr;
+
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
 ddr3_intf ddr3_intf(
@@ -243,6 +246,8 @@ ddr3_intf ddr3_intf(
     .ddr3_wr_sync_err(),                         // synchronization error flag
     .ddr3_wr_done(ddr3_wr_done),                 // asserted when the 'ddr3_wr_control' is in the DONE state
     .acq_done(acq_done),                         // input, acquisition is done
+    .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
+    .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 
     // reading connections
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
@@ -476,6 +481,8 @@ command_top command_top(
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset),           // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),                  // 5 delay-tap-bits per line, all lines always all the same
     .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
+    .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
+    .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 
     .genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
     .genreg_wr_data(genreg_wr_data[31:0]),

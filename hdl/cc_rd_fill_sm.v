@@ -42,6 +42,8 @@ module cc_rd_fill_sm(
 	input fill_header_fifo_empty,			// a header is available when not asserted
 	output reg fill_header_fifo_rd_en,		// remove the current data from the FIFO
 	input [127:0] fill_header_fifo_out,		// data at the head of the FIFO
+	input [22:0] fixed_ddr3_start_addr,
+	input en_fixed_ddr3_start_addr,
 
 	// interface to the DDR3 memory 
 	output reg [22:0] ddr3_rd_start_addr,	// the address of the first requested 128-bit burst
@@ -249,7 +251,11 @@ always @ (posedge clk) begin
 
 	if (NS[GET_FIFO_HDR]) begin
 		// load the address pointer
-		ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[57:35];
+		if (en_fixed_ddr3_start_addr) // if fixed start address is enabled
+			ddr3_rd_start_addr[22:0] <= fixed_ddr3_start_addr[22:0];
+		else
+			ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[57:35];
+
 		// load the burst counter, add '2' for header and footer
 		ddr3_rd_burst_cnt[20:0] <= fill_header_fifo_out[84:64] + 2;
 		// load the words_to_send counter

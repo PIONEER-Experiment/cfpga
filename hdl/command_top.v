@@ -48,6 +48,8 @@ module command_top(
 	output adc_buf_delay_data_reset,	     // use the new delay settings
 	output [4:0] adc_buf_data_delay,	     // 5 delay-tap-bits per line, all lines always all the same
 	input [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
+	output [22:0] fixed_ddr3_start_addr,
+	output en_fixed_ddr3_start_addr,
 
 	output [31:0] genreg_addr_ctrl,	// generic register address and control output
 	output [31:0] genreg_wr_data,	// generic register data written from Master FPGA 
@@ -335,6 +337,8 @@ module command_top(
 	    .adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
 	    .adc_buf_data_delay(adc_buf_data_delay[4:0]),	        // 5 delay-tap-bits per line, all lines always all the same
 	    .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
+	    .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
+	    .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),
@@ -366,6 +370,8 @@ module command_top(
 		.fill_header_fifo_empty(fill_header_fifo_empty),	// a header is available when not asserted
 		.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// remove the current data from the FIFO
 		.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// data at the head of the FIFO
+		.fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
+		.en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 		// interface to the DDR3 memory 
 		.ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),		// the address of the requested 128-bit burst
 		.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),			// number of bursts to read from the DDR3

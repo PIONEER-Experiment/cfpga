@@ -14,6 +14,8 @@ module ddr3_intf(
     output ddr3_wr_sync_err,                    // synchronization error flag
     output ddr3_wr_done,                        // asserted when the 'ddr3_wr_control' is in the DONE state
     input acq_done,                             // input from the adc_acq_sm, aquisition is done
+    input [22:0] fixed_ddr3_start_addr,
+    input en_fixed_ddr3_start_addr,
     // reading connections
     input local_domain_clk,                     // input, the local interface synchronous clock
     output fill_header_fifo_empty,              // output, a header is available when not asserted
@@ -106,7 +108,9 @@ ddr3_wr_control ddr3_wr_control (
     // 'write' ports to address controller
     .ddr3_wr_addr(ddr3_wr_addr[25:0]),              // output, next 'write' address
     .wr_app_rdy(wr_app_rdy),                        // input, increment the 'write' address
-    .wr_app_en(wr_app_en),                          // output, request to perform a 'write' 
+    .wr_app_en(wr_app_en),                          // output, request to perform a 'write'
+    .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
+    .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
     // 'write' ports to the fill_header_fifo
     .fill_header_wr_dat(fill_header_wr_dat[127:0]), // header data
     .fill_header_wr_en(fill_header_wr_en),          // store header in FIFO

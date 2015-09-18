@@ -19,6 +19,8 @@ module ddr3_wr_control (
     output [25:0] ddr3_wr_addr,           // output, next 'write' address
     output  wr_app_en,                    // output, request to perform a 'write' 
     input wr_app_rdy,                     // input, increment the 'write' address
+    input [22:0] fixed_ddr3_start_addr,
+    input en_fixed_ddr3_start_addr,
     // 'write' ports to the fill_header_fifo
     output [127:0] fill_header_wr_dat,    // header data
     output reg fill_header_wr_en,         // store header in FIFO
@@ -58,7 +60,8 @@ reg [22:0] address_gen;
 reg init_address_gen;   // will be asserted by the state machine
 always @ (posedge clk) begin
     if (reset) address_gen[22:0] <= 23'b0;
-    else if (init_address_gen) address_gen[22:0] <= ddr3_wr_fifo_dat[57:35];
+    else if (init_address_gen && en_fixed_ddr3_start_addr) address_gen[22:0] <= fixed_ddr3_start_addr[22:0];
+    else if (init_address_gen && ~en_fixed_ddr3_start_addr) address_gen[22:0] <= ddr3_wr_fifo_dat[57:35];
     else if (address_accept) address_gen[22:0] <= address_gen[22:0] + 1;
 end
 assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};

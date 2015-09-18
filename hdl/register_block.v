@@ -31,6 +31,8 @@ module register_block(
 	output adc_buf_delay_data_reset,	     // use the new delay settings
 	output [4:0] adc_buf_data_delay,	     // 5 delay-tap-bits per line, all lines always all the same
 	input [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
+	output [22:0] fixed_ddr3_start_addr,
+	output en_fixed_ddr3_start_addr,
  
  	// generic register space connections
 	output [31:0] genreg_addr_ctrl,	         // generic register address and control output
@@ -58,18 +60,19 @@ module register_block(
 	reg [31:0]         reg1_,
 			   reg4_,  reg5_,  reg6_,  reg7_,
 			           reg9_,  reg10_, reg11_,
-			   reg12_, reg13_, reg14_, reg15_,
+			   reg12_,         reg14_, reg15_,
 			   reg16_, reg17_, reg18_, reg19_,
 			   reg20_, reg21_, reg22_, reg23_,
 			   reg24_, reg25_, reg26_, reg27_,
 			   reg28_, reg29_, reg30_, reg31_;
 
 	// set non-zero default register values
-	reg [31:0] reg0_ = 32'd1;     // initial fill number set to 1
-	reg [31:0] reg2_ = 32'd70000; // muon fill burst count of 70,000
-	reg [31:0] reg3_ = 32'd0;     // laser fill burst count of 0
-	reg [31:0] reg4_ = 32'd0;     // pedestal fill burst count of 0
-	reg [31:0] reg8_ = 32'd14;    // data bus delay tap value of 14
+	reg [31:0] reg0_  = 32'd1;        // initial fill number set to 1
+	reg [31:0] reg2_  = 32'd70000;    // muon fill burst count of 70,000
+	reg [31:0] reg3_  = 32'd0;        // laser fill burst count of 0
+	reg [31:0] reg4_  = 32'd0;        // pedestal fill burst count of 0
+	reg [31:0] reg8_  = 32'd14;       // data bus delay tap value of 14
+	reg [31:0] reg13_ = 32'hf0000000; // use normal DDR3 start addresses
 
 	// write to the writable registers
 	always @ (posedge clk) begin
@@ -149,6 +152,15 @@ module register_block(
 	    .delay_data_reset(adc_buf_delay_data_reset),      // output, active-high reset
 	    .error(adc_buf_delay_data_error)                  // output, tap values not set properly
 	);
+
+	// R9 is read only
+	// R10 is read only
+	// R11 is read only
+	// R12 is read only
+
+	// R13
+	assign fixed_ddr3_start_addr[22:0] = reg13_[22:0];
+	assign en_fixed_ddr3_start_addr = (reg13_[31:28] == 4'b1111) ? 1'b0 : 1'b1;
 	
 
 	reg [31:0] rdbk_reg;
