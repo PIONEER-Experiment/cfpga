@@ -12,9 +12,9 @@ module adc_acq_top(
     input reset_clk50,              // synchronously negated  
     input clk200,                   // for input pin timing delay settings
     input [15:0] channel_tag,       // stuff about the channel to put in the header
-    input [20:0] num_muon_bursts,   // number of sample bursts in a MUON fill
-    input [20:0] num_laser_bursts,  // number of sample bursts in a LASER fill
-    input [20:0] num_ped_bursts,    // number of sample bursts in a OPEDESTAL fill
+    input [23:0] num_muon_bursts,   // number of sample bursts in a MUON fill
+    input [23:0] num_laser_bursts,  // number of sample bursts in a LASER fill
+    input [23:0] num_ped_bursts,    // number of sample bursts in a OPEDESTAL fill
     input [23:0] initial_fill_num,  // event number to assign to the first fill
     input initial_fill_num_wr,      // write-strobe to store the initial_fill_num
     input acq_enable0,              // indicates enabled for triggers, and fill type
@@ -42,7 +42,7 @@ wire [25:0] packed_adc_dat;     // two samples, with over-range bits,  packed in
                                 // bits[11:1]   = first ADC sample
                                 // bit[12]      = second overrange
                                 // bits[25:13]  = second ADC sample
-wire [20:0] num_fill_bursts;    // number of 8(or 10)-sample bursts in a fill
+wire [23:0] num_fill_bursts;    // number of 8 (or 10)-sample bursts in a fill
 wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,13 +117,13 @@ end
 adc_fill_size_mux adc_fill_size_mux (
     // inputs
     .fill_type(fill_type[1:0]),                 // to determine how much data to collect
-    .num_muon_bursts(num_muon_bursts[20:0]),    // number of sample bursts in a MUON fill
-    .num_laser_bursts(num_laser_bursts[20:0]),  // number of sample bursts in a LASER fill
-    .num_ped_bursts(num_ped_bursts[20:0]),      // number of sample bursts in a PEDESTAL fill
+    .num_muon_bursts(num_muon_bursts[23:0]),    // number of sample bursts in a MUON fill
+    .num_laser_bursts(num_laser_bursts[23:0]),  // number of sample bursts in a LASER fill
+    .num_ped_bursts(num_ped_bursts[23:0]),      // number of sample bursts in a PEDESTAL fill
     .clk(adc_clk),
     .enable(fill_size_mux_en),
     // outputs
-    .num_fill_bursts(num_fill_bursts[20:0])     // number of 8(or 10) sample bursts
+    .num_fill_bursts(num_fill_bursts[23:0])     // number of 8(or 10) sample bursts
 );
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,14 +138,14 @@ adc_dat_mux adc_dat_mux (
     .dat0_(adc_dat_reg0_[25:0]),                // a pair of ADC samples and a pair of over-range bits
     .channel_tag(channel_tag[15:0]),            // stuff about the channel to put in the header
     .fill_type(fill_type[1:0]),                 // determine which burst count to use
-    .num_fill_bursts(num_fill_bursts[20:0]),    // number of 8(or 10) sample bursts
+    .num_fill_bursts(num_fill_bursts[23:0]),    // number of 8(or 10) sample bursts
     .burst_start_adr(burst_start_adr[22:0]),    // first DDR3 burst memory location (3 LSBs=0) for this fill
     .fill_num(fill_num[23:0]),                  // fill number for this fill
     .clk(adc_clk),
     .select_dat(adc_mux_dat_sel),               // '0' selects header, '1' selects data
     .select_checksum(adc_mux_checksum_select),  // '0' selects data, '1' selects checksum, send the checksum to the FIFO 
     // outputs
-    .adc_acq_out_dat(adc_acq_out_dat[127:0])     // 128-bit header or ADC data   
+    .adc_acq_out_dat(adc_acq_out_dat[127:0])    // 128-bit header or ADC data   
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,7 +167,7 @@ adc_address_cntr adc_address_cntr (
 // It will be enabled when each burst is sent out.
 adc_burst_cntr adc_burst_cntr (
     // inputs
-    .num_fill_bursts(num_fill_bursts[20:0]),    // number of 8(or 10) sample bursts
+    .num_fill_bursts(num_fill_bursts[23:0]),    // number of 8 (or 10) sample bursts
     .clk(adc_clk),
     .init(burst_cntr_init),                     // initialize when triggered
     .enable(burst_cntr_en),                     // will be enabled once per burst
@@ -183,10 +183,10 @@ adc_fill_cntr adc_fill_cntr (
     // inputs
     .initial_fill_num(initial_fill_num[23:0]),  // always positive
     .clk(adc_clk),
-    .init(initial_fill_num_wr),                  // initialize when programmed
-    .enable(fill_cntr_en),                       // will be enabled once per fill
+    .init(initial_fill_num_wr),                 // initialize when programmed
+    .enable(fill_cntr_en),                      // will be enabled once per fill
     // outputs
-   .fill_num(fill_num[23:0])                     // fill number for this fill
+   .fill_num(fill_num[23:0])                    // fill number for this fill
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

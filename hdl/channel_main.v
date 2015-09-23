@@ -81,9 +81,9 @@ wire rst_from_master;
 assign rst_from_master = io[3];
 
 wire [15:0] channel_tag;                // stuff about the channel to put in the header
-wire [20:0] num_muon_bursts;            // number of sample bursts in a MUON fill
-wire [20:0] num_laser_bursts;           // number of sample bursts in a LASER fill
-wire [20:0] num_ped_bursts;             // number of sample bursts in a PEDESTAL fill
+wire [23:0] num_muon_bursts;            // number of sample bursts in a MUON fill
+wire [23:0] num_laser_bursts;           // number of sample bursts in a LASER fill
+wire [23:0] num_ped_bursts;             // number of sample bursts in a PEDESTAL fill
 wire [23:0] initial_fill_num;           // event number to assign to the first fill
 wire [127:0] adc_acq_out_dat;           // 128-bit header or ADC data to 'ddr3_write_fifo'
 
@@ -95,7 +95,7 @@ wire [127:0] ddr3_rd_fifo_input_dat;    // memory burst headed toward 'ddr3_read
 wire [127:0] ddr3_rd_fifo_output_dat;   // memory burst headed toward 'ddr3_read_data_width_converter'
 wire [31:0] ddr3_32bit_tx_tdata;        // 32-bit chunks of memory burst headed toward 'axis_interconnect'
 wire [22:0] ddr3_rd_start_addr;         // the address of the first requested 128-bit burst
-wire [20:0] ddr3_rd_burst_cnt;          // number of bursts to read from the DDR3
+wire [23:0] ddr3_rd_burst_cnt;          // number of bursts to read from the DDR3
 wire [31:0] command_tx_tdata;           // data to Aurora from 'command_top'
 wire [31:0] rx_tdata_swap;              // bit-reversed data from Aurora
 
@@ -184,9 +184,9 @@ adc_acq_top adc_acq_top (
     .reset_clk50(reset_clk50),                           // synchronously negated  
     .clk200(clk200),                                     // for input pin timing delay settings
     .channel_tag(channel_tag[15:0]),                     // stuff about the channel to put in the header
-    .num_muon_bursts(num_muon_bursts[20:0]),             // number of sample bursts in a MUON fill
-    .num_laser_bursts(num_laser_bursts[20:0]),           // number of sample bursts in a LASER fill
-    .num_ped_bursts(num_ped_bursts[20:0]),               // number of sample bursts in a PEDESTAL fill
+    .num_muon_bursts(num_muon_bursts[23:0]),             // number of sample bursts in a MUON fill
+    .num_laser_bursts(num_laser_bursts[23:0]),           // number of sample bursts in a LASER fill
+    .num_ped_bursts(num_ped_bursts[23:0]),               // number of sample bursts in a PEDESTAL fill
     .initial_fill_num(initial_fill_num[23:0]),           // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr),           // write-strobe to store the initial_fill_num
     .acq_enable0(acq_enable0),                           // indicates enabled for triggers, and fill type
@@ -255,7 +255,7 @@ ddr3_intf ddr3_intf(
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // input, remove the current data from the FIFO
     .fill_header_fifo_out(fill_header_fifo_out[127:0]),  // output, data at the head of the FIFO
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),       // input, the address of the first requested 128-bit burst
-    .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),         // input, the number of bursts to read
+    .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),         // input, the number of bursts to read
     .enable_reading(enable_reading),                     // input, initialize the address generator and both counters, go
     .reading_done(reading_done),                         // output, reading is complete
 
@@ -465,16 +465,16 @@ command_top command_top(
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),    // input, remove the current data from the FIFO
     .fill_header_fifo_out(fill_header_fifo_out[127:0]), // output, data at the head of the FIFO
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),      // input, the address of the first requested 128-bit burst
-    .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),        // input, the number of bursts to read
+    .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
     .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go
     .reading_done(reading_done),                        // output, reading is complete
 
     // Registers to/from the ADC acquisition state machine
     .fill_num(fill_num[23:0]),                                     // fill number for this fill
     .channel_tag(channel_tag[15:0]),                               // stuff about the channel to put in the header
-    .num_muon_bursts(num_muon_bursts[20:0]),                       // number of sample bursts in a MUON fill
-    .num_laser_bursts(num_laser_bursts[20:0]),                     // number of sample bursts in a LASER fill
-    .num_ped_bursts(num_ped_bursts[20:0]),                         // number of sample bursts in a PEDESTAL fill
+    .num_muon_bursts(num_muon_bursts[23:0]),                       // number of sample bursts in a MUON fill
+    .num_laser_bursts(num_laser_bursts[23:0]),                     // number of sample bursts in a LASER fill
+    .num_ped_bursts(num_ped_bursts[23:0]),                         // number of sample bursts in a PEDESTAL fill
     .initial_fill_num(initial_fill_num[23:0]),                     // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr),                     // write-strobe to store the initial_fill_num
     .ch_addr(ch_addr[2:0]),                                        // the channel address jumpers

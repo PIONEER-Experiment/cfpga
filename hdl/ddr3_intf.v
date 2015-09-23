@@ -22,7 +22,7 @@ module ddr3_intf(
     input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
     output [127:0] fill_header_fifo_out,        // output, data at the head of the FIFO
     input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
-    input [20:0] ddr3_rd_burst_cnt,             // input, the number of bursts to read
+    input [23:0] ddr3_rd_burst_cnt,             // input, the number of bursts to read
     input enable_reading,                       // input, initialize the address generator and both counters, go
     output reading_done,                        // output, reading is complete
     // ports to the 'read' fifo
@@ -71,7 +71,7 @@ wire [2:0] app_cmd;
 wire [127:0] ddr3_rd_dat;
 wire [127:0] ddr3_wr_dat;
 
-///////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 // Connect the module that manages the address and command ports
 ddr3_addr_control ddr3_addr_control (
     // 'write' ports
@@ -90,7 +90,7 @@ ddr3_addr_control ddr3_addr_control (
     .app_rdy(app_rdy)
 );
 
-///////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
 // Connect the module that manages writing data to the memory
 ddr3_wr_control ddr3_wr_control (
     // User interface clock and reset   
@@ -120,7 +120,7 @@ ddr3_wr_control ddr3_wr_control (
     .acq_done(acq_done)                             // input, asserted when the 'adc_acq_sm' is in the DONE state
 );
 
-///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
 // Connect the module that manages reading data from the memory
 ddr3_rd_control ddr3_rd_control (
     // User interface clock and reset   
@@ -129,7 +129,7 @@ ddr3_rd_control ddr3_rd_control (
     .acq_enabled(acq_enabled_sync2),                        // input, writing is enabled
     // connections to the 'rd_fill' command logic
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),          // input, the address of the first requested 128-bit burst
-    .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),            // input, the number of bursts to read
+    .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),            // input, the number of bursts to read
     .enable_reading(enable_reading),                        // input, initialize the address generator and both counters, go
     .reading_done(reading_done),                            // output, reading is complete
     // 'read' ports to memory

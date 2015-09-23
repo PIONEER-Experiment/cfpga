@@ -32,16 +32,16 @@ module command_top(
 	output fill_header_fifo_rd_en,		// output, remove the current data from the FIFO
 	input [127:0] fill_header_fifo_out,	// input, data at the head of the FIFO
 	output [22:0] ddr3_rd_start_addr,	// the address of the first requested 128-bit burst
-	output [20:0] ddr3_rd_burst_cnt,    // input, the number of bursts to read
+	output [23:0] ddr3_rd_burst_cnt,    // input, the number of bursts to read
 	output enable_reading,      		// input, initialize the address generator and both counters, go
     input reading_done,                 // output, reading is complete
 
 	// Register to/from the ADC acquisition state machine
 	input [23:0] fill_num,	                 // fill number for this fill
 	output [15:0] channel_tag,		         // stuff about the channel to put in the header
-	output [20:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
-	output [20:0] num_laser_bursts,	         // number of sample bursts in a LASER fill
-	output [20:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
+	output [23:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
+	output [23:0] num_laser_bursts,	         // number of sample bursts in a LASER fill
+	output [23:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
 	output [23:0] initial_fill_num,          // event number to assign to the first fill
 	output initial_fill_num_wr,              // write-strobe to store the initial_fill_num
 	input [2:0] ch_addr,			         // the channel address jumpers
@@ -273,7 +273,7 @@ module command_top(
 		.send_cmd(rd_reg_sm_send_cmd),  	// send the CC
 		.send_inv_cmd(rd_reg_sm_send_inv_cmd),  	// send the inverse CC
 		.send_reg_data(rd_reg_sm_send_reg_data),	// mux source is the register bank
-		//local controls
+		// local controls
 		.reg_num_le(rd_reg_sm_reg_num_le),		// enable saving the register number
 		.rd_en(rd_reg_sm_reg_rd_en),		// enable reading the specific register
 		.illegal_reg_num(illegal_reg_num)		// The desired register does not exist
@@ -302,7 +302,7 @@ module command_top(
 		.send_csn(wr_reg_sm_send_csn),      // send the CSN
 		.send_cmd(wr_reg_sm_send_cmd),  	// send the CC
 		.send_inv_cmd(wr_reg_sm_send_inv_cmd),  	// send the inverse CC
-		//local controls
+		// local controls
 		.reg_num_le(wr_reg_sm_reg_num_le),		// enable saving the register number
 		.wr_en(wr_reg_sm_reg_wr_en),		// enable writing to the specific register
 		.illegal_reg_num(illegal_reg_num)		// The desired register does not exist
@@ -325,12 +325,12 @@ module command_top(
 		.wr_en(wr_reg_sm_reg_wr_en),			// enable writing to the specific register
 		.reg_num_le(reg_num_le),				// enable saving of the selected register number
 		.illegal_reg_num(illegal_reg_num),		// The desired register does not exist
-		// Register to/from the ADC acquisition state machine
+		// register to/from the ADC acquisition state machine
 		.fill_num(fill_num[23:0]),			         // fill number for this fill
 		.channel_tag(channel_tag[15:0]), 		     // stuff about the channel to put in the header
-		.num_muon_bursts(num_muon_bursts[20:0]),     // number of sample bursts in a MUON fill
-		.num_laser_bursts(num_laser_bursts[20:0]),   // number of sample bursts in a LASER fill
-		.num_ped_bursts(num_ped_bursts[20:0]),       // number of sample bursts in a PEDESTAL fill
+		.num_muon_bursts(num_muon_bursts[23:0]),     // number of sample bursts in a MUON fill
+		.num_laser_bursts(num_laser_bursts[23:0]),   // number of sample bursts in a LASER fill
+		.num_ped_bursts(num_ped_bursts[23:0]),       // number of sample bursts in a PEDESTAL fill
 		.initial_fill_num(initial_fill_num[23:0]),   // event number to assign to the first fill
 		.initial_fill_num_wr(initial_fill_num_wr),   // write-strobe to store the initial_fill_num
 		.ch_addr(ch_addr_corrected[2:0]),						// the channel address jumpers
@@ -365,7 +365,7 @@ module command_top(
 		.send_csn(rd_fill_sm_send_csn),      		// send the CSN
 		.send_cmd(rd_fill_sm_send_cmd),  		// send the CC
 		.send_inv_cmd(rd_fill_sm_send_inv_cmd),  	// send the inverse CC
-		//local controls
+		// local controls
 		// interface to the header FIFO
 		.fill_header_fifo_empty(fill_header_fifo_empty),	// a header is available when not asserted
 		.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// remove the current data from the FIFO
@@ -374,7 +374,7 @@ module command_top(
 		.en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 		// interface to the DDR3 memory 
 		.ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),		// the address of the requested 128-bit burst
-		.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[20:0]),			// number of bursts to read from the DDR3
+		.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),			// number of bursts to read from the DDR3
 		.enable_reading(enable_reading),     			// start the 'ddr3_rd_control'
 		.reading_done(reading_done),       				// reading is complete
 		// interface to the AXIS 2:1 MUX
@@ -403,4 +403,4 @@ module command_top(
 
 //	);
 	
-	endmodule
+endmodule
