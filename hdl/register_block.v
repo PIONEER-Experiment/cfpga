@@ -22,9 +22,9 @@ module register_block(
 	// Register to/from the ADC acquisition state machine
 	input [23:0] fill_num,	                 // fill number for this fill
     output [15:0] channel_tag,		         // stuff about the channel to put in the header
-	output [20:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
-	output [20:0] num_laser_bursts,          // number of sample bursts in a LASER fill
-	output [20:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
+	output [23:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
+	output [23:0] num_laser_bursts,          // number of sample bursts in a LASER fill
+	output [23:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
 	output [23:0] initial_fill_num,          // event number to assign to the first fill
     output initial_fill_num_wr,              // write-strobe to store the initial_fill_num
 	input [2:0] ch_addr,			         // the channel address jumpers
@@ -125,13 +125,13 @@ module register_block(
 	assign channel_tag[15:3] = reg1_[15:3];
 	
 	// R2 - Muon fill burst count
-	assign num_muon_bursts[20:0] = reg2_[20:0];
+	assign num_muon_bursts[23:0] = reg2_[23:0];
 
 	// R3 - Laser fill burst count
-	assign num_laser_bursts[20:0] = reg3_[20:0];
+	assign num_laser_bursts[23:0] = reg3_[23:0];
 
 	// R4 - Pedestal fill burst count
-	assign num_ped_bursts[20:0] = reg4_[20:0];
+	assign num_ped_bursts[23:0] = reg4_[23:0];
 
 	// R5
 	assign genreg_addr_ctrl[31:0] = reg5_[31:0]; // address and control for the generic register interface
@@ -172,17 +172,17 @@ module register_block(
 		// R1 bits [31:16] always read back as zero
 		if (rd_en && (reg_num[4:0] == 5'h01)) rdbk_reg[31:0] <= {16'h0000, reg1_[15:3], ch_addr[2:0]};
 		// R2, R3, R4 bits [31:21] always read back as zero
-		if (rd_en && (reg_num[4:0] == 5'h02)) rdbk_reg[31:0] <= {11'h0000, reg2_[21:0]};
-		if (rd_en && (reg_num[4:0] == 5'h03)) rdbk_reg[31:0] <= {11'h0000, reg3_[21:0]};
-		if (rd_en && (reg_num[4:0] == 5'h04)) rdbk_reg[31:0] <= {11'h0000, reg4_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h02)) rdbk_reg[31:0] <= {8'b0, reg2_[23:0]};
+		if (rd_en && (reg_num[4:0] == 5'h03)) rdbk_reg[31:0] <= {8'b0, reg3_[23:0]};
+		if (rd_en && (reg_num[4:0] == 5'h04)) rdbk_reg[31:0] <= {8'b0, reg4_[23:0]};
 		if (rd_en && (reg_num[4:0] == 5'h05)) rdbk_reg[31:0] <= reg5_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h06)) rdbk_reg[31:0] <= reg6_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h07)) rdbk_reg[31:0] <= genreg_rd_data[31:0];  //data read from generic register interface
+		if (rd_en && (reg_num[4:0] == 5'h07)) rdbk_reg[31:0] <= genreg_rd_data[31:0];  // data read from generic register interface
 		if (rd_en && (reg_num[4:0] == 5'h08)) rdbk_reg[31:0] <= reg8_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h09)) rdbk_reg[31:0] <= {7'b0,adc_buf_current_data_delay[24:0]};   // R9 is read only
-		if (rd_en && (reg_num[4:0] == 5'h0a)) rdbk_reg[31:0] <= {7'b0,adc_buf_current_data_delay[49:25]};  // R10 is read only
-		if (rd_en && (reg_num[4:0] == 5'h0b)) rdbk_reg[31:0] <= {17'b0,adc_buf_current_data_delay[64:50]}; // R11 is read only
-		if (rd_en && (reg_num[4:0] == 5'h0c)) rdbk_reg[31:0] <= {31'b0,adc_buf_delay_data_error};          // R12 is read only
+		if (rd_en && (reg_num[4:0] == 5'h09)) rdbk_reg[31:0] <= {7'b0, adc_buf_current_data_delay[24:0]};   // R9 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0a)) rdbk_reg[31:0] <= {7'b0, adc_buf_current_data_delay[49:25]};  // R10 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0b)) rdbk_reg[31:0] <= {17'b0, adc_buf_current_data_delay[64:50]}; // R11 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0c)) rdbk_reg[31:0] <= {31'b0, adc_buf_delay_data_error};          // R12 is read only
 		if (rd_en && (reg_num[4:0] == 5'h0d)) rdbk_reg[31:0] <= reg13_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h0e)) rdbk_reg[31:0] <= reg14_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h0f)) rdbk_reg[31:0] <= reg15_[31:0];

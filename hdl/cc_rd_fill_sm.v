@@ -47,7 +47,7 @@ module cc_rd_fill_sm(
 
 	// interface to the DDR3 memory 
 	output reg [22:0] ddr3_rd_start_addr,	// the address of the first requested 128-bit burst
-	output reg [20:0] ddr3_rd_burst_cnt,	// number of bursts to read from the DDR3
+	output reg [23:0] ddr3_rd_burst_cnt,	// number of bursts to read from the DDR3
 	output reg enable_reading,     			// start the 'ddr3_rd_control'
 	input reading_done,       				// reading is complete
 	
@@ -71,10 +71,10 @@ reg error_found;
 
 // make a counter to keep track of how many 32-bit DDR3 words still need to
 // be accepted by the Aurora interface
-reg [22:0] ddr3_words_to_send;
+reg [25:0] ddr3_words_to_send;
 reg all_ddr3_words_sent;
 always @(posedge clk) begin
-	all_ddr3_words_sent <= (ddr3_words_to_send[22:0] == 23'b0);
+	all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 25'b0);
 end
 
 // State machine for executing the 'rd_fill' command
@@ -257,19 +257,19 @@ always @ (posedge clk) begin
 			ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[57:35];
 
 		// load the burst counter, add '2' for header and footer
-		ddr3_rd_burst_cnt[20:0] <= fill_header_fifo_out[84:64] + 2;
+		ddr3_rd_burst_cnt[23:0] <= fill_header_fifo_out[87:64] + 2;
 		// load the words_to_send counter
-		ddr3_words_to_send[22:0] <= {(fill_header_fifo_out[84:64] + 2), 2'b0};
-		// remove the word from the fifo head
+		ddr3_words_to_send[25:0] <= {(fill_header_fifo_out[87:64] + 2), 2'b0};
+		// remove the word from the FIFO head
  		fill_header_fifo_rd_en <= 1'b1;
 	end
 
 	if (NS[ECHO_CSN1]) begin
-		send_csn				<= 1'b1;
+		send_csn <= 1'b1;
 	end
 
 	if (NS[ECHO_CSN2]) begin
-		send_csn				<= 1'b1;
+		send_csn <= 1'b1;
 		// enable transmission of the serial number
 		tx_tvalid <= 1'b1;
 	end
@@ -300,7 +300,7 @@ always @ (posedge clk) begin
 		use_ddr3_data			<= 1'b1;
 		// decrement the words_to_send counter when data is accepted by the Aurora
 		if (aurora_ddr3_accept) begin
-			ddr3_words_to_send[22:0] <= ddr3_words_to_send[22:0] - 1;
+			ddr3_words_to_send[25:0] <= ddr3_words_to_send[25:0] - 1;
 		end
 	end
 

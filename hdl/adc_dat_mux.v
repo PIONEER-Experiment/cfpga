@@ -2,7 +2,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // connect a mux that will supply either header info or ADC data to the DDR3 write FIFO
-// All bit ordering is done in this mux
+// all bit ordering is done in this mux
 module adc_dat_mux (
     // inputs
     input [25:0] dat4_,                // a pair of ADC samples and a pair of over-range bits
@@ -12,7 +12,7 @@ module adc_dat_mux (
     input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
     input [15:0] channel_tag, 		   // stuff about the channel to put in the header
     input [1:0] fill_type,             // to determine how much data to collect
-    input [20:0] num_fill_bursts,      // number of 8(or 10) sample bursts
+    input [23:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
     input [22:0] burst_start_adr,      // first DDR3 memory location for this fill
     input [23:0] fill_num,             // fill number for this fill
     input clk,
@@ -22,30 +22,30 @@ module adc_dat_mux (
     output reg [127:0] adc_acq_out_dat // 128-bit header or ADC data   
 );
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////
 // assemble the header
 wire [127:0] header;
 // first 32-bit word
-assign header[23:0]		= fill_num[23:0];                       // 24-bit fill number, always positive, 
-assign header [31:24]	= 8'b0;                                 // filler, always zero
+assign header[23:0]		= fill_num[23:0];                 // 24-bit fill number, always positive, 
+assign header [31:24]	= 8'b0;                           // filler, always zero
 // second 32-bit word
-assign header[57:32]	= {burst_start_adr[22:0], 3'b0};        // 23-bit DDR3 burst address, 3 LSBs always zero, 
-assign header[63:58]	= 6'b0;                                 // filler, always zero
+assign header[57:32]	= {burst_start_adr[22:0], 3'b0};  // 23-bit DDR3 burst address, 3 LSBs always zero, 
+assign header[63:58]	= 6'b0;                           // filler, always zero
 // third 32-bit word
-assign header[84:64]	= num_fill_bursts[20:0];                // 21-bit burst count, 
-assign header[95:85]	= 11'b0;                                // filler, always zero
+assign header[87:64]	= num_fill_bursts[23:0];          // 21-bit burst count, 
+assign header[95:88]	= 11'b0;                          // filler, always zero
 // fourth 32-bit word
-assign header[111:96]	= channel_tag[15:0];            	    // 16-bit channel info, 
-assign header[113:112]	= fill_type[1:0];                       // 2-bit fill type
-assign header[125:114]	= 12'b0;                                // filler, always zero
+assign header[111:96]	= channel_tag[15:0];              // 16-bit channel info, 
+assign header[113:112]	= fill_type[1:0];                 // 2-bit fill type
+assign header[125:114]	= 12'b0;                          // filler, always zero
 // make the last 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
 assign header[127:126]	= 2'b01;
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////
 // assemble the data
 wire [127:0] data;
 // put 8 ADC samples into 8 16-bit words.
-// Omit the overrange bit and sign extend into the upper 4 bits of each word
+// omit the overrange bit and sign extend into the upper 4 bits of each word
 assign data[11:0]	 = dat0_[12:1];                                  // 0 oldest sample data
 assign data[15:12]	 = {dat0_[12], dat0_[12], dat0_[12], dat0_[12]}; // 0 oldest sample sign extension
 
@@ -70,7 +70,7 @@ assign data[111:108] = {dat3_[12], dat3_[12], dat3_[12], dat3_[12]}; // 6 sample
 assign data[123:112] = dat3_[25:14];                                 // 7 sample data
 assign data[127:124] = {dat3_[25], dat3_[25], dat3_[25], dat3_[25]}; // 7 sample sign extension
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////
 // create a checksum register
 reg [127:0] checksum;
 reg [1:0] checksum_cnt;
@@ -104,11 +104,11 @@ always @(posedge clk) begin
 	end
 	else if (select_dat && !select_checksum) begin
 		// connect the data to the output
-		adc_acq_out_dat[127:0]   <= data[127:0];
+		adc_acq_out_dat[127:0] <= data[127:0];
 	end
 	else if (select_checksum) begin
 		// connect the checksum to the output
-		adc_acq_out_dat[127:0]   <= checksum[127:0];
+		adc_acq_out_dat[127:0] <= checksum[127:0];
 	end
 end
 

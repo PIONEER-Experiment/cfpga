@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
-///////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////
 // Connect the module that manages writing data to the memory
 
 module ddr3_wr_control (
@@ -42,7 +43,7 @@ end
 // define equivalent statement for data and address acceptance
 assign address_accept   = (wr_app_en & wr_app_rdy);         // we presented an address and it was accepted
 assign data_accept      = (app_wdf_wren & app_wdf_rdy);     // we presented data and it was accepted
-wire address_allow;     // allow attempts to write an address
+wire address_allow; // allow attempts to write an address
  
 // Create a register to hold the header for future writing to the fill-header FIFO
 reg [127:0] fill_header_wr_dat_reg;
@@ -70,37 +71,37 @@ assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 // Initialize it from the 'burst_cnt' in the header
 // Decrement it whenever an address is accepted. This happens when
 // we are asserting 'wr_app_en' and receiving 'wr_app_rdy'.
-reg [20:0] address_cntr;
-reg init_address_cntr;        // will be asserted by the state machine
-reg adjust_address_cntr;  // add 2 to account for header and checksum
-wire address_cntr_zero;       // the counter is at zero
+reg [23:0] address_cntr;
+reg init_address_cntr;   // will be asserted by the state machine
+reg adjust_address_cntr; // add 2 to account for header and checksum
+wire address_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
-    if (reset) address_cntr[20:0] <= 21'b0;
-    else if (init_address_cntr) address_cntr[20:0] <= ddr3_wr_fifo_dat[84:64];
-    else if (adjust_address_cntr) address_cntr[20:0] <= address_cntr[20:0] + 2;
-    else if (address_cntr_zero) address_cntr[20:0] <= 21'b0; 
-    else if (address_accept) address_cntr[20:0] <= address_cntr[20:0] - 1;
+    if (reset) address_cntr[23:0] <= 24'b0;
+    else if (init_address_cntr) address_cntr[23:0] <= ddr3_wr_fifo_dat[87:64];
+    else if (adjust_address_cntr) address_cntr[23:0] <= address_cntr[23:0] + 2;
+    else if (address_cntr_zero) address_cntr[23:0] <= 24'b0; 
+    else if (address_accept) address_cntr[23:0] <= address_cntr[23:0] - 1;
 end
 // create a flag that gets set when the address counter is down to zero
-assign address_cntr_zero = (address_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
+assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 
 // Create a burst counter
 // Initialize it from the header
 // Decrement it whenever we get a successful write. This happens when
 // we are asserting 'wdf_wren' and receiving 'wdf_rdy'.
-reg [20:0] burst_cntr;
-reg init_burst_cntr;  // will be asserted by the state machine
-reg adjust_burst_cntr;    // add 2 to account for header and checksum
-wire burst_cntr_zero; // the counter is at zero
+reg [23:0] burst_cntr;
+reg init_burst_cntr;   // will be asserted by the state machine
+reg adjust_burst_cntr; // add 2 to account for header and checksum
+wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
-    if (reset) burst_cntr[20:0] <= 21'b0;
-    else if (init_burst_cntr) burst_cntr[20:0] <= ddr3_wr_fifo_dat[84:64];
-    else if (adjust_burst_cntr) burst_cntr[20:0] <= burst_cntr[20:0] + 2;
-    else if (burst_cntr_zero) burst_cntr[20:0] <= 21'b0; 
-    else if (data_accept) burst_cntr[20:0] <= burst_cntr[20:0] - 1;
+    if (reset) burst_cntr[23:0] <= 24'b0;
+    else if (init_burst_cntr) burst_cntr[23:0] <= ddr3_wr_fifo_dat[87:64];
+    else if (adjust_burst_cntr) burst_cntr[23:0] <= burst_cntr[23:0] + 2;
+    else if (burst_cntr_zero) burst_cntr[23:0] <= 24'b0; 
+    else if (data_accept) burst_cntr[23:0] <= burst_cntr[23:0] - 1;
 end
 // create a flag that gets set when the burst counter is down to zero
-assign burst_cntr_zero = (burst_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
+assign burst_cntr_zero = (burst_cntr[23:0] == 24'b0) ? 1'b1 : 1'b0;
 
 // Create a counter that will control when addresses are sent to the DDR3 interface.
 // Since addresses come from a counter, we always have addresses available. However, when we

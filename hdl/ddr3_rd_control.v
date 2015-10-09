@@ -9,7 +9,7 @@ module ddr3_rd_control (
 	input acq_enabled,						// input, writing is enabled
 	// connections to the 'rd_fill' command logic
 	input [22:0] ddr3_rd_start_addr,		// input, the address of the first requested 128-bit burst
-	input [20:0] ddr3_rd_burst_cnt,         // input, the number of bursts to read
+	input [23:0] ddr3_rd_burst_cnt,         // input, the number of bursts to read
 	input enable_reading,      				// input, initialize the address generator and both counters, go
 	output reading_done,       				// output, reading is complete
 	// 'read' ports to memory
@@ -23,8 +23,8 @@ module ddr3_rd_control (
 	// ports to the 'read' fifo
 	output ddr3_rd_fifo_wr_en,             // data is valid, so put it in the READ FIFO	
 	output [127:0] ddr3_rd_fifo_input_dat, // output, memory data
-	input ddr3_rd_fifo_almost_full,         // there is not much room left
-	output ddr3_rd_fifo_input_tlast			// the last burst for this fill	
+	input ddr3_rd_fifo_almost_full,        // there is not much room left
+	output ddr3_rd_fifo_input_tlast		   // the last burst for this fill	
 );
 
 // just pass the DDR3 data thru to the FIFO
@@ -43,11 +43,11 @@ always @(posedge clk) begin
 end
 
 // define equivalent statements for address acceptance
-assign address_accept	= (rd_app_en & rd_app_rdy);			// we presented an address and it was accepted
+assign address_accept = (rd_app_en & rd_app_rdy); // we presented an address and it was accepted
 
 // Create an address generator
 // Initialize it from the 'ddr3_rd_start_addr' extracted from the 'fill_header_fifo'
-// Increment it whenever the address is accepted ( we get a 'rd_app_rdy' while asserting 'rd_app_en') 
+// Increment it whenever the address is accepted (we get a 'rd_app_rdy' while asserting 'rd_app_en') 
 reg [22:0] address_gen;
 reg init_address_gen;	// will be asserted by the state machine
 always @ (posedge clk) begin
@@ -61,32 +61,32 @@ assign ddr3_rd_addr[25:0] = {address_gen[22:0], 3'b0};
 // Initialize it from the 'burst_cnt' provided by the 'rd_fill' logic
 // Decrement it whenever an address is accepted. This happens when
 // we are asserting 'rd_app_en' and receiving 'rd_app_rdy'.
-reg [20:0] address_cntr;
+reg [23:0] address_cntr;
 wire address_cntr_zero;		// the counter is at zero
 always @ (posedge clk) begin
-	if (reset) address_cntr[20:0] <= 21'b0;
-	else if (enable_reading_pulse) address_cntr[20:0] <= ddr3_rd_burst_cnt[20:0];
-	else if (address_cntr_zero) address_cntr[20:0] <= 21'b0; 
-	else if (address_accept) address_cntr[20:0] <= address_cntr[20:0] - 1;
+	if (reset) address_cntr[23:0] <= 24'b0;
+	else if (enable_reading_pulse) address_cntr[23:0] <= ddr3_rd_burst_cnt[23:0];
+	else if (address_cntr_zero) address_cntr[23:0] <= 24'b0; 
+	else if (address_accept) address_cntr[23:0] <= address_cntr[23:0] - 1;
 end
 // create a flag that gets set when the address counter is down to zero
-assign address_cntr_zero = (address_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
+assign address_cntr_zero = (address_cntr[23:0] == 24'b0) ? 1'b1 : 1'b0;
 
 // Create a burst counter
 // Initialize it from the 'burst_cnt' provided by the 'rd_fill' logic
 // Decrement it whenever we get a successful read. This happens when
 // we are receive 'app_rd_data_valid'.
-reg [20:0] burst_cntr;
+reg [23:0] burst_cntr;
 wire burst_cntr_zero, burst_cntr_one;	// the counter is at zero or one
 always @ (posedge clk) begin
-	if (reset) burst_cntr[20:0] <= 21'b0;
-	else if (enable_reading_pulse) burst_cntr[20:0] <= ddr3_rd_burst_cnt[20:0];
-	else if (burst_cntr_zero) burst_cntr[20:0] <= 21'b0; 
-	else if (app_rd_data_valid) burst_cntr[20:0] <= burst_cntr[20:0] - 1;
+	if (reset) burst_cntr[23:0] <= 24'b0;
+	else if (enable_reading_pulse) burst_cntr[23:0] <= ddr3_rd_burst_cnt[23:0];
+	else if (burst_cntr_zero) burst_cntr[23:0] <= 24'b0; 
+	else if (app_rd_data_valid) burst_cntr[23:0] <= burst_cntr[23:0] - 1;
 end
 // create a flag that gets set when the burst counter is down to zero
-assign burst_cntr_zero = (burst_cntr[20:0] == 21'h00_0000) ? 1'b1 : 1'b0;
-assign burst_cntr_one  = (burst_cntr[20:0] == 21'h00_0001) ? 1'b1 : 1'b0;
+assign burst_cntr_zero = (burst_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
+assign burst_cntr_one  = (burst_cntr[23:0] == 24'd1) ? 1'b1 : 1'b0;
 assign ddr3_rd_fifo_input_tlast = burst_cntr_one;
 
 //  Leave the comments containing "synopsys" in your HDL code.
@@ -94,9 +94,9 @@ assign ddr3_rd_fifo_input_tlast = burst_cntr_one;
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [1:0]
-	IDLE	= 2'd0,
-	READ	= 2'd1,
-	DONE	= 2'd2;
+	IDLE = 2'd0,
+	READ = 2'd1,
+	DONE = 2'd2;
 	
 // Declare current state and next state variables
 reg [2:0] /* synopsys enum STATE_TYPE */ CS;
@@ -106,16 +106,16 @@ reg [2:0] /* synopsys enum STATE_TYPE */ NS;
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
 	if (reset | !enable_reading_sync2) begin
-		CS <= 3'b0;				// set all state bits to 0
-		CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
+		CS <= 3'b0;			// set all state bits to 0
+		CS[IDLE] <= 1'b1;	// set IDLE state bit to 1
 	end
 	else
 		CS <= NS;			// set state bits to next state
 end
 
-// combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or enable_reading_sync3 or burst_cntr_zero) 	begin
-	NS = 3'b0;					// default all bits to zero; will overrride one bit
+// combinational always block to determine next state (use blocking [=] assignments) 
+always @ (CS or enable_reading_sync3 or burst_cntr_zero) begin
+	NS = 3'b0; // default all bits to zero; will overrride one bit
 
 	case (1'b1) //synopsys full_case parallel_case
 
@@ -155,4 +155,3 @@ assign ddr3_rd_fifo_wr_en = CS[READ] && app_rd_data_valid;
 assign reading_done = CS[DONE];
 
 endmodule
-
