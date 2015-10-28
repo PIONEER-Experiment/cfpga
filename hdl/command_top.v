@@ -35,13 +35,15 @@ module command_top(
 	output [23:0] ddr3_rd_burst_cnt,    // input, the number of bursts to read
 	output enable_reading,      		// input, initialize the address generator and both counters, go
     input reading_done,                 // output, reading is complete
+	output [11:0] num_waveforms,		// number of waveforms to store per trigger
+    output [21:0] waveform_gap,			// idle time between waveforms 
 
 	// Register to/from the ADC acquisition state machine
 	input [23:0] fill_num,	                 // fill number for this fill
 	output [15:0] channel_tag,		         // stuff about the channel to put in the header
-	output [23:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
-	output [23:0] num_laser_bursts,	         // number of sample bursts in a LASER fill
-	output [23:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
+	output [22:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
+	output [22:0] num_laser_bursts,	         // number of sample bursts in a LASER fill
+	output [22:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
 	output [23:0] initial_fill_num,          // event number to assign to the first fill
 	output initial_fill_num_wr,              // write-strobe to store the initial_fill_num
 	input [2:0] ch_addr,			         // the channel address jumpers
@@ -328,9 +330,9 @@ module command_top(
 		// register to/from the ADC acquisition state machine
 		.fill_num(fill_num[23:0]),			         // fill number for this fill
 		.channel_tag(channel_tag[15:0]), 		     // stuff about the channel to put in the header
-		.num_muon_bursts(num_muon_bursts[23:0]),     // number of sample bursts in a MUON fill
-		.num_laser_bursts(num_laser_bursts[23:0]),   // number of sample bursts in a LASER fill
-		.num_ped_bursts(num_ped_bursts[23:0]),       // number of sample bursts in a PEDESTAL fill
+		.num_muon_bursts(num_muon_bursts[22:0]),     // number of sample bursts in a MUON fill
+		.num_laser_bursts(num_laser_bursts[22:0]),   // number of sample bursts in a LASER fill
+		.num_ped_bursts(num_ped_bursts[22:0]),       // number of sample bursts in a PEDESTAL fill
 		.initial_fill_num(initial_fill_num[23:0]),   // event number to assign to the first fill
 		.initial_fill_num_wr(initial_fill_num_wr),   // write-strobe to store the initial_fill_num
 		.ch_addr(ch_addr_corrected[2:0]),						// the channel address jumpers
@@ -339,6 +341,8 @@ module command_top(
 	    .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
 	    .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
 	    .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
+		.num_waveforms(num_waveforms[11:0]),			// number of waveforms to store per trigger
+	    .waveform_gap(waveform_gap[21:0]),				// idle time between waveforms 
 
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),

@@ -11,7 +11,7 @@
 	// major revision of Xilinx code
 	`define	MAJOR_REV	8'd1
 	// minor revision of Xilinx code
-	`define	MINOR_REV	8'd1
+	`define	MINOR_REV	8'd2
 	
 	// Define 5-bit constants for commands from the Master FPGA
 	`define	CC_NO_CMD		5'd0	// May be useful for synchronizing or testing?

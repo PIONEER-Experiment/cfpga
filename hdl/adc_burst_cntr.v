@@ -7,7 +7,7 @@
 
 module adc_burst_cntr (
     // inputs
-    input [23:0] num_fill_bursts,   // number of 8 (or 10) sample bursts
+    input [22:0] num_fill_bursts,   // number of 8 (or 10) sample bursts
     input clk,
     input init,                     // initialize when triggered
     input enable,                   // will be enabled once per burst
@@ -15,21 +15,21 @@ module adc_burst_cntr (
     output reg at_zero              // all sample bursts have been saved
 );
 
-reg [23:0] burst_cntr;
+reg [22:0] burst_cntr;
 
 // set the 'at_zero' flag when the count is zero
 always @(posedge clk) begin
-    if (burst_cntr[23:0] == 24'd0) at_zero <= 1'b1;
+    if (burst_cntr[22:0] == 23'd0) at_zero <= 1'b1;
     else at_zero <= 1'b0;
 end
 
 // count down when enabled and not at zero
 always @(posedge clk) begin
     if (init) begin
-        burst_cntr[23:0] <= num_fill_bursts[23:0];
+        burst_cntr[22:0] <= num_fill_bursts[22:0];
     end
    else if (enable && !at_zero) begin
-        burst_cntr[23:0] <= burst_cntr[23:0] - 1;
+        burst_cntr[22:0] <= burst_cntr[22:0] - 1;
    end
 end
     

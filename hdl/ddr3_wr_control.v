@@ -153,7 +153,7 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero)     begin
+always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero or acq_done_sync2)     begin
     NS = 7'b0;                  // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case

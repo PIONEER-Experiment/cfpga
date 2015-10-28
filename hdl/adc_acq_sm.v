@@ -12,17 +12,26 @@ module adc_acq_sm (
     input acq_reset,                    // reset from the Master FPGA
     input reset_clk50,                  // reset from internal logic, synched to CLK50
     input burst_cntr_zero,              // all sample bursts have been saved
+    input waveform_gap_zero,   			// the idle time has elapsed
+    input last_waveform,  				// all waveforms have been saved
     input ddr3_wr_done,                 // asserted when the 'ddr3_wr_control' is in the DONE state
+	input dummy_dat_reset_mode,			// channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
     // outputs
     output reg [1:0] fill_type,         // determine which burst count to use
     output reg fill_size_mux_en,
     output reg address_cntr_en,         // increment the next starting address
     output reg dummy_dat_reset,         // reset the dummy data counter
-    output reg adc_mux_dat_sel,         // '0' selects header, '1' selects data
-    output reg adc_mux_checksum_select, // '0' selects data, '1' selects checksum, send the checksum to the FIFO 
+    output reg adc_mux_fill_hdr_sel,    // selects fill header
+    output reg adc_mux_wfm_hdr_sel,     // selects waveform header
+    output reg adc_mux_dat_sel,         // selects data
+    output reg adc_mux_checksum_select, // selects checksum 
     output reg burst_cntr_init,         // initialize when triggered
     output reg burst_cntr_en,           // will be enabled once per burst
     output reg fill_cntr_en,            // will be enabled once per fill
+    output reg waveform_cntr_init,      // initialize when triggered
+    output reg waveform_cntr_en,        // will be enabled once after each waveform
+    output reg waveform_gap_cntr_init,  // initialize after previous waveform stored
+    output reg waveform_gap_cntr_en,    // enable after each initialization
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
     output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
     output reg acq_done,                // acquisition is done
@@ -77,29 +86,36 @@ end
  
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
-parameter [3:0]
-    IDLE        = 4'd0,
-    INIT1       = 4'd1,
-    INIT2       = 4'd2,
-    INIT3       = 4'd3,
-    RUN1        = 4'd4,
-    RUN2        = 4'd5,
-    RUN3        = 4'd6,
-    RUN4        = 4'd7,
-    CHECKSUM1   = 4'd8,
-    CHECKSUM2   = 4'd9,
-    DDR3_WAIT   = 4'd10,
-    DONE        = 4'd11;
+parameter [4:0]
+    IDLE			= 5'd0,
+    FILL_INIT1		= 5'd1,
+    FILL_INIT2		= 5'd2,
+    FILL_INIT3		= 5'd3,
+    WAVEFORM_INIT1	= 5'd4,
+    WAVEFORM_INIT2	= 5'd5,
+    WAVEFORM_INIT3	= 5'd6,
+    RUN1        	= 5'd7,
+    RUN2        	= 5'd8,
+    RUN3        	= 5'd9,
+    RUN4        	= 5'd10,
+    WAVEFORM_TST1	= 5'd11,
+    WAVEFORM_TST2	= 5'd12,
+    WAVEFORM_GAP1	= 5'd13,
+    WAVEFORM_GAP2	= 5'd14,
+    CHECKSUM1   	= 5'd15,
+    CHECKSUM2   	= 5'd16,
+    DDR3_WAIT   	= 5'd17,
+    DONE        	= 5'd18;
     
 // Declare current state and next state variables
-reg [11:0] /* synopsys enum STATE_TYPE */ CS;
-reg [11:0] /* synopsys enum STATE_TYPE */ NS;
+reg [18:0] /* synopsys enum STATE_TYPE */ CS;
+reg [18:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
     if (adc_acq_full_reset) begin
-        CS <= 12'b0;      // set all state bits to 0
+        CS <= 19'b0;      // set all state bits to 0
         CS[IDLE] <= 1'b1; // set IDLE state bit to 1
     end
     else
@@ -108,31 +124,46 @@ end
 
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr3_wr_done_sync2)    begin
-    NS = 12'b0; // default all bits to zero; will overrride one bit
+always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr3_wr_done_sync2 or last_waveform or waveform_gap_zero)    begin
+    NS = 19'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
 
         // Stay in the IDLE state until we are both armed and triggered.
         CS[IDLE]: begin
             if (adc_acq_mode_enabled && acq_trig_sync2)
-                NS[INIT1] = 1'b1;
+                NS[FILL_INIT1] = 1'b1;
             else
                 NS[IDLE] = 1'b1;
         end
 
-        // Stay in INIT1 state for one period. 
-        CS[INIT1]: begin
-                NS[INIT2] = 1'b1;
+        // Stay in FILL_INIT1 state for one period. 
+        CS[FILL_INIT1]: begin
+                NS[FILL_INIT2] = 1'b1;
         end
 
-        // Stay in INIT2 state for one period. 
-        CS[INIT2]: begin
-                NS[INIT3] = 1'b1;
+        // Stay in FILL_INIT2 state for one period. 
+        CS[FILL_INIT2]: begin
+                NS[FILL_INIT3] = 1'b1;
         end
 
-        // Stay in INIT3 state for one period. 
-        CS[INIT3]: begin
+        // Stay in FILL_INIT3 state for one period. 
+        CS[FILL_INIT3]: begin
+                NS[WAVEFORM_INIT1] = 1'b1;
+        end
+
+        // Stay in WAVEFORM_INIT1 state for one period. 
+        CS[WAVEFORM_INIT1]: begin
+                NS[WAVEFORM_INIT2] = 1'b1;
+        end
+
+        // Stay in WAVEFORM_INIT2 state for one period. 
+        CS[WAVEFORM_INIT2]: begin
+                NS[WAVEFORM_INIT3] = 1'b1;
+        end
+
+        // Stay in WAVEFORM_INIT3 state for one period. 
+        CS[WAVEFORM_INIT3]: begin
                 NS[RUN1] = 1'b1;
         end
 
@@ -154,12 +185,40 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
         // Stay in RUN4 state for one period.
         CS[RUN4]: begin
             if (burst_cntr_zero)
-                NS[CHECKSUM1] = 1'b1;
+                NS[WAVEFORM_TST1] = 1'b1;
             else
                 NS[RUN1] = 1'b1;
         end
 
-        // Stay in CHECKSUM1 state for one period.
+        // Stay in WAVEFORM_TST1 state for one period. 
+        CS[WAVEFORM_TST1]: begin
+                NS[WAVEFORM_TST2] = 1'b1;
+        end
+
+        // Stay in WAVEFORM_TST2 state for one period.
+        // If this was the last waveform, go do checksum stuff.
+        // Otherwise, start a gap.
+        CS[WAVEFORM_TST2]: begin
+            if (last_waveform)
+            	NS[CHECKSUM1] = 1'b1;
+       		else
+            	NS[WAVEFORM_GAP1] = 1'b1;
+    	end
+ 
+        // Stay in WAVEFORM_GAP1 state for one period. 
+    	CS[WAVEFORM_GAP1]: begin
+    	        NS[WAVEFORM_GAP2] = 1'b1;
+    	end
+
+    	// Stay in WAVEFORM_GAP2 state until the gap counter is down to zero. 
+    	CS[WAVEFORM_GAP2]: begin
+    	    if (waveform_gap_zero)
+    	    	NS[WAVEFORM_INIT1] = 1'b1;
+       		else
+    	    	NS[WAVEFORM_GAP2] = 1'b1;
+    	end
+ 
+         // Stay in CHECKSUM1 state for one period.
         CS[CHECKSUM1]: begin
                 NS[CHECKSUM2] = 1'b1;
         end
@@ -195,39 +254,65 @@ always @ (posedge clk) begin
         fill_size_mux_en        <= 1'b0;
         address_cntr_en         <= 1'b0;
         dummy_dat_reset         <= 1'b0;
-        adc_mux_dat_sel         <= 1'b1;
+        adc_mux_fill_hdr_sel    <= 1'b0;
+        adc_mux_wfm_hdr_sel     <= 1'b0;
+        adc_mux_dat_sel         <= 1'b0;
+        adc_mux_checksum_select <= 1'b0;
+        waveform_cntr_init      <= 1'b0;
+        waveform_cntr_en        <= 1'b0;
+        waveform_gap_cntr_init  <= 1'b0;
+        waveform_gap_cntr_en    <= 1'b0;
         burst_cntr_init         <= 1'b0;
         burst_cntr_en           <= 1'b0;
         fill_cntr_en            <= 1'b0;
         adc_acq_out_valid       <= 1'b0;
-        adc_mux_checksum_select <= 1'b0;
         acq_done                <= 1'b0;
         sm_idle                 <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
-        // reset the counter that provides dummy data
-        dummy_dat_reset         <= 1'b1;
         sm_idle                 <= 1'b1;
     end
     
-    if (NS[INIT1]) begin
+    if (NS[FILL_INIT1]) begin
        // latch the current fill type size 
         fill_size_mux_en        <= 1'b1;
     end
 
-    if (NS[INIT2]) begin
-       // initialize the burst counter with the current fill size
-        burst_cntr_init         <= 1'b1;
-        // signal the mux to output the header info
-        adc_mux_dat_sel         <= 1'b0;
+    if (NS[FILL_INIT2]) begin
+       // initialize the waveform counter with the number of waveforms
+        waveform_cntr_init         <= 1'b1;
+        // signal the mux to output the fill header info
+        adc_mux_fill_hdr_sel         <= 1'b1;
     end
 
-    if (NS[INIT3]) begin
+    if (NS[FILL_INIT3]) begin
        // write the header to the FIFO
        adc_acq_out_valid        <= 1'b1;
         // increment the next fill address
        address_cntr_en          <= 1'b1;
+        // at the start of a fill, unconditionally reset the counter that provides dummy data
+	    dummy_dat_reset         <= 1'b1;
+    end
+
+    if (NS[WAVEFORM_INIT1]) begin
+        // at the start of a waveform, conditionally reset the counter that provides dummy data
+        // 0 -> free-run,  1 -> reset every waveform
+	    dummy_dat_reset         <= dummy_dat_reset_mode;
+    end
+
+    if (NS[WAVEFORM_INIT2]) begin
+		// initialize the burst counter with the current fill size
+		burst_cntr_init         <= 1'b1;
+        // signal the mux to output the waveform header info
+		adc_mux_wfm_hdr_sel         <= 1'b1;
+    end
+
+    if (NS[WAVEFORM_INIT3]) begin
+		// write the header to the FIFO
+		adc_acq_out_valid        <= 1'b1;
+		// increment the next fill address
+		address_cntr_en          <= 1'b1;
     end
 
     if (NS[RUN1]) begin
@@ -241,12 +326,34 @@ always @ (posedge clk) begin
     end
 
     if (NS[RUN3]) begin
+        adc_mux_dat_sel         <= 1'b1;
     end
 
     if (NS[RUN4]) begin
         // write the burst to the FIFO
         adc_acq_out_valid       <= 1'b1;
+		// increment the next fill address
+        address_cntr_en          <= 1'b1;
     end
+
+    if (NS[WAVEFORM_TST1]) begin
+    	// decrement the waveform counter
+    	waveform_cntr_en <= 1'b1;
+    end
+
+    if (NS[WAVEFORM_TST2]) begin
+    	// initialize the waveform gap counter
+    	waveform_gap_cntr_init <= 1'b1;
+    end
+
+    if (NS[WAVEFORM_GAP1]) begin
+    end
+
+    if (NS[WAVEFORM_GAP2]) begin
+    	// decrement the waveform gap counter
+	    waveform_gap_cntr_en <= 1'b1;
+    end
+
 
     if (NS[CHECKSUM1]) begin
         // send the checksum

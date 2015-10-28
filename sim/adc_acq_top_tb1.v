@@ -30,9 +30,9 @@ module adc_acq_top_tb1;
     reg reset_clk50;              // synchronously negated  
     reg clk200;                   // for input pin timing delay settings
     reg [15:0] channel_tag;   // stuff about the channel to put in the header
-    reg [20:0] num_muon_bursts;  // number of sample bursts in a MUON fill
-    reg [20:0] num_laser_bursts; // number of sample bursts in a LASER fill
-    reg [20:0] num_ped_bursts;   // number of sample bursts in a PEDESTAL fill
+    reg [22:0] num_muon_bursts;  // number of sample bursts in a MUON fill
+    reg [22:0] num_laser_bursts; // number of sample bursts in a LASER fill
+    reg [22:0] num_ped_bursts;   // number of sample bursts in a PEDESTAL fill
     reg [23:0] initial_fill_num;  // event number to assign to the first fill
     reg initial_fill_num_wr;      // write-strobe to store the initial_fill_num
 	reg acq_enable0;              // indicates enabled for triggers, and fill type
@@ -41,6 +41,9 @@ module adc_acq_top_tb1;
     reg acq_reset;                // reset all of the acquisition logic
  	reg adc_buf_delay_data_reset;	// use the new delay settings
 	reg [4:0] adc_buf_data_delay;	// 5 delay-tap-bits per line, all lines always all the same
+	reg ddr3_wr_done;             // asserted when the 'ddr3_wr_control' is in the DONE state
+	reg [11:0] num_waveforms;		// number of waveforms to store per trigger
+	reg [21:0] waveform_gap;		// idle time between waveforms 
     // outputs
 	wire [64:0] adc_buf_current_data_delay; // 13 lines *5 bits/line, current tap settings
 	wire [23:0] fill_num;         // fill number for this fill
@@ -49,6 +52,8 @@ module adc_acq_top_tb1;
     wire adc_clk;		         // ADC clock used by the FIFO
     wire acq_done;                 // acquisition is done
 	wire adc_acq_full_reset;		// reset all aspects of data collection/storage/readout
+	wire acq_enabled;             // the system is in acquisition mode, rather than readout mode
+	wire adc_acq_sm_idl;          // ADC acquisition state machine is idle (used for front panel LED status)
 
 adc_acq_top uut(
     // inputs
@@ -72,6 +77,9 @@ adc_acq_top uut(
     .acq_reset( acq_reset),                // reset all of the acquisition logic
  	.adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
 	.adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
+    .ddr3_wr_done(ddr3_wr_done),             // asserted when the 'ddr3_wr_control' is in the DONE state
+	.num_waveforms(num_waveforms),		// number of waveforms to store per trigger
+	.waveform_gap(waveform_gap),		// idle time between waveforms 
     // outputs
 	.adc_buf_current_data_delay(adc_buf_current_data_delay), // 13 lines *5 bits/line, current tap settings
     .fill_num(fill_num),         // fill number for this fill
@@ -93,11 +101,14 @@ adc_acq_top uut(
         reset_clk50 = 1'b1;              // synchronously negated  
         clk200 = 1'b0;                   // for input pin timing delay settings
         channel_tag[15:0] = 16'h0000;   // stuff about the channel to put in the header
-       num_muon_bursts[20:0] = 21'h000000;  // number of sample bursts in a MUON fill
-        num_laser_bursts[20:0] = 21'h000000; // number of sample bursts in a LASER fill
-        num_ped_bursts[20:0] = 21'h000000;   // number of sample bursts in a PEDESTAL fill
+       num_muon_bursts[22:0] = 23'h000000;  // number of sample bursts in a MUON fill
+        num_laser_bursts[22:0] = 23'h000000; // number of sample bursts in a LASER fill
+        num_ped_bursts[22:0] = 23'h000000;   // number of sample bursts in a PEDESTAL fill
         initial_fill_num[23:0] = 24'h000000;  // event number to assign to the first fill
         initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
+		ddr3_wr_done = 1'b0;
+		num_waveforms[11:0] = 12'h000;		// number of waveforms to store per trigger
+        waveform_gap[21:0] = 22'h000000;		// idle time between waveforms 
         acq_enable0 = 1'b0;                  // arm the logic to accept triggers
         acq_enable1 = 1'b0;                  // arm the logic to accept triggers
         acq_trig = 1'b0;                 // trigger the logic to start collecting data
@@ -109,11 +120,13 @@ adc_acq_top uut(
 		#100;
 	    #20 reset_clk50 = 1'b0;
 	        
-	    #20 num_muon_bursts[20:0] = 21'h000005;  // number of sample bursts in a MUON fill
-            num_laser_bursts[20:0] = 21'h000008; // number of sample bursts in a LASER fill
-            num_ped_bursts[20:0] = 21'h00000b;   // number of sample bursts in a PEDESTAL fill
+	    #20 num_muon_bursts[22:0] = 23'h000005;  // number of sample bursts in a MUON fill
+            num_laser_bursts[22:0] = 23'h000008; // number of sample bursts in a LASER fill
+            num_ped_bursts[22:0] = 23'h00000b;   // number of sample bursts in a PEDESTAL fill
             initial_fill_num[23:0] = 24'h000055;  // event number to assign to the first fill
             channel_tag[15:0] = 16'h0008;   // stuff about the channel to put in the header
+			num_waveforms[11:0] = 12'h003;		// number of waveforms to store per trigger
+    	    waveform_gap[21:0] = 22'h000001;		// idle time between waveforms 
         #10 initial_fill_num_wr = 1'b1;      // write-strobe to store the initial_fill_num
         #10 initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
 
