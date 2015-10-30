@@ -165,6 +165,7 @@ adc_dat_mux adc_dat_mux (
     .select_fill_hdr(adc_mux_fill_hdr_sel),     // selects fill header
     .select_waveform_hdr(adc_mux_wfm_hdr_sel),   // selects waveform header
     .select_checksum(adc_mux_checksum_select),  // selects checksum, send the checksum to the FIFO 
+    .checksum_update(adc_mux_checksum_update),      // update the checksum 
     // outputs
     .adc_acq_out_dat(adc_acq_out_dat[127:0])    // 128-bit header or ADC data   
 );
@@ -263,7 +264,8 @@ adc_acq_sm adc_acq_sm (
     .adc_mux_wfm_hdr_sel(adc_mux_wfm_hdr_sel),     // selects waveform header
     .adc_mux_dat_sel(adc_mux_dat_sel),      // selects data
     .adc_mux_checksum_select(adc_mux_checksum_select),      // send the checksum to the FIFO 
-    .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
+    .adc_mux_checksum_update(adc_mux_checksum_update),      // update the checksum 
+     .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
     .burst_cntr_init(burst_cntr_init),      // initialize when triggered
     .burst_cntr_en(burst_cntr_en),          // will be enabled once per burst
     .fill_cntr_en(fill_cntr_en),            // will be enabled once per fill

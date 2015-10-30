@@ -28,6 +28,7 @@ module adc_dat_mux (
     input select_waveform_hdr,  		// selects waveform header
     input select_dat,                  //  selects data
     input select_checksum,             //  selects checksum
+    input checksum_update,				// update the checksum 
     // outputs
     output reg [127:0] adc_acq_out_dat // 128-bit header or ADC data   
 );
@@ -50,7 +51,7 @@ assign fill_header[127:126]	= 2'b01;
 // assemble the waveform header
 wire [127:0] waveform_header;
 assign waveform_header[1:0]		= fill_type[1:0];                 // 3-bit fill type
-assign fill_header[2]			= 1'b0;						      // 1-bit reserved for future 3-bit fill type
+assign waveform_header[2]		= 1'b0;						      // 1-bit reserved for future 3-bit fill type
 assign waveform_header[25:3]	= num_fill_bursts[22:0];          // 23-bit burst count, 
 assign waveform_header[51:26]	= {burst_start_adr[22:0], 3'b0};  // 23-bit DDR3 burst address, 3 LSBs always zero, 
 assign waveform_header[63:52]	= num_waveforms[11:0];            // 12-bit number of waveforms to store per trigger
@@ -104,7 +105,7 @@ always @(posedge clk) begin
 		checksum[127:0] <= checksum[127:0] ^ waveform_header[127:0];
 	end
 
-	else if (!select_fill_hdr && !select_waveform_hdr && select_dat) begin
+	else if (checksum_update) begin
 		// XOR the data with the checksum
 		checksum[127:0] <= checksum[127:0] ^ data[127:0];
 	end

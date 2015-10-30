@@ -25,6 +25,7 @@ module adc_acq_sm (
     output reg adc_mux_wfm_hdr_sel,     // selects waveform header
     output reg adc_mux_dat_sel,         // selects data
     output reg adc_mux_checksum_select, // selects checksum 
+    output reg adc_mux_checksum_update, // update the checksum 
     output reg burst_cntr_init,         // initialize when triggered
     output reg burst_cntr_en,           // will be enabled once per burst
     output reg fill_cntr_en,            // will be enabled once per fill
@@ -137,6 +138,8 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
                 NS[IDLE] = 1'b1;
         end
 
+		// We use 3 states to initialize for a new fill.
+		// This happens once per trigger
         // Stay in FILL_INIT1 state for one period. 
         CS[FILL_INIT1]: begin
                 NS[FILL_INIT2] = 1'b1;
@@ -152,7 +155,9 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
                 NS[WAVEFORM_INIT1] = 1'b1;
         end
 
-        // Stay in WAVEFORM_INIT1 state for one period. 
+		// We use 3 states to initialize for each new waveform.
+		// This happens once per waveform
+         // Stay in WAVEFORM_INIT1 state for one period. 
         CS[WAVEFORM_INIT1]: begin
                 NS[WAVEFORM_INIT2] = 1'b1;
         end
@@ -167,6 +172,9 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
                 NS[RUN1] = 1'b1;
         end
 
+		// We use 4 states to collect and forward bursts of ADC data.
+		// Two 12-bit ADC samples, packed in a 32-bit word, are collected during each RUN state.
+		// At the end, the 128-bit data is forwarded and the checksum is updated.
         // Stay in RUN1 state for one period.
         CS[RUN1]: begin
                 NS[RUN2] = 1'b1;
@@ -183,6 +191,8 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
         end
 
         // Stay in RUN4 state for one period.
+        // If we have collected all of the bursts, we are done.
+        // Otherwise, loop back and get mor ADC data.
         CS[RUN4]: begin
             if (burst_cntr_zero)
                 NS[WAVEFORM_TST1] = 1'b1;
@@ -190,6 +200,7 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
                 NS[RUN1] = 1'b1;
         end
 
+		// We use 2 states to update and test the waveform counter
         // Stay in WAVEFORM_TST1 state for one period. 
         CS[WAVEFORM_TST1]: begin
                 NS[WAVEFORM_TST2] = 1'b1;
@@ -205,19 +216,22 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
             	NS[WAVEFORM_GAP1] = 1'b1;
     	end
  
+		// We use 2 states to initialize and test the gap counter
         // Stay in WAVEFORM_GAP1 state for one period. 
     	CS[WAVEFORM_GAP1]: begin
     	        NS[WAVEFORM_GAP2] = 1'b1;
     	end
 
-    	// Stay in WAVEFORM_GAP2 state until the gap counter is down to zero. 
+    	// Stay in WAVEFORM_GAP2 state until the gap counter is down to zero.
+    	// When it gets to zero, go initialize another waveform. 
     	CS[WAVEFORM_GAP2]: begin
     	    if (waveform_gap_zero)
     	    	NS[WAVEFORM_INIT1] = 1'b1;
        		else
     	    	NS[WAVEFORM_GAP2] = 1'b1;
     	end
- 
+
+		// We use 2 states to store the checksum. 
          // Stay in CHECKSUM1 state for one period.
         CS[CHECKSUM1]: begin
                 NS[CHECKSUM2] = 1'b1;
@@ -228,7 +242,8 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
                 NS[DDR3_WAIT] = 1'b1;
         end
 
-        // Stay in DDR3_WAIT state until writing to the DDR3 is done.
+        // After all data for all waveforms has been collected, we
+        // stay in DDR3_WAIT state until writing to the DDR3 is done.
         CS[DDR3_WAIT]: begin
             if (ddr3_wr_done_sync2)
                 NS[DONE] = 1'b1;
@@ -236,7 +251,8 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
                 NS[DDR3_WAIT] = 1'b1;
         end
 
-        // Stay in DONE state until the trigger is negated.
+        // Stay in the DONE state until the trigger is negated.
+        // This prevents false retriggering.
         CS[DONE]: begin
             if (adc_acq_mode_enabled && acq_trig_sync2)
                 NS[DONE] = 1'b1;
@@ -258,6 +274,7 @@ always @ (posedge clk) begin
         adc_mux_wfm_hdr_sel     <= 1'b0;
         adc_mux_dat_sel         <= 1'b0;
         adc_mux_checksum_select <= 1'b0;
+        adc_mux_checksum_update	<= 1'b0;
         waveform_cntr_init      <= 1'b0;
         waveform_cntr_en        <= 1'b0;
         waveform_gap_cntr_init  <= 1'b0;
@@ -287,7 +304,7 @@ always @ (posedge clk) begin
     end
 
     if (NS[FILL_INIT3]) begin
-       // write the header to the FIFO
+       // write the fill header to the FIFO
        adc_acq_out_valid        <= 1'b1;
         // increment the next fill address
        address_cntr_en          <= 1'b1;
@@ -309,7 +326,7 @@ always @ (posedge clk) begin
     end
 
     if (NS[WAVEFORM_INIT3]) begin
-		// write the header to the FIFO
+		// write the waveform header to the FIFO
 		adc_acq_out_valid        <= 1'b1;
 		// increment the next fill address
 		address_cntr_en          <= 1'b1;
@@ -318,19 +335,20 @@ always @ (posedge clk) begin
     if (NS[RUN1]) begin
         // decrement the burst counter
         burst_cntr_en           <= 1'b1;
-        // increment the next fill address
-        address_cntr_en         <= 1'b1;
-    end
+     end
 
     if (NS[RUN2]) begin
     end
 
     if (NS[RUN3]) begin
+    	// signal the mux to output the ADC burst
         adc_mux_dat_sel         <= 1'b1;
+        // update the checksum
+        adc_mux_checksum_update	<= 1'b1;
     end
 
     if (NS[RUN4]) begin
-        // write the burst to the FIFO
+        // write the ADC burst to the FIFO
         adc_acq_out_valid       <= 1'b1;
 		// increment the next fill address
         address_cntr_en          <= 1'b1;
@@ -354,14 +372,13 @@ always @ (posedge clk) begin
 	    waveform_gap_cntr_en <= 1'b1;
     end
 
-
     if (NS[CHECKSUM1]) begin
-        // send the checksum
+        // signal the mux to output the checksum
         adc_mux_checksum_select <= 1'b1;
     end
 
     if (NS[CHECKSUM2]) begin
-        // write the checksum burst to the FIFO
+        // write the checksum to the FIFO
         adc_acq_out_valid       <= 1'b1;
         // increment the next fill address
         address_cntr_en         <= 1'b1;
