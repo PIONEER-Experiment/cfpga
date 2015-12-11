@@ -30,12 +30,12 @@ module adc_dat_mux (
     input select_checksum,             //  selects checksum
     input checksum_update,				// update the checksum 
     // outputs
-    output reg [127:0] adc_acq_out_dat // 128-bit header or ADC data   
+    output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data   
 );
 
 //////////////////////
 // assemble the fill header
-wire [127:0] fill_header;
+wire [131:0] fill_header;
 assign fill_header[22:0]	= num_fill_bursts[22:0];          // 23-bit burst count, 
 assign fill_header[46:23]	= fill_num[23:0];                 // 24-bit fill number, always positive, 
 assign fill_header[48:47]	= fill_type[1:0];                 // 2-bit fill type
@@ -44,14 +44,16 @@ assign fill_header[75:50]	= {burst_start_adr[22:0], 3'b0};  // 23-bit DDR3 burst
 assign fill_header[87:76]	= num_waveforms[11:0];            // 12-bit number of waveforms to store per trigger
 assign fill_header[109:88]	= waveform_gap[21:0];	          // 22-bit idle time between waveforms
 assign fill_header[125:110]	= channel_tag[15:0];              // 16-bit channel info, 
-// make the last 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
+// make the next 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
 assign fill_header[127:126]	= 2'b01;
+// tag = '1' for fill header
+assign fill_header[131:128]	= 4'd1;
 
 //////////////////////
 // assemble the waveform header
-wire [127:0] waveform_header;
+wire [131:0] waveform_header;
 assign waveform_header[22:0]	= num_fill_bursts[22:0];          // 23-bit burst count, 
-assign waveform_header[24:23]		= fill_type[1:0];                 // 3-bit fill type
+assign waveform_header[24:23]	= fill_type[1:0];    	          // 2-bit fill type
 assign waveform_header[25]		= 1'b0;						      // 1-bit reserved for future 3-bit fill type
 assign waveform_header[51:26]	= {burst_start_adr[22:0], 3'b0};  // 23-bit DDR3 burst address, 3 LSBs always zero, 
 assign waveform_header[63:52]	= num_waveforms[11:0];            // 12-bit number of waveforms to store per trigger
@@ -59,12 +61,14 @@ assign waveform_header[75:64]	= current_waveform_num[11:0];     // 12-bit curren
 assign waveform_header[97:76]	= waveform_gap[21:0];	          // 22-bit idle time between waveforms
 assign waveform_header[113:98]	= channel_tag[15:0];              // 16-bit channel info, 
 assign waveform_header[125:114]	= 12'b0;		                  // 12-bit spare 
-// make the last 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
+// make the next 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
 assign waveform_header[127:126]	= 2'b01;
+// tag = '2' for waveform header
+assign waveform_header[131:128]	= 4'd2;
 
 ////////////////////
 // assemble the data
-wire [127:0] data;
+wire [131:0] data;
 // put 8 ADC samples into 8 16-bit words.
 // omit the overrange bit and sign extend into the upper 4 bits of each word
 assign data[11:0]	 = dat0_[12:1];                                  // 0 oldest sample data
@@ -91,22 +95,29 @@ assign data[111:108] = {dat3_[12], dat3_[12], dat3_[12], dat3_[12]}; // 6 sample
 assign data[123:112] = dat3_[25:14];                                 // 7 sample data
 assign data[127:124] = {dat3_[25], dat3_[25], dat3_[25], dat3_[25]}; // 7 sample sign extension
 
+// tag = '3' for data
+assign data[131:128]	= 4'd3;
+
 /////////////////////////////
 // create a checksum register
 reg [127:0] checksum;
+wire [3:0] checksum_tag;
+// tag = '4' for checksum
+assign checksum_tag[3:0] = 4'd4;
+
 always @(posedge clk) begin
 	if (select_fill_hdr && !select_waveform_hdr && !select_dat) begin
-		// initialize the checksum 
+		// initialize the checksum, exclude the 4-bit tag 
 		checksum[127:0] <= fill_header[127:0];
 	end
 	
 	else if (!select_fill_hdr && select_waveform_hdr &&  !select_dat) begin
-		// XOR the current fill header with the checksum
+		// XOR the current fill header with the checksum, exclude the 4-bit tag
 		checksum[127:0] <= checksum[127:0] ^ waveform_header[127:0];
 	end
 
 	else if (checksum_update) begin
-		// XOR the data with the checksum
+		// XOR the data with the checksum, exclude the 4-bit tag
 		checksum[127:0] <= checksum[127:0] ^ data[127:0];
 	end
 end
@@ -116,19 +127,19 @@ end
 always @(posedge clk) begin
 	if (select_fill_hdr) begin
 		// connect fill header bits
-		adc_acq_out_dat[127:0] <= fill_header[127:0];
+		adc_acq_out_dat[131:0] <= fill_header[131:0];
 	end
 	if (select_waveform_hdr) begin
 		// connect waveform header bits
-		adc_acq_out_dat[127:0] <= waveform_header[127:0];
+		adc_acq_out_dat[131:0] <= waveform_header[131:0];
 	end
 	if (select_dat) begin
 		// connect the data to the output
-		adc_acq_out_dat[127:0] <= data[127:0];
+		adc_acq_out_dat[131:0] <= data[131:0];
 	end
 	if (select_checksum) begin
 		// connect the checksum to the output
-		adc_acq_out_dat[127:0] <= checksum[127:0];
+		adc_acq_out_dat[131:0] <= {checksum_tag[3:0], checksum[127:0]};
 	end
 end
 

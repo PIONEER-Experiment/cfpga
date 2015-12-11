@@ -30,7 +30,7 @@ module adc_acq_top(
     output acq_enabled,             // the system is in acquisition mode, rather than readout mode
     output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
     output [23:0] fill_num,         // fill number for this fill
-    output [127:0] adc_acq_out_dat, // 128-bit header or ADC data
+    output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,       // current data should be stored in the FIFO
     output adc_clk,                 // ADC clock used by the FIFO
     output adc_acq_full_reset,      // reset all aspects of data collection/storage/readout
@@ -167,7 +167,7 @@ adc_dat_mux adc_dat_mux (
     .select_checksum(adc_mux_checksum_select),  // selects checksum, send the checksum to the FIFO 
     .checksum_update(adc_mux_checksum_update),      // update the checksum 
     // outputs
-    .adc_acq_out_dat(adc_acq_out_dat[127:0])    // 128-bit header or ADC data   
+    .adc_acq_out_dat(adc_acq_out_dat[131:0])    // 132-bit: 4-bit tag plus 128-bit header or ADC data   
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

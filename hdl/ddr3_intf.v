@@ -10,7 +10,7 @@ module ddr3_intf(
     input acq_enabled,                          // the system is in acquisition mode, rather than readout mode
     input ddr3_wr_fifo_empty,                   // input, data is available when this is not asserted
     output ddr3_wr_fifo_rd_en,                  // output, use and remove the data on the FIFO head
-    input [127:0] ddr3_wr_fifo_dat,             // input, data from the ddr3_write_fifo, to be written to the DDR3
+    input [131:0] ddr3_wr_fifo_dat,             // input, 132-bit 4-bit header plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
     output ddr3_wr_sync_err,                    // synchronization error flag
     output ddr3_wr_done,                        // asserted when the 'ddr3_wr_control' is in the DONE state
     input acq_done,                             // input from the adc_acq_sm, aquisition is done
@@ -98,7 +98,7 @@ ddr3_wr_control ddr3_wr_control (
     .reset(ddr3_domain_reset),
     .acq_enabled(acq_enabled_sync2),                // input, writing is enabled
     // Connections to the FIFO from the ADC
-    .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),     // input, next 'write' data from the ADC FIFO
+    .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),     // input, next 'write' data from the ADC FIFO
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),        // input, data is available when this is not asserted
     .ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),        // output, use and remove the data on the FIFO head
     // 'write' ports to memory

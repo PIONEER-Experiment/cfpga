@@ -85,12 +85,12 @@ wire [22:0] num_muon_bursts;            // number of sample bursts in a MUON fil
 wire [22:0] num_laser_bursts;           // number of sample bursts in a LASER fill
 wire [22:0] num_ped_bursts;             // number of sample bursts in a PEDESTAL fill
 wire [23:0] initial_fill_num;           // event number to assign to the first fill
-wire [127:0] adc_acq_out_dat;           // 128-bit header or ADC data to 'ddr3_write_fifo'
+wire [131:0] adc_acq_out_dat;           // 132-bit 4-bit tag plus header or ADC data to 'ddr3_write_fifo'
 wire [11:0] num_waveforms;				// number of waveforms to store per trigger
 wire [21:0] waveform_gap;				// idle time between waveforms 
 
 wire adc_acq_out_valid;
-wire [127:0] ddr3_wr_fifo_dat;          // 128-bit header or ADC data from 'ddr3_write_fifo'
+wire [131:0] ddr3_wr_fifo_dat;          // 132-bit 4-bit tag plus header or ADC data from 'ddr3_write_fifo'
 wire [127:0] ddr3_rd_dat;               // 128-bit header or ADC data from DDR3 memory
 wire [23:0] fill_num;                   // fill number for this fill
 wire [127:0] ddr3_rd_fifo_input_dat;    // memory burst headed toward 'ddr3_read_fifo'
@@ -205,7 +205,7 @@ adc_acq_top adc_acq_top (
     .acq_enabled(acq_enabled),                           // the system is in acquisition mode, rather than readout mode
     .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
     .fill_num(fill_num[23:0]),                           // fill number for this fill
-    .adc_acq_out_dat(adc_acq_out_dat[127:0]),            // 128-bit header or ADC data
+    .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
     .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
@@ -222,10 +222,10 @@ ddr3_write_fifo ddr3_write_fifo (
     .rst(adc_acq_full_reset),       // reset at startup or when requested
     .wr_clk(adc_clk),               // clock extracted from ADC DDR clock
     .rd_clk(ddr3_domain_clk),       // clock extracted from DDR3 block
-    .din(adc_acq_out_dat[127:0]),   // 128-bit header or ADC data
+    .din(adc_acq_out_dat[131:0]),   // 132-bit 4-bit tag plus 128-bit header or ADC data
     .wr_en(adc_acq_out_valid),      // current data should be stored in the FIFO
     .rd_en(ddr3_wr_fifo_rd_en),     // use and remove the data on the FIFO head
-    .dout(ddr3_wr_fifo_dat[127:0]), // data to be written to the DDR3
+    .dout(ddr3_wr_fifo_dat[131:0]), // 132-bit 4-bit tag plus 128-bit data to be written to the DDR3
     .full(ddr3_write_fifo_full),    // we don't currently use this
     .empty(ddr3_wr_fifo_empty)      // data is available when this is not asserted
 );
@@ -246,7 +246,7 @@ ddr3_intf ddr3_intf(
     .acq_enabled(acq_enabled),                   // the system is in acquisition mode, rather than readout mode
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),     // input, data is available when this is not asserted
     .ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),     // output, use and remove the data on the FIFO head
-    .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),  // input, data from the ddr3_write_fifo, to be written to the DDR3
+    .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),  // input, 132-bit 4-bit tag plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
     .ddr3_wr_sync_err(),                         // synchronization error flag
     .ddr3_wr_done(ddr3_wr_done),                 // asserted when the 'ddr3_wr_control' is in the DONE state
     .acq_done(acq_done),                         // input, acquisition is done

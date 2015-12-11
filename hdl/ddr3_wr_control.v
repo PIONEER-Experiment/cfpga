@@ -9,7 +9,7 @@ module ddr3_wr_control (
     input reset,
     (* mark_debug = "true" *) input acq_enabled,                    // input, writing is enabled
     // Connections to the FIFO from the ADC
-    (* mark_debug = "true" *) input [127:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
+    (* mark_debug = "true" *) input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
     input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
     output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
     // 'write' ports to memory
@@ -55,8 +55,8 @@ end
 assign fill_header_wr_dat[127:0] = fill_header_wr_dat_reg[127:0];
 
 // Create an address generator
-// Initialize it from the 'start_address' in the header
-// Increment it whenever we the address is accepted ( we get a 'wr_app_rdy' while asserting 'wr_app_en') 
+// Initialize it from the 'start_address' in the fill_header
+// Increment it whenever the address is accepted ( we get a 'wr_app_rdy' while asserting 'wr_app_en') 
 reg [22:0] address_gen;
 reg init_address_gen;   // will be asserted by the state machine
 always @ (posedge clk) begin
@@ -67,18 +67,19 @@ always @ (posedge clk) begin
 end
 assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 
-// Create an address counter
-// Initialize it from the 'burst_cnt' in the header
+// Create an address counter that will count how many addresses are accepted
+// For storing the fill_header or the checksum, initialize it to 1.
+// For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever an address is accepted. This happens when
 // we are asserting 'wr_app_en' and receiving 'wr_app_rdy'.
 (* mark_debug = "true" *) reg [23:0] address_cntr;
 (* mark_debug = "true" *) reg init_address_cntr;   // will be asserted by the state machine
-(* mark_debug = "true" *) reg adjust_address_cntr; // add 2 to account for header and checksum
+(* mark_debug = "true" *) reg init_address_cntr_to_1;   // will be asserted by the state machine
 (* mark_debug = "true" *) wire address_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) address_cntr[23:0] <= 24'b0;
-    else if (init_address_cntr) address_cntr[23:0] <= ddr3_wr_fifo_dat[22:0];
-    else if (adjust_address_cntr) address_cntr[23:0] <= address_cntr[23:0] + 2;
+    else if (init_address_cntr_to_1) address_cntr[23:0] <= 1;
+    else if (init_address_cntr) address_cntr[23:0] <= ddr3_wr_fifo_dat[22:0] + 1; // num_fill_bursts + 1
     else if (address_cntr_zero) address_cntr[23:0] <= 24'b0; 
     else if (address_accept) address_cntr[23:0] <= address_cntr[23:0] - 1;
 end
@@ -86,17 +87,18 @@ end
 assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 
 // Create a burst counter
-// Initialize it from the header
+// For storing the fill_header or the checksum, initialize it to 1.
+// For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever we get a successful write. This happens when
 // we are asserting 'wdf_wren' and receiving 'wdf_rdy'.
 (* mark_debug = "true" *) reg [23:0] burst_cntr;
 (* mark_debug = "true" *) reg init_burst_cntr;   // will be asserted by the state machine
-(* mark_debug = "true" *) reg adjust_burst_cntr; // add 2 to account for header and checksum
+(* mark_debug = "true" *) reg init_burst_cntr_to_1;   // will be asserted by the state machine
 (* mark_debug = "true" *) wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) burst_cntr[23:0] <= 24'b0;
-    else if (init_burst_cntr) burst_cntr[23:0] <= ddr3_wr_fifo_dat[22:0];
-    else if (adjust_burst_cntr) burst_cntr[23:0] <= burst_cntr[23:0] + 2;
+    else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 1;
+    else if (init_burst_cntr) burst_cntr[23:0] <= ddr3_wr_fifo_dat[22:0] + 1;
     else if (burst_cntr_zero) burst_cntr[23:0] <= 24'b0; 
     else if (data_accept) burst_cntr[23:0] <= burst_cntr[23:0] - 1;
 end
@@ -129,23 +131,25 @@ assign address_allow = ~(address_control == 0);
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
     IDLE        = 4'd0,
-    TST_HDR_TAG = 4'd1,
+    TST_TAG		= 4'd1,
     SYNC_ERR    = 4'd2,
-    INIT        = 4'd3,
-    ADJ_CNT     = 4'd4,
-    WRITE       = 4'd5,
-    WRITE_HDR   = 4'd6,
-    DONE        = 4'd7;
+    INIT_FILL   = 4'd3,
+    INIT_WFM    = 4'd4,
+    INIT_CKSM   = 4'd5,
+    WRITE       = 4'd6,
+    WRITE_CKSM  = 4'd7,
+    WRITE_HDR	= 4'd8,
+    DONE        = 4'd9;
     
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [7:0] /* synopsys enum STATE_TYPE */ CS;
-(* mark_debug = "true" *) reg [7:0] /* synopsys enum STATE_TYPE */ NS;
+(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
     if (reset || !acq_enabled) begin
-        CS <= 7'b0;             // set all state bits to 0
+        CS <= 10'b0;             // set all state bits to 0
         CS[IDLE] <= 1'b1;       // set IDLE state bit to 1
     end
     else
@@ -154,7 +158,7 @@ end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
 always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero or acq_done_sync2)     begin
-    NS = 7'b0;                  // default all bits to zero; will overrride one bit
+    NS = 10'b0;                  // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
 
@@ -163,21 +167,29 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
         // in not empty, then the data will be vaild
         CS[IDLE]: begin
             if (ddr3_wr_fifo_empty)
-                    // stay here if there is no data
-                    NS[IDLE] = 1'b1;
+            	// stay here if there is no data
+                NS[IDLE] = 1'b1;
             else
-                    NS[TST_HDR_TAG] = 1'b1;
+                // figure out how to handle the data
+                NS[TST_TAG] = 1'b1;
         end
 
-        // Stay in TST_HDR_TAG state for one period.
-        // If the 2 MSBs of the data are a valid header tag (2'b01), then proceed.
-        // If not, then we are out of sync and need to flag an error 
-        CS[TST_HDR_TAG]: begin
-            if (ddr3_wr_fifo_dat[127:126] == 2'b01)
-                // we have a valid header
-                NS[INIT] = 1'b1;
-            else
-                // we are not synchronized. Go raise an error condition
+        // Stay in TST_TAG state for one period.
+        // Check the 4 MSBs of the data for valid tag types. Possibilities are
+        // 'fill_header' tag (4'd1), 'waveform_header' tag (4'd2, and 'checksum' tag (4'd4).
+        // Anything else says that we are out of sync and need to flag an error 
+        CS[TST_TAG]: begin
+            if (ddr3_wr_fifo_dat[131:128] == 4'd1)
+                // we have a valid 'fill_header'
+                NS[INIT_FILL] = 1'b1;
+            else if (ddr3_wr_fifo_dat[131:128] == 4'd2)
+                 // we have a valid 'waveform_header'
+	            NS[INIT_WFM] = 1'b1;
+            else if (ddr3_wr_fifo_dat[131:128] == 4'd4)
+	            // we have a valid 'checksum'
+	            NS[INIT_CKSM] = 1'b1;
+	        else
+               // we are not synchronized. Go raise an error condition
                 NS[SYNC_ERR] = 1'b1;
         end
 
@@ -187,28 +199,47 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
                NS[SYNC_ERR] = 1'b1;
         end
 
-        // Stay in INIT state for one period.
+        // Stay in INIT_FILL state for one period.
         // Initialize the address and data counters. Store a copy of the header
         // for writing to the fill header fifo
-        CS[INIT]: begin
-                NS[ADJ_CNT] = 1'b1;
-        end
-
-        // Stay in ADJ_CNT state for one period.
-        // Make necessary adjustments to the address and burst counters to account for
-        // how we determine when we are done 
-        CS[ADJ_CNT]: begin
+        CS[INIT_FILL]: begin
                 NS[WRITE] = 1'b1;
         end
 
-        // Stay in WRITE state until all of the data has been written to memory.
+        // Stay in INIT_WFM state for one period.
+        // Initialize the address and data counters.
+        CS[INIT_WFM]: begin
+                NS[WRITE] = 1'b1;
+        end
+
+        // Stay in WRITE state until all of the data for the fill_header or waveform_header
+        // has been written to memory.
         CS[WRITE]: begin
             if (burst_cntr_zero && address_cntr_zero)
                 // we have written the requested number of addresses and bursts
-                NS[WRITE_HDR] = 1'b1;
+                // go back and wait for another wavweform or the checksum
+                NS[IDLE] = 1'b1;
             else
                 // More addresses or data to write, stay here
                 NS[WRITE] = 1'b1;
+        end
+
+        // Stay in INIT_CKSM state for one period.
+        // Initialize the address and data counters to stuff in the checksum.
+        CS[INIT_CKSM]: begin
+                NS[WRITE_CKSM] = 1'b1;
+        end
+
+       // Stay in WRITE_CKSM state until all of the data for the checksum
+        // has been written to memory.
+        CS[WRITE_CKSM]: begin
+            if (burst_cntr_zero && address_cntr_zero)
+                // we have written the requested number of addresses and bursts
+                // Go write the header tot he fill_header_fifo
+                NS[WRITE_HDR] = 1'b1;
+            else
+                // More addresses or data to write, stay here
+                NS[WRITE_CKSM] = 1'b1;
         end
 
         // Stay in WRITE_HDR state for one period.
@@ -237,10 +268,10 @@ always @ (posedge clk) begin
         ddr3_wr_done        <= 1'b0;
         latch_header        <= 1'b0;
         init_address_gen    <= 1'b0;
+		init_address_cntr_to_1	<= 1'b0;
         init_address_cntr   <= 1'b0;
         init_burst_cntr     <= 1'b0;
-        adjust_burst_cntr   <= 1'b0;
-        adjust_address_cntr <= 1'b0;
+		init_burst_cntr_to_1	<= 1'b0;
         ddr3_wr_sync_err    <= 1'b0;
         fill_header_wr_en   <= 1'b0;
 
@@ -248,33 +279,45 @@ always @ (posedge clk) begin
     if (NS[IDLE]) begin
     end
     
-    if (NS[TST_HDR_TAG]) begin
+    if (NS[TST_TAG]) begin
         // latch the header data for use later
         latch_header        <= 1'b1;
     end
 
-    if (NS[INIT]) begin
-        // initialize the address counter from the header
+    if (NS[INIT_FILL]) begin
+        // initialize the address from the header
         init_address_gen    <= 1'b1;
+        // initialize the address counter to 1
+		init_address_cntr_to_1	<= 1'b0;
+        // initialize the burst counter to 1
+		init_burst_cntr_to_1	<= 1'b0;
+    end
+ 
+    if (NS[INIT_WFM]) begin
+        // we do not initialize the address
         // initialize the address counter from the header
         init_address_cntr   <= 1'b1;
         // initialize the burst counter from the header
         init_burst_cntr     <= 1'b1;
     end
- 
-    if (NS[ADJ_CNT]) begin
-        // increment the address counter to adjust for the checksum
-        adjust_address_cntr <= 1'b1;
-        // increment the burst counter to adjust for the checksum
-        adjust_burst_cntr   <= 1'b1;
-    end
 
+    if (NS[INIT_CKSM]) begin
+        // we do not initialize the address
+        // initialize the address counter to 1
+		init_address_cntr_to_1	<= 1'b0;
+        // initialize the burst counter to 1
+		init_burst_cntr_to_1	<= 1'b0;
+    end
+    
     if (NS[WRITE]) begin
     end
 
     if (NS[SYNC_ERR]) begin
         // assert an error flag
         ddr3_wr_sync_err    <= 1'b1;
+    end
+
+    if (NS[WRITE_CKSM]) begin
     end
 
     if (NS[WRITE_HDR]) begin
