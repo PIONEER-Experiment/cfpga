@@ -288,9 +288,9 @@ always @ (posedge clk) begin
         // initialize the address from the header
         init_address_gen    <= 1'b1;
         // initialize the address counter to 1
-		init_address_cntr_to_1	<= 1'b0;
+		init_address_cntr_to_1	<= 1'b1;
         // initialize the burst counter to 1
-		init_burst_cntr_to_1	<= 1'b0;
+		init_burst_cntr_to_1	<= 1'b1;
     end
  
     if (NS[INIT_WFM]) begin
@@ -304,9 +304,9 @@ always @ (posedge clk) begin
     if (NS[INIT_CKSM]) begin
         // we do not initialize the address
         // initialize the address counter to 1
-		init_address_cntr_to_1	<= 1'b0;
+		init_address_cntr_to_1	<= 1'b1;
         // initialize the burst counter to 1
-		init_burst_cntr_to_1	<= 1'b0;
+		init_burst_cntr_to_1	<= 1'b1;
     end
     
     if (NS[WRITE]) begin
