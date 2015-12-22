@@ -79,7 +79,7 @@ assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 always @ (posedge clk) begin
     if (reset) address_cntr[23:0] <= 24'b0;
     else if (init_address_cntr_to_1) address_cntr[23:0] <= 1;
-    else if (init_address_cntr) address_cntr[23:0] <= ddr3_wr_fifo_dat[22:0] + 1; // num_fill_bursts + 1
+    else if (init_address_cntr) address_cntr[23:0] <= ddr3_wr_fifo_dat[25:3] + 1; // num_fill_bursts + 1
     else if (address_cntr_zero) address_cntr[23:0] <= 24'b0; 
     else if (address_accept) address_cntr[23:0] <= address_cntr[23:0] - 1;
 end
@@ -98,7 +98,7 @@ assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 always @ (posedge clk) begin
     if (reset) burst_cntr[23:0] <= 24'b0;
     else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 1;
-    else if (init_burst_cntr) burst_cntr[23:0] <= ddr3_wr_fifo_dat[22:0] + 1;
+    else if (init_burst_cntr) burst_cntr[23:0] <= ddr3_wr_fifo_dat[25:3] + 1;
     else if (burst_cntr_zero) burst_cntr[23:0] <= 24'b0; 
     else if (data_accept) burst_cntr[23:0] <= burst_cntr[23:0] - 1;
 end
@@ -304,9 +304,9 @@ always @ (posedge clk) begin
     if (NS[INIT_CKSM]) begin
         // we do not initialize the address
         // initialize the address counter to 1
-		init_address_cntr_to_1	<= 1'b1;
+		init_address_cntr_to_1	<= 1'b0;
         // initialize the burst counter to 1
-		init_burst_cntr_to_1	<= 1'b1;
+		init_burst_cntr_to_1	<= 1'b0;
     end
     
     if (NS[WRITE]) begin
