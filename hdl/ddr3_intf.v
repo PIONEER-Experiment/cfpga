@@ -20,7 +20,7 @@ module ddr3_intf(
     input local_domain_clk,                     // input, the local interface synchronous clock
     output fill_header_fifo_empty,              // output, a header is available when not asserted
     input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
-    output [127:0] fill_header_fifo_out,        // output, data at the head of the FIFO
+    output [151:0] fill_header_fifo_out,        // output, data at the head of the FIFO
     input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
     input [23:0] ddr3_rd_burst_cnt,             // input, the number of bursts to read
     input enable_reading,                       // input, initialize the address generator and both counters, go
@@ -64,12 +64,15 @@ end
 
 wire [25:0] ddr3_wr_addr;
 wire [25:0] ddr3_rd_addr;
-wire [127:0] fill_header_wr_dat;
+wire [151:0] fill_header_wr_dat;
 wire [127:0] fill_header_rd_dat;
 wire [26:0] app_addr;
 wire [2:0] app_cmd;
 wire [127:0] ddr3_rd_dat;
 wire [127:0] ddr3_wr_dat;
+
+// just pass the DDR3 data thru to the FIFO
+assign ddr3_rd_fifo_input_dat[127:0] = ddr3_rd_dat[127:0];
 
 ////////////////////////////////////////////////////////////////
 // Connect the module that manages the address and command ports
@@ -112,7 +115,7 @@ ddr3_wr_control ddr3_wr_control (
     .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
     .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
     // 'write' ports to the fill_header_fifo
-    .fill_header_wr_dat(fill_header_wr_dat[127:0]), // header data
+    .fill_header_wr_dat(fill_header_wr_dat[151:0]), // header data
     .fill_header_wr_en(fill_header_wr_en),          // store header in FIFO
     .ddr3_wr_sync_err(ddr3_wr_sync_err),            // synchronization error flag
     // status signals connected to the ADC acquisition machine
@@ -135,14 +138,14 @@ ddr3_rd_control ddr3_rd_control (
     // 'read' ports to memory
     .app_rd_data_end(app_rd_data_end),                      // input, last data cycle
     .app_rd_data_valid(app_rd_data_valid),                  // input, memory data is valid  
-    .app_rd_data(ddr3_rd_dat[127:0]),                       // input, memory data   
+    //.app_rd_data(ddr3_rd_dat[127:0]),                       // input, memory data   
     // 'read' ports to address controller
     .ddr3_rd_addr(ddr3_rd_addr[25:0]),                      // output, next 'read' address
     .rd_app_rdy(rd_app_rdy),                                // input, increment the 'read' address
     .rd_app_en(rd_app_en),                                  // output, request to perform a 'read'
     // ports to the 'read' fifo
     .ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),                // data is valid, so put it in the READ FIFO    
-    .ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
+    //.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
     .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)     // the last burst for this fill 
 );
@@ -155,10 +158,10 @@ fill_header_fifo fill_header_fifo (
     .rst(ddr3_domain_reset),                // reset at startup or when requested
     .wr_clk(ddr3_domain_clk),               // clock used by 'write' controller
     .rd_clk(local_domain_clk),              // clock used by 'rd_fill' controller
-    .din(fill_header_wr_dat[127:0]),        // header data to write
+    .din(fill_header_wr_dat[151:0]),        // header data to write
     .wr_en(fill_header_wr_en),              // store the fill header 
     .rd_en(fill_header_fifo_rd_en),             // read the next word of the fill header
-    .dout(fill_header_fifo_out[127:0]),     // fill header 
+    .dout(fill_header_fifo_out[151:0]),     // fill header 
     .full(),                                // the header fifo is full, WHAT DO WE DO?
     .empty(fill_header_fifo_empty)          // a fill header is available when this is not asserted
 );

@@ -23,7 +23,7 @@ module ddr3_wr_control (
     input [22:0] fixed_ddr3_start_addr,
     input en_fixed_ddr3_start_addr,
     // 'write' ports to the fill_header_fifo
-    output [127:0] fill_header_wr_dat,    // header data
+    output [151:0] fill_header_wr_dat,    // header data
     output reg fill_header_wr_en,         // store header in FIFO
     // synchronization error flag
     output reg ddr3_wr_sync_err,
@@ -44,15 +44,30 @@ end
 assign address_accept   = (wr_app_en & wr_app_rdy);         // we presented an address and it was accepted
 assign data_accept      = (app_wdf_wren & app_wdf_rdy);     // we presented data and it was accepted
 wire address_allow; // allow attempts to write an address
- 
+
+// Create a counter to hold the total burst count for a fill. It will include the
+// fill header, all waveform headers and data, and the checksum. Clear it at the 
+// start of a fill. Increment it every time an address is accepted by the DDR3 memory.
+reg [23:0] total_burst_count;
+reg reset_total_burst_count;
+always @ (posedge clk) begin
+	if (reset || reset_total_burst_count)
+		total_burst_count[23:0] <= {24{1'b0}};
+	else if (address_accept)
+		total_burst_count[23:0] <= total_burst_count[23:0] + 1;
+end
+	 
 // Create a register to hold the header for future writing to the fill-header FIFO
-reg [127:0] fill_header_wr_dat_reg;
+reg [151:0] fill_header_wr_dat_reg;
 reg latch_header;   // will be asserted by the state machine
 always @ (posedge clk) begin
-    if (reset) fill_header_wr_dat_reg <= 128'b0;
-    else if (latch_header) fill_header_wr_dat_reg[127:0] <= ddr3_wr_fifo_dat[127:0];
+    if (reset) fill_header_wr_dat_reg <= {152{1'b0}};
+    else if (latch_header) begin
+    	fill_header_wr_dat_reg[127:0] <= ddr3_wr_fifo_dat[127:0];	// leave off the 4 tag bits
+    	fill_header_wr_dat_reg[151:128] <= total_burst_count[23:0];	// append the total burst count
+	end
 end
-assign fill_header_wr_dat[127:0] = fill_header_wr_dat_reg[127:0];
+assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];
 
 // Create an address generator
 // Initialize it from the 'start_address' in the fill_header
@@ -272,6 +287,7 @@ always @ (posedge clk) begin
         init_address_cntr   <= 1'b0;
         init_burst_cntr     <= 1'b0;
 		init_burst_cntr_to_1	<= 1'b0;
+		reset_total_burst_count	<= 1'b0;
         ddr3_wr_sync_err    <= 1'b0;
         fill_header_wr_en   <= 1'b0;
 
@@ -291,6 +307,8 @@ always @ (posedge clk) begin
 		init_address_cntr_to_1	<= 1'b1;
         // initialize the burst counter to 1
 		init_burst_cntr_to_1	<= 1'b1;
+       // reset the total_burst counter to 0
+		reset_total_burst_count	<= 1'b1;
     end
  
     if (NS[INIT_WFM]) begin

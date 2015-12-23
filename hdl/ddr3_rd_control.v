@@ -15,20 +15,21 @@ module ddr3_rd_control (
 	// 'read' ports to memory
 	input app_rd_data_end,					// input, last data cycle
 	input app_rd_data_valid,				// input, memory data is valid	
-	input [127:0] app_rd_data,				// input, memory data	
+	//input [127:0] app_rd_data,				// input, memory data	
 	// 'read' ports to address controller
 	input rd_app_rdy,						// input, increment the 'read' address
 	output [25:0] ddr3_rd_addr,				// output, next 'read' address
 	output rd_app_en,					    // output, request to perform a 'read'
 	// ports to the 'read' fifo
 	output ddr3_rd_fifo_wr_en,             // data is valid, so put it in the READ FIFO	
-	output [127:0] ddr3_rd_fifo_input_dat, // output, memory data
+	//output [127:0] ddr3_rd_fifo_input_dat, // output, memory data
 	input ddr3_rd_fifo_almost_full,        // there is not much room left
 	output ddr3_rd_fifo_input_tlast		   // the last burst for this fill	
 );
 
 // just pass the DDR3 data thru to the FIFO
-assign ddr3_rd_fifo_input_dat[127:0] = app_rd_data[127:0];
+// moved this assignment up 1 level to 'ddr3_intf.v' to eliminate warning meaasges about unused signals
+//assign ddr3_rd_fifo_input_dat[127:0] = app_rd_data[127:0];
 
 // synchronize the 'enable_reading' request to the DDR3 clock domain.
 // Also, make a single period pulse for initialization

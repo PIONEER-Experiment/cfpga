@@ -41,7 +41,7 @@ module cc_rd_fill_sm(
 	// interface to the header FIFO
 	input fill_header_fifo_empty,			// a header is available when not asserted
 	output reg fill_header_fifo_rd_en,		// remove the current data from the FIFO
-	input [127:0] fill_header_fifo_out,		// data at the head of the FIFO
+	input [151:0] fill_header_fifo_out,		// data at the head of the FIFO
 	input [22:0] fixed_ddr3_start_addr,
 	input en_fixed_ddr3_start_addr,
 
@@ -254,12 +254,13 @@ always @ (posedge clk) begin
 		if (en_fixed_ddr3_start_addr) // if fixed start address is enabled
 			ddr3_rd_start_addr[22:0] <= fixed_ddr3_start_addr[22:0];
 		else
-			ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[57:35];
+			ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[75:53];
 
-		// load the burst counter, add '2' for header and footer
-		ddr3_rd_burst_cnt[23:0] <= fill_header_fifo_out[87:64] + 2;
-		// load the words_to_send counter
-		ddr3_words_to_send[25:0] <= {(fill_header_fifo_out[87:64] + 2), 2'b0};
+		// load the burst counter from the high 24 bits of 'fill_header_fifo_out'.
+		// It already accounts for all headers and trailers
+		ddr3_rd_burst_cnt[23:0] <= fill_header_fifo_out[151:128];
+		// load the words_to_send counter - these are 32-bit words, so left-shift the burst count
+		ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
 		// remove the word from the FIFO head
  		fill_header_fifo_rd_en <= 1'b1;
 	end

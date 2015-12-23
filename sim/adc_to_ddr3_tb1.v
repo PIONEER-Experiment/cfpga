@@ -37,6 +37,10 @@ module adc_to_ddr3_tb1;
     reg [20:0] num_ped_bursts;   // number of sample bursts in a PEDESTAL fill
     reg [23:0] initial_fill_num;  // event number to assign to the first fill
     reg initial_fill_num_wr;      // write-strobe to store the initial_fill_num
+	reg [11:0] num_waveforms;			// number of waveforms to store per trigger
+    reg [21:0] waveform_gap;			// idle time between waveforms 
+	reg [22:0] fixed_ddr3_start_addr,
+    reg en_fixed_ddr3_start_addr,
 	reg acq_enable0;              // indicates enabled for triggers, and fill type
     reg acq_enable1;              // indicates enabled for triggers, and fill type
     reg acq_trig;                 // trigger the logic to start collecting data
@@ -123,6 +127,10 @@ adc_to_ddr3_block uut(
     .num_ped_bursts(num_ped_bursts ),   // number of sample bursts in a PEDESTAL fill
     .initial_fill_num( initial_fill_num),  // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr ),      // write-strobe to store the initial_fill_num
+	.num_waveforms(num_waveforms),			// number of waveforms to store per trigger
+    .waveform_gap(waveform_gap),			// idle time between waveforms 
+	.fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
+    .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 	.acq_enable0(acq_enable0),
 	.acq_enable1(acq_enable1),
     .acq_trig(acq_trig ),                 // trigger the logic to start collecting data
@@ -185,6 +193,10 @@ adc_to_ddr3_block uut(
         num_ped_bursts[20:0] = 21'h000000;   // number of sample bursts in a PEDESTAL fill
         initial_fill_num[23:0] = 24'h000000;  // event number to assign to the first fill
         initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
+		num_waveforms = 12'b0;			// number of waveforms to store per trigger
+    	waveform_gap = 21'b0;			// idle time between waveforms 
+ 		fixed_ddr3_start_addr[22:0] = 23'h000000;,
+    	en_fixed_ddr3_start_addr = 1'b0;
         acq_enable0 = 1'b0;                  // arm the logic to accept triggers
         acq_enable1 = 1'b0;                  // arm the logic to accept triggers
         acq_trig = 1'b0;                 // trigger the logic to start collecting data

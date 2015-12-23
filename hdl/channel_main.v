@@ -115,7 +115,7 @@ wire [31:0] genreg_rd_data;
 wire [31:0] adc_intf_rd_data;
 wire [31:0] adc_intf_wr_data;
 
-wire [127:0] fill_header_fifo_out;
+wire [151:0] fill_header_fifo_out;
 wire [22:0] ddr3_rd_burst_addr;
 
 wire [4:0] adc_buf_data_delay;
@@ -257,7 +257,7 @@ ddr3_intf ddr3_intf(
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
     .fill_header_fifo_empty(fill_header_fifo_empty),     // output, a header is available when not asserted
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // input, remove the current data from the FIFO
-    .fill_header_fifo_out(fill_header_fifo_out[127:0]),  // output, data at the head of the FIFO
+    .fill_header_fifo_out(fill_header_fifo_out[151:0]),  // output, data at the head of the FIFO
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),       // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),         // input, the number of bursts to read
     .enable_reading(enable_reading),                     // input, initialize the address generator and both counters, go
@@ -467,7 +467,7 @@ command_top command_top(
     // interface to the ADC data memory and header FIFO
     .fill_header_fifo_empty(fill_header_fifo_empty),    // output, a header is available when not asserted
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),    // input, remove the current data from the FIFO
-    .fill_header_fifo_out(fill_header_fifo_out[127:0]), // output, data at the head of the FIFO
+    .fill_header_fifo_out(fill_header_fifo_out[151:0]), // output, data at the head of the FIFO
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),      // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
     .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go

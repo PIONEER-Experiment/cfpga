@@ -30,7 +30,7 @@ module command_top(
 	// interface to the ADC data memory and header FIFO
 	input fill_header_fifo_empty,		// input, a header is available when not asserted
 	output fill_header_fifo_rd_en,		// output, remove the current data from the FIFO
-	input [127:0] fill_header_fifo_out,	// input, data at the head of the FIFO
+	input [151:0] fill_header_fifo_out,	// input, data at the head of the FIFO
 	output [22:0] ddr3_rd_start_addr,	// the address of the first requested 128-bit burst
 	output [23:0] ddr3_rd_burst_cnt,    // input, the number of bursts to read
 	output enable_reading,      		// input, initialize the address generator and both counters, go
@@ -373,7 +373,7 @@ module command_top(
 		// interface to the header FIFO
 		.fill_header_fifo_empty(fill_header_fifo_empty),	// a header is available when not asserted
 		.fill_header_fifo_rd_en(fill_header_fifo_rd_en),	// remove the current data from the FIFO
-		.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// data at the head of the FIFO
+		.fill_header_fifo_out(fill_header_fifo_out[151:0]),	// data at the head of the FIFO
 		.fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
 		.en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 		// interface to the DDR3 memory 
