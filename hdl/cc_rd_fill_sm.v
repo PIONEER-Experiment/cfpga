@@ -244,6 +244,9 @@ always @ (posedge clk) begin
 	end
 	
 	if (NS[CHK_FIFO_EMPTY]) begin
+	   //if (~fill_header_fifo_empty) 		
+	   // remove the word from the FIFO head
+       //fill_header_fifo_rd_en <= 1'b1;
 	end
 
 	if (NS[ERROR1]) begin
@@ -261,8 +264,8 @@ always @ (posedge clk) begin
 		ddr3_rd_burst_cnt[23:0] <= fill_header_fifo_out[151:128];
 		// load the words_to_send counter - these are 32-bit words, so left-shift the burst count
 		ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
-		// remove the word from the FIFO head
- 		fill_header_fifo_rd_en <= 1'b1;
+	   // remove the word from the FIFO head
+       fill_header_fifo_rd_en <= 1'b1;		
 	end
 
 	if (NS[ECHO_CSN1]) begin

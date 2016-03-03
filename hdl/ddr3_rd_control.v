@@ -141,7 +141,7 @@ always @ (CS or enable_reading_sync3 or burst_cntr_zero) begin
 				NS[DONE] = 1'b1;
 		end
 	endcase
-end // combinational always block to determine next state
+end // combinational always block to determine next state	
 	
 // indicate that we want to supply an address
 // 'acq_enabled' must be negated to allow reading

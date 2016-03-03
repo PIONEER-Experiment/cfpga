@@ -18,9 +18,9 @@ module command_sm(
 	input clk,					// local clock
 	input reset,				// active-hi
 	input rx_tvalid,            // valid data is available
-    input [0:3] rx_tkeep,       // which bytes are valid, should always be all of them
-    input rx_tlast,             // final word in the frame
-    output rx_tready,           // signal that we are accepting the data from the fifo
+  input [0:3] rx_tkeep,       // which bytes are valid, should always be all of them
+  input rx_tlast,             // final word in the frame
+  output rx_tready,           // signal that we are accepting the data from the fifo
 	output ser_num_le,          // latch the serial number
 	output command_le,          // latch the command
 	output run_cmd_sm,       	// run a state machine

@@ -15,14 +15,14 @@ module adc_dat_mux (
     input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
-    (* mark_debug = "true" *) input [15:0] channel_tag, 		   // stuff about the channel to put in the header
-    (* mark_debug = "true" *) input [1:0] fill_type,             // to determine how much data to collect
-    (* mark_debug = "true" *) input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
+    input [15:0] channel_tag, 		   // stuff about the channel to put in the header
+    input [1:0] fill_type,             // to determine how much data to collect
+    input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
     input [22:0] burst_start_adr,      // first DDR3 memory location for this fill
-    (* mark_debug = "true" *) input [23:0] fill_num,             // fill number for this fill
-    (* mark_debug = "true" *) input [11:0] num_waveforms,	       // number of waveforms to store per trigger
+    input [23:0] fill_num,             // fill number for this fill
+    input [11:0] num_waveforms,	       // number of waveforms to store per trigger
 	input [11:0] current_waveform_num, // the current waveform number, to be used in header
-    (* mark_debug = "true" *) input [21:0] waveform_gap,	       // idle time between waveforms
+    input [21:0] waveform_gap,	       // idle time between waveforms
     input clk,
     input select_fill_hdr,     			// selects fill header
     input select_waveform_hdr,  		// selects waveform header
@@ -36,10 +36,10 @@ module adc_dat_mux (
 //////////////////////
 // assemble the fill header
 wire [131:0] fill_header;
-assign fill_header[22:0]	= num_fill_bursts[22:0];          // 23-bit burst count, 
-assign fill_header[46:23]	= fill_num[23:0];                 // 24-bit fill number, always positive, 
-assign fill_header[48:47]	= fill_type[1:0];                 // 2-bit fill type
-assign fill_header[49]		= 1'b0;						      // 1-bit reserved for future 3-bit fill type
+assign fill_header[23:0]	= fill_num[23:0];                 // 24-bit fill number, always positive, 
+assign fill_header[25:24]	= fill_type[1:0];                 // 2-bit fill type
+assign fill_header[26]		= 1'b0;						      // 1-bit reserved for future 3-bit fill type
+assign fill_header[49:27]	= num_fill_bursts[22:0];          // 23-bit burst count, 
 assign fill_header[75:50]	= {burst_start_adr[22:0], 3'b0};  // 23-bit DDR3 burst address, 3 LSBs always zero, 
 assign fill_header[87:76]	= num_waveforms[11:0];            // 12-bit number of waveforms to store per trigger
 assign fill_header[109:88]	= waveform_gap[21:0];	          // 22-bit idle time between waveforms

@@ -32,15 +32,15 @@ module adc_to_ddr3_tb1;
 	reg clk250;						// for DDR3 operation
     reg clk125;						// for buffer readout
     reg [15:0] channel_tag;   // stuff about the channel to put in the header
-    reg [20:0] num_muon_bursts;  // number of sample bursts in a MUON fill
-    reg [20:0] num_laser_bursts; // number of sample bursts in a LASER fill
-    reg [20:0] num_ped_bursts;   // number of sample bursts in a PEDESTAL fill
+    reg [22:0] num_muon_bursts;  // number of sample bursts in a MUON fill
+    reg [22:0] num_laser_bursts; // number of sample bursts in a LASER fill
+    reg [22:0] num_ped_bursts;   // number of sample bursts in a PEDESTAL fill
     reg [23:0] initial_fill_num;  // event number to assign to the first fill
     reg initial_fill_num_wr;      // write-strobe to store the initial_fill_num
 	reg [11:0] num_waveforms;			// number of waveforms to store per trigger
     reg [21:0] waveform_gap;			// idle time between waveforms 
-	reg [22:0] fixed_ddr3_start_addr,
-    reg en_fixed_ddr3_start_addr,
+	reg [22:0] fixed_ddr3_start_addr;
+    reg en_fixed_ddr3_start_addr;
 	reg acq_enable0;              // indicates enabled for triggers, and fill type
     reg acq_enable1;              // indicates enabled for triggers, and fill type
     reg acq_trig;                 // trigger the logic to start collecting data
@@ -48,8 +48,10 @@ module adc_to_ddr3_tb1;
  	reg adc_buf_delay_data_reset;	// use the new delay settings
 	reg [4:0] adc_buf_data_delay;	// 5 delay-tap-bits per line, all lines always all the same
 	reg fill_header_fifo_rd_en;		// input, remove the current data from the FIFO
-	reg [22:0] ddr3_rd_burst_addr;	// input, the address of the requested 128-bit burst
-	reg ddr3_rd_one_burst;			// input, get one 128-bit burst from the DDR3
+	reg [22:0] ddr3_rd_start_addr;      // input, the address of the first requested 128-bit burst
+	reg [23:0] ddr3_rd_burst_cnt;        // input, the number of bursts to read
+	reg enable_reading;                     // input, initialize the address generator and both counters, go
+	reg ddr3_rd_fifo_almost_full;    // there is not much room left    
     // outputs
 	wire [64:0] adc_buf_current_data_delay; // 13 lines *5 bits/line, current tap settings
 	wire [23:0] fill_num;         // fill number for this fill
@@ -61,10 +63,10 @@ module adc_to_ddr3_tb1;
 	wire adc_acq_full_reset;		// reset all aspects of data collection/storage/readout
 	wire acq_enabled;					// the system is in acquisition mode, rather than readout mode
 	wire fill_header_fifo_empty;		// output, a header is available when not asserted
-	wire [127:0] ddr3_wr_fifo_dat;
-	wire [127:0] fill_header_fifo_out;	// output, data at the head of the FIFO
-	wire ddr3_one_burst_rdy;			// output, the requested 128-bit burst is ready
-	wire [127:0] ddr3_one_burst_data;	// output, the requested 128-bit burst
+	wire [131:0] ddr3_wr_fifo_dat;
+	wire [151:0] fill_header_fifo_out;	// output, data at the head of the FIFO
+	wire [127:0] ddr3_rd_fifo_input_dat; // output, memory data
+	wire reading_done;                         // output, reading is complete
 
 	// DDR3 chip connections
 	wire [12:0] ddr3_addr;
@@ -138,9 +140,11 @@ adc_to_ddr3_block uut(
  	.adc_buf_delay_data_reset(adc_buf_delay_data_reset),	// use the new delay settings
 	.adc_buf_data_delay(adc_buf_data_delay[4:0]),	// 5 delay-tap-bits per line, all lines always all the same
 	.fill_header_fifo_rd_en(fill_header_fifo_rd_en),		// input, remove the current data from the FIFO
-	.ddr3_rd_burst_addr(ddr3_rd_burst_addr[22:0]),	// input, the address of the requested 128-bit burst
-	.ddr3_rd_one_burst(ddr3_rd_one_burst),			// input, get one 128-bit burst from the DDR3
-    // outputs
+    .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),      // input, the address of the first requested 128-bit burst
+	.ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
+	.enable_reading(enable_reading),                     // input, initialize the address generator and both counters, go
+	.ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
+   // outputs
 	.adc_buf_current_data_delay(adc_buf_current_data_delay), // 13 lines *5 bits/line, current tap settings
     .fill_num(fill_num),         // fill number for this fill
     .adc_acq_out_dat(adc_acq_out_dat ), // 128-bit header or ADC data
@@ -149,12 +153,12 @@ adc_to_ddr3_block uut(
  	.adc_acq_full_reset(adc_acq_full_reset),		// reset all aspects of data collection/storage/readout
    	.acq_done(acq_done ),                 // acquisition is done
 	.acq_enabled(acq_enabled),					// the system is in acquisition mode, rather than readout mode
-	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[127:0]),
+	.ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),
 	.ddr3_wr_fifo_valid(ddr3_wr_fifo_valid),
     .fill_header_fifo_empty(fill_header_fifo_empty),		// output, a header is available when not asserted
-	.fill_header_fifo_out(fill_header_fifo_out[127:0]),	// output, data at the head of the FIFO
-   	.ddr3_one_burst_rdy(ddr3_one_burst_rdy),			// output, the requested 128-bit burst is ready
-    .ddr3_one_burst_data(ddr3_one_burst_data[127:0]),	// output, the requested 128-bit burst
+	.fill_header_fifo_out(fill_header_fifo_out[151:0]),	// output, data at the head of the FIFO
+	.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
+	.reading_done(reading_done),                         // output, reading is complete
 		// connections to the DDR3 chips
    .ddr3_dq(ddr3_dq),
    .ddr3_addr(ddr3_addr), 
@@ -188,14 +192,14 @@ adc_to_ddr3_block uut(
         clk250 = 1'b0;                   // 
         clk125 = 1'b0;                   // 
         channel_tag[15:0] = 16'h0000;   // stuff about the channel to put in the header
-        num_muon_bursts[20:0] = 21'h000000;  // number of sample bursts in a MUON fill
-        num_laser_bursts[20:0] = 21'h000000; // number of sample bursts in a LASER fill
-        num_ped_bursts[20:0] = 21'h000000;   // number of sample bursts in a PEDESTAL fill
+        num_muon_bursts[22:0] = 23'h000000;  // number of sample bursts in a MUON fill
+        num_laser_bursts[22:0] = 23'h000000; // number of sample bursts in a LASER fill
+        num_ped_bursts[22:0] = 23'h000000;   // number of sample bursts in a PEDESTAL fill
         initial_fill_num[23:0] = 24'h000000;  // event number to assign to the first fill
         initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
 		num_waveforms = 12'b0;			// number of waveforms to store per trigger
     	waveform_gap = 21'b0;			// idle time between waveforms 
- 		fixed_ddr3_start_addr[22:0] = 23'h000000;,
+ 		fixed_ddr3_start_addr[22:0] = 23'h000000;
     	en_fixed_ddr3_start_addr = 1'b0;
         acq_enable0 = 1'b0;                  // arm the logic to accept triggers
         acq_enable1 = 1'b0;                  // arm the logic to accept triggers
@@ -204,25 +208,28 @@ adc_to_ddr3_block uut(
 		adc_buf_delay_data_reset = 1'b0;
 		adc_buf_data_delay[4:0] = 5'h00;
 		fill_header_fifo_rd_en = 1'b0;
-		ddr3_rd_burst_addr[22:0] = 23'h000000;				
-		ddr3_rd_one_burst = 1'b0;
 		measure_eff = 1'b0;
+		ddr3_rd_start_addr[22:0] = 23'b0;      // input, the address of the first requested 128-bit burst
+		ddr3_rd_burst_cnt[23:0] = 24'b0;        // input, the number of bursts to read
+		enable_reading = 1'b0;
+		ddr3_rd_fifo_almost_full= 1'b0;    // there is not much room left    
 
 		// Wait 100 ns for global reset to finish
 		#100;
 	    #20 reset_clk50 = 1'b0;
 	    #20	acq_reset = 1'b0;                // reset all of the acquisition logic
          
-	    #20 num_muon_bursts[20:0] = 21'h0f4240;  // number of sample bursts in a MUON fill
-            num_laser_bursts[20:0] = 21'h000064; // number of sample bursts in a LASER fill
-            num_ped_bursts[20:0] = 21'h00000b;   // number of sample bursts in a PEDESTAL fill
+	    #20 num_muon_bursts[20:0] = 21'h000002;  // number of sample bursts in a MUON fill
+            num_laser_bursts[20:0] = 21'h000000; // number of sample bursts in a LASER fill
+            num_ped_bursts[20:0] = 21'h000000;   // number of sample bursts in a PEDESTAL fill
             initial_fill_num[23:0] = 24'h000055;  // event number to assign to the first fill
+			num_waveforms = 12'b1;			// number of waveforms to store per trigger
             channel_tag[15:0] = 16'h0008;   // stuff about the channel to put in the header
         #10 initial_fill_num_wr = 1'b1;      // write-strobe to store the initial_fill_num
         #10 initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
 
-        #20 acq_enable0 = 1'b0;                  // arm the logic to accept triggers
-			acq_enable1 = 1'b1;                  // arm the logic to accept triggers
+        #20 acq_enable0 = 1'b1;                  // arm the logic to accept triggers
+			acq_enable1 = 1'b0;                  // arm the logic to accept triggers
      end        
 
     // clocks
@@ -257,427 +264,24 @@ adc_to_ddr3_block uut(
 		#105000 acq_trig = 1'b1; measure_eff=1'b1;                 // trigger the logic to start collecting data
 		#100	acq_trig = 1'b0;
 
-        //#6000 acq_enable0 = 1'b0;                  // arm the logic to accept triggers
-		//	acq_enable1 = 1'b0;                  // arm the logic to accept triggers
+		// start another acquisition
+		#500    acq_trig = 1'b1;                  // trigger the logic to start collecting data
+		#100	acq_trig = 1'b0;
 
-        //#100 acq_enable0 = 1'b0;                  // arm the logic to accept triggers
-		//	acq_enable1 = 1'b1;                  // arm the logic to accept triggers
+ 		// disable triggers and enable readout
+		#2000	acq_enable0 = 1'b0;                  // change to readout mode
+				acq_enable1 = 1'b0;                  // 
 
-		//#100 acq_trig = 1'b1; measure_eff=1'b1;                 // trigger the logic to start collecting data
-		//#100	acq_trig = 1'b0;
+//		// start a readout
+		#100	ddr3_rd_start_addr[22:0] = fill_header_fifo_out[75:53];      // input, the address of the first requested 128-bit burst
+				ddr3_rd_burst_cnt[23:0] = 24'd10;        // input, the number of bursts to read
+				
+		#100	enable_reading = 1'b1;
+
+		// see what else is in the fill_header_fifo
+		#1000 	fill_header_fifo_rd_en = 1'b1;
+		#20		fill_header_fifo_rd_en = 1'b0;
 		
-		// disable triggers and enable readout
-		//#6000	acq_enable0 = 1'b0;                  // change to readout mode
-		//		acq_enable1 = 1'b0;                  // 
-
-//		// start a readout				
-//		#100	ddr3_rd_burst_addr[22:0] = fill_header_fifo_out[57:35];				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-		
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-//		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
-				
-// 		#550	ddr3_rd_burst_addr[22:0] = ddr3_rd_burst_addr[22:0] + 1;				
-//				ddr3_rd_one_burst = 1'b1;
-//		#50		ddr3_rd_one_burst = 1'b0;
 				
     
     end

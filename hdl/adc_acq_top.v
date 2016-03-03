@@ -24,7 +24,7 @@ module adc_acq_top(
     input adc_buf_delay_data_reset, // use the new delay settings
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
     input ddr3_wr_done,             // asserted when the 'ddr3_wr_control' is in the DONE state
-	input [11:0] num_waveforms,		// number of waveforms to store per trigger
+    input [11:0] num_waveforms,		// number of waveforms to store per trigger
     input [21:0] waveform_gap,		// idle time between waveforms 
     // outputs
     output acq_enabled,             // the system is in acquisition mode, rather than readout mode

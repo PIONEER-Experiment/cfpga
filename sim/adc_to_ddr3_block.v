@@ -13,9 +13,9 @@ module adc_to_ddr3_block(
 	input clk250,						// for DDR3 operation
 	input clk125,						// for buffer readout
 	input [15:0] channel_tag,			// stuff about the channel to put in the header
-	input [20:0] num_muon_bursts,		// number of sample bursts in a MUON fill
-	input [20:0] num_laser_bursts,		// number of sample bursts in a LASER fill
-	input [20:0] num_ped_bursts,		// number of sample bursts in a PEDESTAL fill
+	input [22:0] num_muon_bursts,		// number of sample bursts in a MUON fill
+	input [22:0] num_laser_bursts,		// number of sample bursts in a LASER fill
+	input [22:0] num_ped_bursts,		// number of sample bursts in a PEDESTAL fill
 	input [23:0] initial_fill_num,		// event number to assign to the first fill
 	input initial_fill_num_wr,			// write-strobe to store the initial_fill_num
 	input [11:0] num_waveforms,			// number of waveforms to store per trigger
@@ -35,22 +35,24 @@ module adc_to_ddr3_block(
 	output acq_enabled,					// the system is in acquisition mode, rather than readout mode
 	output [64:0] adc_buf_current_data_delay,	// 13 lines *5 bits/line, current tap settings
 	output [23:0] fill_num,				// fill number for this fill
-	output [127:0] adc_acq_out_dat,		// 128-bit header or ADC data
+	output [131:0] adc_acq_out_dat,		// 128-bit header or ADC data
 	output adc_acq_out_valid,			// current data should be stored in the FIFO
 	output adc_clk,						// ADC clock used by the FIFO
 	output adc_acq_full_reset,			// reset all aspects of data collection/storage/readout
 	output acq_done,					// acquisition is done
 	output fill_header_fifo_empty,		// output, a header is available when not asserted
 	output ddr3_wr_fifo_valid,		// maybe this will be ahead of 'empty'?
-	output [127:0] ddr3_wr_fifo_dat,
+	output [131:0] ddr3_wr_fifo_dat,
 	// header/buffer readout control
 	input fill_header_fifo_rd_en,		// input, remove the current data from the FIFO
-	input [22:0] ddr3_rd_burst_addr,	// input, the address of the requested 128-bit burst
-	input ddr3_rd_one_burst,			// input, get one 128-bit burst from the DDR3
+    input [22:0] ddr3_rd_start_addr,      // input, the address of the first requested 128-bit burst
+	input [23:0] ddr3_rd_burst_cnt,        // input, the number of bursts to read
+	input enable_reading,                     // input, initialize the address generator and both counters, go
+	output reading_done,                         // output, reading is complete
+	input ddr3_rd_fifo_almost_full,    // there is not much room left    
+	output [127:0] ddr3_rd_fifo_input_dat, // output, memory data
 	// header/buffer readout results
 	output [127:0] fill_header_fifo_out,	// output, data at the head of the FIFO
-	output ddr3_one_burst_rdy,			// output, the requested 128-bit burst is ready
-	output [127:0] ddr3_one_burst_data,	// output, the requested 128-bit burst
 	// DDR Memory pins
 	output [2:0] ddr3_ba,
 	output [12:0] ddr3_addr,
@@ -70,8 +72,8 @@ module adc_to_ddr3_block(
 	input adc_ovr_n, adc_ovr_p,     // over-range
 	output ddr3_domain_clk,			// output, the DDR3 user-interface synchronous clock
 	output app_rdy
-
 );
+
 
 ////////////////////////////////////////////////////////////////////////////
 // connect the ADC acquisition controller
