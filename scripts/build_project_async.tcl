@@ -2,13 +2,13 @@
 set origin_dir [file dirname [info script]]/..
 
 # Create project
-create_project WFD_Channel $origin_dir/project
+create_project WFD_Channel_ASYNC $origin_dir/project_async
 
 # Set the directory path for the new project
 set proj_dir [get_property directory [current_project]]
 
 # Set project properties
-set obj [get_projects WFD_Channel]
+set obj [get_projects WFD_Channel_ASYNC]
 set_property "default_lib" "xil_defaultlib" $obj
 set_property "part" "xc7k70tfbg484-2" $obj
 
@@ -53,7 +53,7 @@ foreach file [glob $origin_dir/hdl/*.txt] {
 
 # Set 'sources_1' fileset properties
 set obj [get_filesets sources_1]
-set_property "top" "channel_main" $obj
+set_property "top" "channel_main_async" $obj
 
 # Create 'constrs_1' fileset (if not found)
 if {[string equal [get_filesets -quiet constrs_1] ""]} {
@@ -86,7 +86,7 @@ set obj [get_filesets sim_1]
 add_files -norecurse -fileset $obj [glob $origin_dir/sim/*.v]
 
 # Set 'sim_1' fileset file properties
-set file "$origin_dir/sim/channel_main_tb1.v"
+set file "$origin_dir/sim/channel_main_async_tb1.v"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sim_1] [list "*$file"]]
 set_property "used_in_implementation" "0" $file_obj
@@ -95,7 +95,7 @@ set_property "used_in_synthesis" "0" $file_obj
 # Set 'sim_1' fileset properties
 set obj [get_filesets sim_1]
 set_property "xsim.simulate.runtime" "1us" $obj
-set_property "top" "channel_main_tb1" $obj
+set_property "top" "channel_main_async_tb1" $obj
 
 # Create 'synth_1' run (if not found)
 if {[string equal [get_runs -quiet synth_1] ""]} {
@@ -121,9 +121,9 @@ if {[string equal [get_runs -quiet impl_1] ""]} {
 }
 set obj [get_runs impl_1]
 set_property "part" "xc7k70tfbg484-2" $obj
-set_property "steps.write_bitstream.tcl.post" "[file normalize "$origin_dir/scripts/export_bitstream.tcl"]" $obj
+set_property "steps.write_bitstream.tcl.post" "[file normalize "$origin_dir/scripts/export_bitstream_async.tcl"]" $obj
 
 # set the current impl run
 current_run -implementation [get_runs impl_1]
 
-puts "INFO: Project created: WFD_Channel"
+puts "INFO: Project created: WFD_Channel_ASYNC"
