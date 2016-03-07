@@ -6,9 +6,9 @@
 module adc_fill_size_mux(
     // inputs
     input [1:0] fill_type,            // to determine how much data to collect
-    input [22:0] num_muon_bursts,     // number of sample bursts in a MUON fill
-    input [22:0] num_laser_bursts,    // number of sample bursts in a LASER fill
-    input [22:0] num_ped_bursts,      // number of sample bursts in a PEDESTAL fill
+    input [22:0] muon_num_bursts,     // number of sample bursts in a MUON fill
+    input [22:0] laser_num_bursts,    // number of sample bursts in a LASER fill
+    input [22:0] ped_num_bursts,      // number of sample bursts in a PEDESTAL fill
     input clk,
     input enable,
     // outputs
@@ -22,13 +22,13 @@ always @(posedge clk) begin
                         num_fill_bursts[22:0] <= 23'h00000;
                      end
             2'b01  : begin
-                        num_fill_bursts[22:0] <= num_muon_bursts[22:0];
+                        num_fill_bursts[22:0] <= muon_num_bursts[22:0];
                      end
             2'b10  : begin
-                        num_fill_bursts[22:0] <= num_laser_bursts[22:0];
+                        num_fill_bursts[22:0] <= laser_num_bursts[22:0];
                      end
             2'b11  : begin
-                        num_fill_bursts[22:0] <= num_ped_bursts[22:0];
+                        num_fill_bursts[22:0] <= ped_num_bursts[22:0];
                     end
 		endcase
     end

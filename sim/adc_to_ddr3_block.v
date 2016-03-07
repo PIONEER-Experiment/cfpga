@@ -13,9 +13,9 @@ module adc_to_ddr3_block(
 	input clk250,						// for DDR3 operation
 	input clk125,						// for buffer readout
 	input [15:0] channel_tag,			// stuff about the channel to put in the header
-	input [22:0] num_muon_bursts,		// number of sample bursts in a MUON fill
-	input [22:0] num_laser_bursts,		// number of sample bursts in a LASER fill
-	input [22:0] num_ped_bursts,		// number of sample bursts in a PEDESTAL fill
+	input [22:0] muon_num_bursts,		// number of sample bursts in a MUON fill
+	input [22:0] laser_num_bursts,		// number of sample bursts in a LASER fill
+	input [22:0] ped_num_bursts,		// number of sample bursts in a PEDESTAL fill
 	input [23:0] initial_fill_num,		// event number to assign to the first fill
 	input initial_fill_num_wr,			// write-strobe to store the initial_fill_num
 	input [11:0] num_waveforms,			// number of waveforms to store per trigger
@@ -89,9 +89,9 @@ adc_acq_top adc_acq_top (
 	.reset_clk50(reset_clk50),                  // synchronously negated  
 	.clk200(clk200),                            // for input pin timing delay settings
 	.channel_tag(channel_tag[15:0]), 		   // stuff about the channel to put in the header
-	.num_muon_bursts(num_muon_bursts[22:0]),  // number of sample bursts in a MUON fill
-	.num_laser_bursts(num_laser_bursts[22:0]),// number of sample bursts in a LASER fill
-	.num_ped_bursts(num_ped_bursts[22:0]),    // number of sample bursts in a PEDESTAL fill
+	.muon_num_bursts(muon_num_bursts[22:0]),  // number of sample bursts in a MUON fill
+	.laser_num_bursts(laser_num_bursts[22:0]),// number of sample bursts in a LASER fill
+	.ped_num_bursts(ped_num_bursts[22:0]),    // number of sample bursts in a PEDESTAL fill
 	.initial_fill_num(initial_fill_num[23:0]),  // event number to assign to the first fill
 	.initial_fill_num_wr(initial_fill_num_wr),  // write-strobe to store the initial_fill_num
     .acq_enable0(acq_enable0),              // indicates enabled for triggers, and fill type

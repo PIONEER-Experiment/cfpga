@@ -32,9 +32,9 @@ module adc_to_ddr3_tb1;
 	reg clk250;						// for DDR3 operation
     reg clk125;						// for buffer readout
     reg [15:0] channel_tag;   // stuff about the channel to put in the header
-    reg [22:0] num_muon_bursts;  // number of sample bursts in a MUON fill
-    reg [22:0] num_laser_bursts; // number of sample bursts in a LASER fill
-    reg [22:0] num_ped_bursts;   // number of sample bursts in a PEDESTAL fill
+    reg [22:0] muon_num_bursts;  // number of sample bursts in a MUON fill
+    reg [22:0] laser_num_bursts; // number of sample bursts in a LASER fill
+    reg [22:0] ped_num_bursts;   // number of sample bursts in a PEDESTAL fill
     reg [23:0] initial_fill_num;  // event number to assign to the first fill
     reg initial_fill_num_wr;      // write-strobe to store the initial_fill_num
 	reg [11:0] num_waveforms;			// number of waveforms to store per trigger
@@ -124,9 +124,9 @@ adc_to_ddr3_block uut(
     .clk250(clk250 ),                   // 
     .clk125(clk125 ),                   // 
     .channel_tag(channel_tag ),   // stuff about the channel to put in the header
-    .num_muon_bursts(num_muon_bursts ),  // number of sample bursts in a MUON fill
-    .num_laser_bursts( num_laser_bursts), // number of sample bursts in a LASER fill
-    .num_ped_bursts(num_ped_bursts ),   // number of sample bursts in a PEDESTAL fill
+    .muon_num_bursts(muon_num_bursts ),  // number of sample bursts in a MUON fill
+    .laser_num_bursts( laser_num_bursts), // number of sample bursts in a LASER fill
+    .ped_num_bursts(ped_num_bursts ),   // number of sample bursts in a PEDESTAL fill
     .initial_fill_num( initial_fill_num),  // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr ),      // write-strobe to store the initial_fill_num
 	.num_waveforms(num_waveforms),			// number of waveforms to store per trigger
@@ -192,9 +192,9 @@ adc_to_ddr3_block uut(
         clk250 = 1'b0;                   // 
         clk125 = 1'b0;                   // 
         channel_tag[15:0] = 16'h0000;   // stuff about the channel to put in the header
-        num_muon_bursts[22:0] = 23'h000000;  // number of sample bursts in a MUON fill
-        num_laser_bursts[22:0] = 23'h000000; // number of sample bursts in a LASER fill
-        num_ped_bursts[22:0] = 23'h000000;   // number of sample bursts in a PEDESTAL fill
+        muon_num_bursts[22:0] = 23'h000000;  // number of sample bursts in a MUON fill
+        laser_num_bursts[22:0] = 23'h000000; // number of sample bursts in a LASER fill
+        ped_num_bursts[22:0] = 23'h000000;   // number of sample bursts in a PEDESTAL fill
         initial_fill_num[23:0] = 24'h000000;  // event number to assign to the first fill
         initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
 		num_waveforms = 12'b0;			// number of waveforms to store per trigger
@@ -219,9 +219,9 @@ adc_to_ddr3_block uut(
 	    #20 reset_clk50 = 1'b0;
 	    #20	acq_reset = 1'b0;                // reset all of the acquisition logic
          
-	    #20 num_muon_bursts[20:0] = 21'h000002;  // number of sample bursts in a MUON fill
-            num_laser_bursts[20:0] = 21'h000000; // number of sample bursts in a LASER fill
-            num_ped_bursts[20:0] = 21'h000000;   // number of sample bursts in a PEDESTAL fill
+	    #20 muon_num_bursts[20:0] = 21'h000002;  // number of sample bursts in a MUON fill
+            laser_num_bursts[20:0] = 21'h000000; // number of sample bursts in a LASER fill
+            ped_num_bursts[20:0] = 21'h000000;   // number of sample bursts in a PEDESTAL fill
             initial_fill_num[23:0] = 24'h000055;  // event number to assign to the first fill
 			num_waveforms = 12'b1;			// number of waveforms to store per trigger
             channel_tag[15:0] = 16'h0008;   // stuff about the channel to put in the header

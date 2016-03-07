@@ -30,9 +30,9 @@ module adc_acq_top_tb1;
     reg reset_clk50;              // synchronously negated  
     reg clk200;                   // for input pin timing delay settings
     reg [15:0] channel_tag;   // stuff about the channel to put in the header
-    reg [22:0] num_muon_bursts;  // number of sample bursts in a MUON fill
-    reg [22:0] num_laser_bursts; // number of sample bursts in a LASER fill
-    reg [22:0] num_ped_bursts;   // number of sample bursts in a PEDESTAL fill
+    reg [22:0] muon_num_bursts;  // number of sample bursts in a MUON fill
+    reg [22:0] laser_num_bursts; // number of sample bursts in a LASER fill
+    reg [22:0] ped_num_bursts;   // number of sample bursts in a PEDESTAL fill
     reg [23:0] initial_fill_num;  // event number to assign to the first fill
     reg initial_fill_num_wr;      // write-strobe to store the initial_fill_num
 	reg acq_enable0;              // indicates enabled for triggers, and fill type
@@ -66,9 +66,9 @@ adc_acq_top uut(
     .reset_clk50(reset_clk50 ),              // synchronously negated  
     .clk200(clk200 ),                   // for input pin timing delay settings
     .channel_tag(channel_tag ),   // stuff about the channel to put in the header
-    .num_muon_bursts(num_muon_bursts ),  // number of sample bursts in a MUON fill
-    .num_laser_bursts( num_laser_bursts), // number of sample bursts in a LASER fill
-    .num_ped_bursts(num_ped_bursts ),   // number of sample bursts in a PEDESTAL fill
+    .muon_num_bursts(muon_num_bursts ),  // number of sample bursts in a MUON fill
+    .laser_num_bursts( laser_num_bursts), // number of sample bursts in a LASER fill
+    .ped_num_bursts(ped_num_bursts ),   // number of sample bursts in a PEDESTAL fill
     .initial_fill_num( initial_fill_num),  // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr ),      // write-strobe to store the initial_fill_num
 	.acq_enable0(acq_enable0),
@@ -101,9 +101,9 @@ adc_acq_top uut(
         reset_clk50 = 1'b1;              // synchronously negated  
         clk200 = 1'b0;                   // for input pin timing delay settings
         channel_tag[15:0] = 16'h0000;   // stuff about the channel to put in the header
-       num_muon_bursts[22:0] = 23'h000000;  // number of sample bursts in a MUON fill
-        num_laser_bursts[22:0] = 23'h000000; // number of sample bursts in a LASER fill
-        num_ped_bursts[22:0] = 23'h000000;   // number of sample bursts in a PEDESTAL fill
+       muon_num_bursts[22:0] = 23'h000000;  // number of sample bursts in a MUON fill
+        laser_num_bursts[22:0] = 23'h000000; // number of sample bursts in a LASER fill
+        ped_num_bursts[22:0] = 23'h000000;   // number of sample bursts in a PEDESTAL fill
         initial_fill_num[23:0] = 24'h000000;  // event number to assign to the first fill
         initial_fill_num_wr = 1'b0;      // write-strobe to store the initial_fill_num
 		ddr3_wr_done = 1'b0;
@@ -120,9 +120,9 @@ adc_acq_top uut(
 		#100;
 	    #20 reset_clk50 = 1'b0;
 	        
-	    #20 num_muon_bursts[22:0] = 23'h000005;  // number of sample bursts in a MUON fill
-            num_laser_bursts[22:0] = 23'h000008; // number of sample bursts in a LASER fill
-            num_ped_bursts[22:0] = 23'h00000b;   // number of sample bursts in a PEDESTAL fill
+	    #20 muon_num_bursts[22:0] = 23'h000005;  // number of sample bursts in a MUON fill
+            laser_num_bursts[22:0] = 23'h000008; // number of sample bursts in a LASER fill
+            ped_num_bursts[22:0] = 23'h00000b;   // number of sample bursts in a PEDESTAL fill
             initial_fill_num[23:0] = 24'h000055;  // event number to assign to the first fill
             channel_tag[15:0] = 16'h0008;   // stuff about the channel to put in the header
 			num_waveforms[11:0] = 12'h003;		// number of waveforms to store per trigger

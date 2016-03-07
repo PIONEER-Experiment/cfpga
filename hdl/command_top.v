@@ -35,15 +35,13 @@ module command_top(
 	output [23:0] ddr3_rd_burst_cnt,    // input, the number of bursts to read
 	output enable_reading,      		// input, initialize the address generator and both counters, go
     input reading_done,                 // output, reading is complete
-	output [11:0] num_waveforms,		// number of waveforms to store per trigger
-    output [21:0] waveform_gap,			// idle time between waveforms 
 
 	// Register to/from the ADC acquisition state machine
 	input [23:0] fill_num,	                 // fill number for this fill
 	output [15:0] channel_tag,		         // stuff about the channel to put in the header
-	output [22:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
-	output [22:0] num_laser_bursts,	         // number of sample bursts in a LASER fill
-	output [22:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
+	output [22:0] muon_num_bursts,	         // number of sample bursts in a MUON fill
+	output [22:0] laser_num_bursts,	         // number of sample bursts in a LASER fill
+	output [22:0] ped_num_bursts,	         // number of sample bursts in a PEDESTAL fill
 	output [23:0] initial_fill_num,          // event number to assign to the first fill
 	output initial_fill_num_wr,              // write-strobe to store the initial_fill_num
 	input [2:0] ch_addr,			         // the channel address jumpers
@@ -52,6 +50,14 @@ module command_top(
 	input [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
 	output [22:0] fixed_ddr3_start_addr,
 	output en_fixed_ddr3_start_addr,
+	output [11:0] muon_num_waveforms,		// number of waveforms to store per trigger
+	output [21:0] muon_waveform_gap,		// idle time between waveforms 
+	output [11:0] laser_num_waveforms,		// number of waveforms to store per trigger
+	output [21:0] laser_waveform_gap,		// idle time between waveforms 
+	output [11:0] ped_num_waveforms,		// number of waveforms to store per trigger
+	output [21:0] ped_waveform_gap,			// idle time between waveforms 
+	output [11:0] async_num_bursts,         // number of 8-sample bursts in an ASYNC waveform
+	output [15:0] async_pre_trig,           // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
 	output [31:0] genreg_addr_ctrl,	// generic register address and control output
 	output [31:0] genreg_wr_data,	// generic register data written from Master FPGA 
@@ -330,9 +336,9 @@ module command_top(
 		// register to/from the ADC acquisition state machine
 		.fill_num(fill_num[23:0]),			         // fill number for this fill
 		.channel_tag(channel_tag[15:0]), 		     // stuff about the channel to put in the header
-		.num_muon_bursts(num_muon_bursts[22:0]),     // number of sample bursts in a MUON fill
-		.num_laser_bursts(num_laser_bursts[22:0]),   // number of sample bursts in a LASER fill
-		.num_ped_bursts(num_ped_bursts[22:0]),       // number of sample bursts in a PEDESTAL fill
+		.muon_num_bursts(muon_num_bursts[22:0]),     // number of sample bursts in a MUON fill
+		.laser_num_bursts(laser_num_bursts[22:0]),   // number of sample bursts in a LASER fill
+		.ped_num_bursts(ped_num_bursts[22:0]),       // number of sample bursts in a PEDESTAL fill
 		.initial_fill_num(initial_fill_num[23:0]),   // event number to assign to the first fill
 		.initial_fill_num_wr(initial_fill_num_wr),   // write-strobe to store the initial_fill_num
 		.ch_addr(ch_addr_corrected[2:0]),						// the channel address jumpers
@@ -341,8 +347,14 @@ module command_top(
 	    .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
 	    .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
 	    .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
-		.num_waveforms(num_waveforms[11:0]),			// number of waveforms to store per trigger
-	    .waveform_gap(waveform_gap[21:0]),				// idle time between waveforms 
+		.muon_num_waveforms(muon_num_waveforms[11:0]),			// number of waveforms to store per trigger
+	    .muon_waveform_gap(muon_waveform_gap[21:0]),			// idle time between waveforms 
+		.laser_num_waveforms(laser_num_waveforms[11:0]),		// number of waveforms to store per trigger
+	    .laser_waveform_gap(laser_waveform_gap[21:0]),			// idle time between waveforms 
+		.ped_num_waveforms(ped_num_waveforms[11:0]),			// number of waveforms to store per trigger
+	    .ped_waveform_gap(ped_waveform_gap[21:0]),				// idle time between waveforms 
+		.async_num_bursts(async_num_bursts[11:0]),         		// number of 8-sample bursts in an ASYNC waveform
+	    .async_pre_trig(async_pre_trig[15:0]),           		// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),

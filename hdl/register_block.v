@@ -22,9 +22,9 @@ module register_block(
 	// Register to/from the ADC acquisition state machine
 	input [23:0] fill_num,	                 // fill number for this fill
     output [15:0] channel_tag,		         // stuff about the channel to put in the header
-	output [22:0] num_muon_bursts,	         // number of sample bursts in a MUON fill
-	output [22:0] num_laser_bursts,          // number of sample bursts in a LASER fill
-	output [22:0] num_ped_bursts,	         // number of sample bursts in a PEDESTAL fill
+	output [22:0] muon_num_bursts,	         // number of sample bursts in a MUON fill
+	output [22:0] laser_num_bursts,          // number of sample bursts in a LASER fill
+	output [22:0] ped_num_bursts,	         // number of sample bursts in a PEDESTAL fill
 	output [23:0] initial_fill_num,          // event number to assign to the first fill
     output initial_fill_num_wr,              // write-strobe to store the initial_fill_num
 	input [2:0] ch_addr,			         // the channel address jumpers
@@ -33,8 +33,14 @@ module register_block(
 	input [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
 	output [22:0] fixed_ddr3_start_addr,
 	output en_fixed_ddr3_start_addr,
-	output [11:0] num_waveforms,			// number of waveforms to store per trigger
-	output [21:0] waveform_gap,				// idle time between waveforms 
+	output [11:0] muon_num_waveforms,		// number of waveforms to store per trigger
+	output [21:0] muon_waveform_gap,		// idle time between waveforms 
+	output [11:0] laser_num_waveforms,		// number of waveforms to store per trigger
+	output [21:0] laser_waveform_gap,		// idle time between waveforms 
+	output [11:0] ped_num_waveforms,		// number of waveforms to store per trigger
+	output [21:0] ped_waveform_gap,			// idle time between waveforms 
+	output [11:0] async_num_bursts,         // number of 8-sample bursts in an ASYNC waveform
+	output [15:0] async_pre_trig,           // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
  
  	// generic register space connections
 	output [31:0] genreg_addr_ctrl,	         // generic register address and control output
@@ -64,7 +70,7 @@ module register_block(
 			           reg5_,  reg6_,  reg7_,
 			           reg9_,  reg10_, reg11_,
 			   reg12_,                 reg15_,
-			   reg16_, reg17_, reg18_, reg19_,
+			           reg17_,         reg19_,
 			   reg20_, reg21_, reg22_, reg23_,
 			   reg24_, reg25_, reg26_, reg27_,
 			   reg28_, reg29_, reg30_, reg31_;
@@ -76,7 +82,9 @@ module register_block(
 	reg [31:0] reg4_  = 32'd0;        // pedestal fill burst count of 0
 	reg [31:0] reg8_  = 32'd14;       // data bus delay tap value of 14
 	reg [31:0] reg13_ = 32'hf0000000; // use normal DDR3 start addresses
-	reg [31:0] reg14_ = 32'd1;        // 1 waveform per trigger
+	reg [31:0] reg14_ = 32'd1;        // 1 muon waveform per trigger
+	reg [31:0] reg16_ = 32'd1;        // 1 laser waveform per trigger
+	reg [31:0] reg18_ = 32'd1;        // 1 pedestal waveform per trigger
 	
 	// write to the writable registers
 	always @ (posedge clk) begin
@@ -129,13 +137,13 @@ module register_block(
 	assign channel_tag[15:3] = reg1_[15:3];
 	
 	// R2 - Muon burst count
-	assign num_muon_bursts[22:0] = reg2_[22:0];
+	assign muon_num_bursts[22:0] = reg2_[22:0];
 
 	// R3 - Laser burst count
-	assign num_laser_bursts[22:0] = reg3_[22:0];
+	assign laser_num_bursts[22:0] = reg3_[22:0];
 
 	// R4 - Pedestal burst count
-	assign num_ped_bursts[22:0] = reg4_[22:0];
+	assign ped_num_bursts[22:0] = reg4_[22:0];
 
 	// R5
 	assign genreg_addr_ctrl[31:0] = reg5_[31:0]; // address and control for the generic register interface
@@ -167,13 +175,36 @@ module register_block(
 	assign en_fixed_ddr3_start_addr = (reg13_[31:28] == 4'b1111) ? 1'b0 : 1'b1;
 	
 	// R14
-	// number of waveforms to store per trigger
-	assign num_waveforms[11:0] = reg14_[11:0];
+	// number of muon waveforms to store per trigger
+	assign muon_num_waveforms[11:0] = reg14_[11:0];
 
 	// R15
-	// idle time between waveforms
-	assign waveform_gap[21:0] = reg15_[21:0]; 
+	// idle time between laser waveforms
+	assign laser_waveform_gap[21:0] = reg15_[21:0]; 
 
+	// R16
+	// number of laser waveforms to store per trigger
+	assign laser_num_waveforms[11:0] = reg16_[11:0];
+
+	// R17
+	// idle time between pedestal waveforms
+	assign ped_waveform_gap[21:0] = reg17_[21:0]; 
+
+	// R18
+	// number of pedestal waveforms to store per trigger
+	assign ped_num_waveforms[11:0] = reg18_[11:0];
+
+	// R19
+	// idle time between muon waveforms
+	assign muon_waveform_gap[21:0] = reg19_[21:0]; 
+
+	// R20
+	// number of 8-sample bursts in an ASYNC waveform
+	assign async_num_bursts[11:0] = reg20_[11:0];         
+
+	// R21
+	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	assign async_pre_trig[15:0] = reg21_[15:0]; 
 
 	reg [31:0] rdbk_reg;
 	assign tx_data[31:0] = rdbk_reg[31:0];
@@ -199,12 +230,12 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h0e)) rdbk_reg[11:0] <= {20'b0, reg14_[11:0]};
 		if (rd_en && (reg_num[4:0] == 5'h0f)) rdbk_reg[31:0] <= {10'b0, reg15_[21:0]};
 		
-		if (rd_en && (reg_num[4:0] == 5'h10)) rdbk_reg[31:0] <= reg16_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= reg17_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= reg18_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= reg19_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= reg20_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= reg21_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h10)) rdbk_reg[31:0] <= {20'b0, reg16_[11:0]};
+		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= {10'b0, reg17_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= {20'b0, reg18_[11:0]};
+		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= {10'b0, reg19_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {20'b0, reg20_[11:0]};
+		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {16'b0, reg21_[15:0]};
 		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= reg22_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= reg23_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= reg24_[31:0];

@@ -18,7 +18,7 @@ module adc_acq_sm (
 	input dummy_dat_reset_mode,			// channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
     // outputs
     output reg [1:0] fill_type,         // determine which burst count to use
-    output reg fill_size_mux_en,
+    output reg fill_type_mux_en,
     output reg address_cntr_en,         // increment the next starting address
     output reg dummy_dat_reset,         // reset the dummy data counter
     output reg adc_mux_fill_hdr_sel,    // selects fill header
@@ -267,7 +267,7 @@ end // combinational always block to determine next state
 // Use the NS[] array.
 always @ (posedge clk) begin
     // defaults
-        fill_size_mux_en        <= 1'b0;
+        fill_type_mux_en        <= 1'b0;
         address_cntr_en         <= 1'b0;
         dummy_dat_reset         <= 1'b0;
         adc_mux_fill_hdr_sel    <= 1'b0;
@@ -293,7 +293,7 @@ always @ (posedge clk) begin
     
     if (NS[FILL_INIT1]) begin
        // latch the current fill type size 
-        fill_size_mux_en        <= 1'b1;
+        fill_type_mux_en        <= 1'b1;
     end
 
     if (NS[FILL_INIT2]) begin
