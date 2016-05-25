@@ -6,8 +6,9 @@
 
 module startup_reset(
 	input clk50,				// buffered clock, 50 MHz
-	output reset_clk50,	       	// active-high reset output, goes low after startup
+    input rst_from_master,		// external reset of all acquisition logic
 	input clk125,				// buffered clock, 125 MHz
+	output reset_clk50,	       	// active-high reset output, goes low after startup
     output reset_clk125	       	// active-high reset output, goes low after startup
 );
 
@@ -23,15 +24,15 @@ module startup_reset(
         else cnt <= cnt;
     end        
  
-	// Make a synchronous 'reset' signal
-	// Pass the 'at_max' signal thru a 2 stage synchronizer that is clocked by 'clk50'
+	// Make a synchronous 'reset' signal from either the startup clock or the reset signal
+	// from the master FPGA. Pass the signal thru a 2 stage synchronizer that is clocked by 'clk50'
     reg clk50_sync1, clk50_sync2;	// registers for 2 stage synchronizers
 	always @(posedge clk50 ) begin
-		clk50_sync1 <= at_max;
+		clk50_sync1 <= !at_max | rst_from_master;
 		clk50_sync2 <= clk50_sync1;
 	end
-	// invert the synchronizer output so the 'reset' is asserted when the counter is not 'at_max'
-	assign reset_clk50 = !clk50_sync2;
+	// drive the 'reset' output
+	assign reset_clk50 = clk50_sync2;
 	
 	// now pass the 'reset_clk50' signal thru a 2 stage synchronizer
 	// that is clocked by 'clk125'.

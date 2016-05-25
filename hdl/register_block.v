@@ -39,8 +39,8 @@ module register_block(
 	output [21:0] laser_waveform_gap,		// idle time between waveforms 
 	output [11:0] ped_num_waveforms,		// number of waveforms to store per trigger
 	output [21:0] ped_waveform_gap,			// idle time between waveforms 
-	output [11:0] async_num_bursts,         // number of 8-sample bursts in an ASYNC waveform
-	output [15:0] async_pre_trig,           // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	output [10:0] async_num_bursts,         // number of 8-sample bursts in an ASYNC waveform
+	output [11:0] async_pre_trig,           // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
  
  	// generic register space connections
 	output [31:0] genreg_addr_ctrl,	         // generic register address and control output
@@ -200,11 +200,11 @@ module register_block(
 
 	// R20
 	// number of 8-sample bursts in an ASYNC waveform
-	assign async_num_bursts[11:0] = reg20_[11:0];         
+	assign async_num_bursts[10:0] = reg20_[10:0];         
 
 	// R21
 	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-	assign async_pre_trig[15:0] = reg21_[15:0]; 
+	assign async_pre_trig[11:0] = reg21_[11:0]; 
 
 	reg [31:0] rdbk_reg;
 	assign tx_data[31:0] = rdbk_reg[31:0];
@@ -234,8 +234,8 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= {10'b0, reg17_[21:0]};
 		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= {20'b0, reg18_[11:0]};
 		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= {10'b0, reg19_[21:0]};
-		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {20'b0, reg20_[11:0]};
-		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {16'b0, reg21_[15:0]};
+		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {21'b0, reg20_[10:0]};
+		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {20'b0, reg21_[11:0]};
 		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= reg22_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= reg23_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= reg24_[31:0];

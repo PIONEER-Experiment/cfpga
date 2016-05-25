@@ -1,4 +1,4 @@
-`timescale 1ns / 1ps
+`timescale 1ns / 10ps
 
 ///////////////////////////////////////////////////////////////////
 // connect an up-counter that will keep track of the fill number
@@ -17,17 +17,17 @@ module adc_fill_cntr (
 // sync 'init' to this clock
 reg init_temp, init_sync;
 always @(posedge clk) begin
-    init_temp <= init;
-    init_sync <= init_temp;
+    init_temp <= #1 init;
+    init_sync <= #1 init_temp;
 end
 
 // count up when enabled, 
 always @(posedge clk) begin
     if (init_sync) begin
-        fill_num[23:0] <= initial_fill_num[23:0];
+        fill_num[23:0] <= #1 initial_fill_num[23:0];
     end
    else if (enable) begin
-        fill_num[23:0] <= fill_num[23:0] + 1;
+        fill_num[23:0] <= #1 fill_num[23:0] + 1;
    end
 end
 

@@ -56,8 +56,8 @@ module command_top(
 	output [21:0] laser_waveform_gap,		// idle time between waveforms 
 	output [11:0] ped_num_waveforms,		// number of waveforms to store per trigger
 	output [21:0] ped_waveform_gap,			// idle time between waveforms 
-	output [11:0] async_num_bursts,         // number of 8-sample bursts in an ASYNC waveform
-	output [15:0] async_pre_trig,           // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	output [10:0] async_num_bursts,         // number of 8-sample bursts in an ASYNC waveform
+	output [11:0] async_pre_trig,           // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
 	output [31:0] genreg_addr_ctrl,	// generic register address and control output
 	output [31:0] genreg_wr_data,	// generic register data written from Master FPGA 
@@ -353,8 +353,8 @@ module command_top(
 	    .laser_waveform_gap(laser_waveform_gap[21:0]),			// idle time between waveforms 
 		.ped_num_waveforms(ped_num_waveforms[11:0]),			// number of waveforms to store per trigger
 	    .ped_waveform_gap(ped_waveform_gap[21:0]),				// idle time between waveforms 
-		.async_num_bursts(async_num_bursts[11:0]),         		// number of 8-sample bursts in an ASYNC waveform
-	    .async_pre_trig(async_pre_trig[15:0]),           		// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+		.async_num_bursts(async_num_bursts[10:0]),         		// number of 8-sample bursts in an ASYNC waveform
+	    .async_pre_trig(async_pre_trig[11:0]),           		// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),
