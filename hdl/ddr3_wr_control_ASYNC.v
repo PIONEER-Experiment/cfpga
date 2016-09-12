@@ -28,8 +28,8 @@ module ddr3_wr_control_ASYNC (
     output reg ddr3_wr_sync_err,
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
-    input acq_done                        // asserted when the 'adc_acq_sm' is in the DONE state
-
+    input acq_done,                        // asserted when the 'adc_acq_sm' is in the DONE state
+    input [23:0] calc_total_burst_count
 );
 
 // 
@@ -85,7 +85,8 @@ always @ (posedge clk) begin
     	fill_header_wr_dat_reg[127:0] <= ddr3_wr_fifo_dat[127:0];	// leave off the 4 tag bits
     end
     else if (NS[WRITE_CKSM] && burst_cntr_zero && address_cntr_zero) begin
-    	fill_header_wr_dat_reg[151:128] <= total_burst_count[23:0];	// append the total burst count before issue write command to the FIFO
+        //fill_header_wr_dat_reg[151:128] <= total_burst_count[23:0] + 2; // append the total burst count before issue write command to the FIFO
+        fill_header_wr_dat_reg[151:128] <= calc_total_burst_count[23:0]; // append the total burst count before issue write command to the FIFO
 	end
 end
 assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];

@@ -23,13 +23,16 @@ module circ_buf_to_ddr3_ASYNC(
 	output [23:0] fill_num,         // fill number for this fill
 	output reg [15:0] circ_buf_rd_addr,	// read address for the circular buffer
     output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
-    output adc_acq_out_valid       	// current data should be stored in the FIFO
+    output adc_acq_out_valid,       	// current data should be stored in the FIFO
+    output [23:0] calc_total_burst_count
 );
 
 wire [22:0] current_waveform_num;	// the current waveform number, to be used in header
 wire [22:0] burst_adr;				// DDR3 burst memory location (3 LSBs=0) for a waveform
 reg [22:0] waveform_start_adr;		// DDR3 burst memory location (3 LSBs=0) for a waveform
 reg [22:0] num_fill_bursts;			// total number of bursts in a fill
+
+assign calc_total_burst_count[23:0] = (async_num_bursts[10:0]+1)*current_waveform_num[22:0]+2;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////                            
 // Subtract the pre-trigger count from the trigger address coming out of the FIFO. The FIFO is in

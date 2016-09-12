@@ -34,7 +34,7 @@ module register_block(
 	output [22:0] fixed_ddr3_start_addr,
 	output en_fixed_ddr3_start_addr,
 	output [11:0] muon_num_waveforms,		// number of waveforms to store per trigger
-	output [21:0] muon_waveform_gap,		// idle time between waveforms 
+ 	output [21:0] muon_waveform_gap,		// idle time between waveforms 
 	output [11:0] laser_num_waveforms,		// number of waveforms to store per trigger
 	output [21:0] laser_waveform_gap,		// idle time between waveforms 
 	output [11:0] ped_num_waveforms,		// number of waveforms to store per trigger
@@ -66,25 +66,27 @@ module register_block(
 	
 	// make a block of 32 32-bit registers
 	// those with explicit defaults follow below
-	reg [31:0]         reg1_,
-			           reg5_,  reg6_,  reg7_,
-			           reg9_,  reg10_, reg11_,
-			   reg12_,                 reg15_,
-			           reg17_,         reg19_,
-			   reg20_, reg21_, reg22_, reg23_,
-			   reg24_, reg25_, reg26_, reg27_,
-			   reg28_, reg29_, reg30_, reg31_;
+	reg [31:0] reg1_,  reg5_,  reg6_,  reg7_,
+			   reg9_,  reg10_, reg11_, reg12_,
+			   reg22_, reg23_, reg24_, reg25_,
+			   reg26_, reg27_, reg28_, reg29_,
+			   reg30_, reg31_;
 
 	// set non-zero default register values
 	reg [31:0] reg0_  = 32'd1;        // initial fill number set to 1
 	reg [31:0] reg2_  = 32'd70000;    // muon fill burst count of 70,000
-	reg [31:0] reg3_  = 32'd0;        // laser fill burst count of 0
-	reg [31:0] reg4_  = 32'd0;        // pedestal fill burst count of 0
+	reg [31:0] reg3_  = 32'd100;      // laser fill burst count of 100
+	reg [31:0] reg4_  = 32'd100;      // pedestal fill burst count of 100
 	reg [31:0] reg8_  = 32'd14;       // data bus delay tap value of 14
 	reg [31:0] reg13_ = 32'hf0000000; // use normal DDR3 start addresses
 	reg [31:0] reg14_ = 32'd1;        // 1 muon waveform per trigger
-	reg [31:0] reg16_ = 32'd1;        // 1 laser waveform per trigger
+	reg [31:0] reg16_ = 32'd4;        // 4 laser waveform per trigger
 	reg [31:0] reg18_ = 32'd1;        // 1 pedestal waveform per trigger
+	reg [31:0] reg19_ = 32'd1;        // muon waveform gap of 1
+	reg [31:0] reg15_ = 32'd200;      // laser waveform gap of 200
+	reg [31:0] reg17_ = 32'd1;        // pedestal waveform gap of 1
+	reg [31:0] reg20_ = 32'd10;       // async burst count of 10
+	reg [31:0] reg21_ = 32'd2;        // async pre-trigger of 2
 	
 	// write to the writable registers
 	always @ (posedge clk) begin

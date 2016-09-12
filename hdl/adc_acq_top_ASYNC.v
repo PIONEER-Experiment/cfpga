@@ -31,7 +31,8 @@ module adc_acq_top_ASYNC(
     output adc_acq_out_valid,       // current data should be stored in the FIFO
     output adc_clk,                 // ADC clock used by the FIFO
     output ext_done,                // external output indicating acquisition is done
-    output adc_acq_sm_idle          // ADC acquisition state machine is idle (used for front panel LED status)
+    output adc_acq_sm_idle,          // ADC acquisition state machine is idle (used for front panel LED status)
+    output [23:0] calc_total_burst_count
 );
 
 wire [25:0] packed_adc_dat;     // two samples, with over-range bits,  packed in one wide-word
@@ -174,7 +175,8 @@ circ_buf_to_ddr3_ASYNC circ_buf_to_ddr3_ASYNC(
 	.fill_num(fill_num[23:0]),         				// fill number for this fill
 	.circ_buf_rd_addr(circ_buf_rd_addr[15:0]),		// read address for the circular buffer
     .adc_acq_out_dat(adc_acq_out_dat[131:0]), 		// 132-bit 4-bit tag plus 128-bit header or ADC data
-    .adc_acq_out_valid(adc_acq_out_valid)       	// current data should be stored in the FIFO
+    .adc_acq_out_valid(adc_acq_out_valid),       	// current data should be stored in the FIFO
+    .calc_total_burst_count(calc_total_burst_count[23:0])
 );
 
   

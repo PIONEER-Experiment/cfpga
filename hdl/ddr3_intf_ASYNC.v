@@ -29,6 +29,8 @@ module ddr3_intf_ASYNC(
     output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
     input ddr3_rd_fifo_almost_full,             // there is not much room left    
     output ddr3_rd_fifo_input_tlast,            // the last burst for this fill 
+    //other
+    input [23:0] calc_total_burst_count,
     // connections to the DDR3 chips
     output [12:0] ddr3_addr,
     output [2:0] ddr3_ba,
@@ -124,7 +126,8 @@ ddr3_wr_control_ASYNC ddr3_wr_control_ASYNC (
     .ddr3_wr_sync_err(ddr3_wr_sync_err),            // synchronization error flag
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
-    .acq_done(acq_done)                             // input, asserted when the 'adc_acq_sm' is in the DONE state
+    .acq_done(acq_done),                             // input, asserted when the 'adc_acq_sm' is in the DONE state
+    .calc_total_burst_count(calc_total_burst_count[23:0])
 );
 
 ///////////////////////////////////////////////////////////////

@@ -68,6 +68,8 @@ module channel_main_async(
   input adc_syncp, adc_syncn
 );
 
+wire [23:0] calc_total_burst_count;
+
 // Assignments for 'io' lines:
 //   io[0]   : 'readout_pause'
 wire readout_pause;
@@ -204,8 +206,8 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
-	.async_num_bursts(async_num_bursts[10:0]),          // number of 8-sample bursts in an ASYNC waveform
-    .async_pre_trig(async_pre_trig[11:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	  .async_num_bursts(async_num_bursts[10:0]),           // number of 8-sample bursts in an ASYNC waveform
+    .async_pre_trig(async_pre_trig[11:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
  
     // outputs
     .ddr3_wr_en(ddr3_wr_en),							// writing of triggered events to memory is enabled
@@ -215,7 +217,8 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
-    .adc_acq_sm_idle(adc_acq_sm_idle)                    // ADC acquisition state machine is idle (used for front panel LED status)
+    .adc_acq_sm_idle(adc_acq_sm_idle),                    // ADC acquisition state machine is idle (used for front panel LED status)
+    .calc_total_burst_count(calc_total_burst_count[23:0])
 );
 
 wire ddr3_write_fifo_full;
@@ -237,6 +240,9 @@ ddr3_write_fifo ddr3_write_fifo (
 
 wire [22:0] fixed_ddr3_start_addr;
 wire en_fixed_ddr3_start_addr;
+
+wire enable_reading;
+wire reading_done;
 
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
@@ -272,6 +278,9 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
     .ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
     .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast),    // the last burst for this fill 
+
+    // other
+    .calc_total_burst_count(calc_total_burst_count[23:0]),
 
     // connections to the DDR3 chips
     .ddr3_addr(ddr3_addr[12:0]),
@@ -360,7 +369,7 @@ led_status led_status(
     .adc_acq_sm_idle(adc_acq_sm_idle),
     .command_sm_idle(command_sm_idle)
 );
-
+ 
 ////////////////////////////////////////////////////////////////////////////
 // Connect the serial link to the Master FPGA.
 // This block may get pushed down in the hierarchy later.

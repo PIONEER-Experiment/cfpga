@@ -75,7 +75,7 @@ always @ (posedge clk) begin
 	else if (address_accept)
 		total_burst_count[23:0] <= total_burst_count[23:0] + 1;
 end
-	 
+
 // Create a register to hold the header for future writing to the fill-header FIFO
 reg [151:0] fill_header_wr_dat_reg;
 reg latch_header;   // will be asserted by the state machine
