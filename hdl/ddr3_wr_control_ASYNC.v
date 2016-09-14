@@ -85,7 +85,7 @@ always @ (posedge clk) begin
     	fill_header_wr_dat_reg[127:0] <= ddr3_wr_fifo_dat[127:0];	// leave off the 4 tag bits
     end
     else if (NS[WRITE_CKSM] && burst_cntr_zero && address_cntr_zero) begin
-        //fill_header_wr_dat_reg[151:128] <= total_burst_count[23:0] + 2; // append the total burst count before issue write command to the FIFO
+        //fill_header_wr_dat_reg[151:128] <= total_burst_count[23:0]; // append the total burst count before issue write command to the FIFO
         fill_header_wr_dat_reg[151:128] <= calc_total_burst_count[23:0]; // append the total burst count before issue write command to the FIFO
 	end
 end
@@ -93,7 +93,7 @@ assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];
 
 // Create an address generator
 // Initialize it from the 'start_address' in the fill_header
-// Increment it whenever the address is accepted ( we get a 'wr_app_rdy' while asserting 'wr_app_en') 
+// Increment it whenever the address is accepted (we get a 'wr_app_rdy' while asserting 'wr_app_en') 
 reg [22:0] address_gen;
 reg init_address_gen;   // will be asserted by the state machine
 always @ (posedge clk) begin
@@ -101,7 +101,7 @@ always @ (posedge clk) begin
     	address_gen[22:0] <= 23'b0;
     else if (init_address_gen && (ddr3_wr_fifo_dat[131:128] == 4'd1))
     	// fill header, so set the address to zero
-    	address_gen[22:0] <= address_gen[22:0] <= 23'b0;
+    	address_gen[22:0] <= 23'b0;
     else if (init_address_gen && (ddr3_wr_fifo_dat[131:128] == 4'd2))
     	// waveform header, extract the address
     	address_gen[22:0] <= ddr3_wr_fifo_dat[51:29];
