@@ -39,16 +39,18 @@ module ddr3_wr_control_ASYNC (
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
     IDLE        = 4'd0,
-    TST_TAG     = 4'd1,
-    SYNC_ERR    = 4'd2,
-    INIT_FILL   = 4'd3,
-    WRITE_FILL	= 4'd4,
-    INIT_WFM    = 4'd5,
-    INIT_CKSM   = 4'd6,
-    WRITE       = 4'd7,
-    WRITE_CKSM  = 4'd8,
-    WRITE_HDR   = 4'd9,
-    DONE        = 4'd10;
+    INIT_ALL	= 4'd1,
+    WAIT		= 4'd2,
+    TST_TAG     = 4'd3,
+    SYNC_ERR    = 4'd4,
+    INIT_FILL	= 4'd5,
+    WRITE_FILL	= 4'd6,
+    INIT_WFM    = 4'd7,
+    INIT_CKSM   = 4'd8,
+    WRITE       = 4'd9,
+    WRITE_CKSM  = 4'd10,
+    WRITE_HDR   = 4'd11,
+    DONE        = 4'd12;
 
 // synchronize 'acq_done'
 reg acq_done_sync1, acq_done_sync2;
@@ -69,9 +71,9 @@ reg [23:0] total_burst_count;
 reg init_total_burst_count;
 always @ (posedge clk) begin
 	if (reset)
-		total_burst_count[23:0] <= {24{1'b0}};
+		total_burst_count[23:0] <= 24'd0;
 	else if (init_total_burst_count)
-	    total_burst_count[23:0] <= {{1'b1}};
+	    total_burst_count[23:0] <= 24'd1;
 	else if (address_accept)
 		total_burst_count[23:0] <= total_burst_count[23:0] + 1;
 end
@@ -83,10 +85,7 @@ always @ (posedge clk) begin
     if (reset) fill_header_wr_dat_reg <= {152{1'b0}};
     else if (latch_header) begin
     	fill_header_wr_dat_reg[127:0] <= ddr3_wr_fifo_dat[127:0];	// leave off the 4 tag bits
-    end
-    else if (NS[WRITE_CKSM] && burst_cntr_zero && address_cntr_zero) begin
-        //fill_header_wr_dat_reg[151:128] <= total_burst_count[23:0]; // append the total burst count before issue write command to the FIFO
-        fill_header_wr_dat_reg[151:128] <= calc_total_burst_count[23:0]; // append the total burst count before issue write command to the FIFO
+        fill_header_wr_dat_reg[151:128] <= total_burst_count[23:0]; // append the total burst count before issue write command to the FIFO
 	end
 end
 assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];
@@ -97,11 +96,13 @@ assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];
 reg [22:0] address_gen;
 reg init_address_gen;   // will be asserted by the state machine
 always @ (posedge clk) begin
-    if (reset)
-    	address_gen[22:0] <= 23'b0;
+    if (reset || !acq_enabled)
+    	// start up with it a '1'. This way, if we have a fill with no waveforms we will put
+    	// the checksum in the correct place.
+    	address_gen[22:0] <= 23'd1;
     else if (init_address_gen && (ddr3_wr_fifo_dat[131:128] == 4'd1))
     	// fill header, so set the address to zero
-    	address_gen[22:0] <= 23'b0;
+    	address_gen[22:0] <= 23'd0;
     else if (init_address_gen && (ddr3_wr_fifo_dat[131:128] == 4'd2))
     	// waveform header, extract the address
     	address_gen[22:0] <= ddr3_wr_fifo_dat[51:29];
@@ -168,14 +169,14 @@ end
 assign address_allow = ~(address_control == 0);
     
 // Declare current state and next state variables
-reg [10:0] /* synopsys enum STATE_TYPE */ CS;
-reg [10:0] /* synopsys enum STATE_TYPE */ NS;
+reg [12:0] /* synopsys enum STATE_TYPE */ CS;
+reg [12:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
     if (reset || !acq_enabled) begin
-        CS <= 11'b0;             // set all state bits to 0
+        CS <= 13'b0;             // set all state bits to 0
         CS[IDLE] <= 1'b1;       // set IDLE state bit to 1
     end
     else
@@ -184,22 +185,33 @@ end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
 always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero or acq_done_sync2)     begin
-    NS = 11'b0;                  // default all bits to zero; will overrride one bit
+    NS = 13'b0;                  // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
 
-        // Stay in the IDLE state until we see that the fifo is not empty.
+        // Stay in the IDLE state until we are released from the 'reset' condition by the assertion of 'acq_enabled".
+       CS[IDLE]: begin
+                NS[INIT_ALL] = 1'b1;
+		end
+		
+        // Stay in the INIT_ALL state for 1 clock period.
+        // Initialize stuff for a new fill.
+        CS[INIT_ALL]: begin
+                NS[WAIT] = 1'b1;
+        end
+
+        // Stay in the WAIT state until we see that the fifo is not empty.
         // Since the FIFO runs in first-word fall-through mode, if the fifo
         // in not empty, then the data will be vaild
-        CS[IDLE]: begin
+        CS[WAIT]: begin
             if (ddr3_wr_fifo_empty)
             	// stay here if there is no data
-                NS[IDLE] = 1'b1;
+                NS[WAIT] = 1'b1;
             else
                 // figure out how to handle the data
                 NS[TST_TAG] = 1'b1;
         end
-
+        
         // Stay in TST_TAG state for one period.
         // Check the 4 MSBs of the data for valid tag types. Possibilities are
         // 'fill_header' tag (4'd1), 'waveform_header' tag (4'd2), and 'checksum' tag (4'd4).
@@ -256,7 +268,7 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
             if (burst_cntr_zero && address_cntr_zero)
                 // we have written the requested number of addresses and bursts
                 // go back and wait for another waveform or the checksum
-                NS[IDLE] = 1'b1;
+                NS[WAIT] = 1'b1;
             else
                 // More addresses or data to write, stay here
                 NS[WRITE] = 1'b1;
@@ -274,7 +286,7 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
             if (burst_cntr_zero && address_cntr_zero)
                 // we have written the requested number of addresses and bursts
                 // Go back and wait for the fill header
-                NS[IDLE] = 1'b1;
+                NS[WAIT] = 1'b1;
             else
                 // More addresses or data to write, stay here
                 NS[WRITE_CKSM] = 1'b1;
@@ -290,7 +302,7 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
         // Write the original header to the fill_header_fifo
         CS[DONE]: begin
             if (acq_done_sync2)
-               NS[IDLE] = 1'b1;
+               NS[WAIT] = 1'b1;
             else
                 NS[DONE] = 1'b1;
         end
@@ -303,35 +315,38 @@ end // combinational always block to determine next state
 // Use the NS[] array.
 always @ (posedge clk) begin
     // defaults
-        ddr3_wr_done        <= 1'b0;
-        latch_header        <= 1'b0;
-        init_address_gen    <= 1'b0;
+        ddr3_wr_done        	<= 1'b0;
+        latch_header        	<= 1'b0;
+        init_address_gen    	<= 1'b0;
 		init_address_cntr_to_1	<= 1'b0;
-        init_address_cntr   <= 1'b0;
-        init_burst_cntr     <= 1'b0;
+        init_address_cntr   	<= 1'b0;
+        init_burst_cntr     	<= 1'b0;
 		init_burst_cntr_to_1	<= 1'b0;
 		init_total_burst_count	<= 1'b0;
-        ddr3_wr_sync_err    <= 1'b0;
-        fill_header_wr_en   <= 1'b0;
+        ddr3_wr_sync_err    	<= 1'b0;
+        fill_header_wr_en   	<= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
     end
     
-    if (CS[TST_TAG] && ddr3_wr_fifo_dat[131:128] == 4'd1) begin
-        // latch the header data for use later
-        latch_header        <= 1'b1;
+    if (NS[INIT_ALL]) begin
+       // initialize the total_burst counter to 1 (to include fill header)
+		init_total_burst_count	<= 1'b1;
+    end
+
+    if (NS[WAIT]) begin
     end
 
     if (NS[INIT_FILL]) begin
+        // latch the header data for use later
+	    latch_header        <= 1'b1;
         // initialize the address from the header
         init_address_gen    <= 1'b1;
         // initialize the address counter to 1
 		init_address_cntr_to_1	<= 1'b1;
         // initialize the burst counter to 1
 		init_burst_cntr_to_1	<= 1'b1;
-       // initialize the total_burst counter to 1 (to include fill header)
-		init_total_burst_count	<= 1'b1;
     end
  
 	if (NS[WRITE_FILL]) begin
