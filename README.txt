@@ -45,7 +45,7 @@ repository's absolute path is not allowed to have any spaces.
 To build the firmware, click 'Generate Bitstream' from the Flow Navigator which
 will automatically run synthesis and/or implementation if required.  If successful,
 the bitstream 'bitstreams/wfd_channel.bit' will be generated along with the debug
-file 'debugs/debug_channel.ltx' if set up.
+file 'bitstreams/wfd_channel.ltx' if set up.
 
 
 Intellectual Property (IP)
@@ -66,12 +66,10 @@ WFD_Channel/
 	|-- .gitignore
 	|-- bitstreams/
 	|		|-- .gitignore
-	|		`-- <generated bitstreams>
+	|		|-- <generated bitstreams>
+	|       `-- <generated debugs>
 	|-- constraints/
 	|		`-- <constraint XDC files>
-	|-- debugs/
-	|		|-- .gitignore
-	|		`-- <generated debugs>
 	|-- hdl/
 	|		`-- <main source files>
 	|-- ip/

@@ -46,7 +46,8 @@ module ddr3_intf_ASYNC(
     output ddr3_reset_n,
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
-    output app_rdy                              // output, PHY calibration is done
+    output app_rdy,                              // output, PHY calibration is done
+    output ddr3_wr_control_sm_idle
 );
 // for fast simulation uncomment the next 3 lines, and comment out lines marked farther into this file.
 //wire app_wdf_rdy;				// for fast simulation ONLY
@@ -127,7 +128,8 @@ ddr3_wr_control_ASYNC ddr3_wr_control_ASYNC (
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
     .acq_done(acq_done),                             // input, asserted when the 'adc_acq_sm' is in the DONE state
-    .calc_total_burst_count(calc_total_burst_count[23:0])
+    .calc_total_burst_count(calc_total_burst_count[23:0]),
+    .ddr3_wr_control_sm_idle(ddr3_wr_control_sm_idle)
 );
 
 ///////////////////////////////////////////////////////////////
@@ -154,7 +156,7 @@ ddr3_rd_control ddr3_rd_control (
     .ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),                // data is valid, so put it in the READ FIFO    
     //.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
-    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)     // the last burst for this fill 
+    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)    // the last burst for this fill 
 );
 
 ////////////////////////////////////////////////////////////////////////////

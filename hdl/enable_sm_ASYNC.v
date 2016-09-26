@@ -217,6 +217,7 @@ always @ (posedge adc_clk) begin
     end
     
 	if (NS[FILL_WAIT]) begin
+        adc_acq_sm_idle     <= #1 1'b1;
     end
 
 	if (NS[FILL_START]) begin

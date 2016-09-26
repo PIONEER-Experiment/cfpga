@@ -29,7 +29,8 @@ module ddr3_wr_control_ASYNC (
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
     input acq_done,                        // asserted when the 'adc_acq_sm' is in the DONE state
-    input [23:0] calc_total_burst_count
+    input [23:0] calc_total_burst_count,
+    output reg ddr3_wr_control_sm_idle
 );
 
 // 
@@ -325,17 +326,21 @@ always @ (posedge clk) begin
 		init_total_burst_count	<= 1'b0;
         ddr3_wr_sync_err    	<= 1'b0;
         fill_header_wr_en   	<= 1'b0;
+        ddr3_wr_control_sm_idle <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
+        ddr3_wr_control_sm_idle <= 1'b1;
     end
     
     if (NS[INIT_ALL]) begin
        // initialize the total_burst counter to 1 (to include fill header)
 		init_total_burst_count	<= 1'b1;
+        ddr3_wr_control_sm_idle <= 1'b1;
     end
 
     if (NS[WAIT]) begin
+        ddr3_wr_control_sm_idle <= 1'b1;
     end
 
     if (NS[INIT_FILL]) begin

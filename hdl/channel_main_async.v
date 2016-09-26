@@ -137,6 +137,7 @@ wire [64:0] adc_buf_current_data_delay;
 wire aurora_channel_up;
 wire adc_acq_sm_idle;
 wire command_sm_idle;
+wire ddr3_wr_control_sm_idle;
 
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
@@ -297,7 +298,9 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
     .ddr3_reset_n(ddr3_reset_n),
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
-    .app_rdy()
+    .app_rdy(),
+
+    .ddr3_wr_control_sm_idle(ddr3_wr_control_sm_idle)
 );
 
 ////////////////////////////////////////////////////////////////////////////
@@ -361,13 +364,14 @@ assign aurora_ddr3_accept = use_ddr3_data & (c0_tx_axi_tready && !readout_pause_
  
 ////////////////////////////////////////////////////////////////////////////
 // status LED
-led_status led_status(
+led_status_async led_status_async (
     .clk(clk50),
     .red_led(led1),
     .green_led(led2),
     .aurora_channel_up(aurora_channel_up),
     .adc_acq_sm_idle(adc_acq_sm_idle),
-    .command_sm_idle(command_sm_idle)
+    .command_sm_idle(command_sm_idle),
+    .ddr3_wr_control_sm_idle(ddr3_wr_control_sm_idle)
 );
  
 ////////////////////////////////////////////////////////////////////////////
