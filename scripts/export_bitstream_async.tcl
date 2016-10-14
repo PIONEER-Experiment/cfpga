@@ -3,7 +3,7 @@ if {[file exists ./channel_main_async.bit]} {
   file copy -force ./channel_main_async.bit [file dirname [info script]]/../bitstreams/wfd_channel_async.bit
   puts "INFO: Bitstream copied: wfd_channel_async.bit"
   write_cfgmem -force -format MCS -size 32 -interface SPIx1 \
-      -loadbit "up 0x12E0000 ./channel_main_async.bit" [file dirname [info script]]/../bitstreams/wfd_channel_async
+      -loadbit "up 0x012E0000 ./channel_main_async.bit" [file dirname [info script]]/../bitstreams/wfd_channel_async
 } else {
   puts "ERROR: Bitstream not found: channel_main_async.bit"
 }

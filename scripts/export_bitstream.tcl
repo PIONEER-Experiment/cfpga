@@ -3,7 +3,7 @@ if {[file exists ./channel_main.bit]} {
   file copy -force ./channel_main.bit [file dirname [info script]]/../bitstreams/wfd_channel.bit
   puts "INFO: Bitstream copied: wfd_channel.bit"
   write_cfgmem -force -format MCS -size 32 -interface SPIx1 \
-      -loadbit "up 0x1000000 ./channel_main.bit" [file dirname [info script]]/../bitstreams/wfd_channel
+      -loadbit "up 0x01000000 ./channel_main.bit" [file dirname [info script]]/../bitstreams/wfd_channel
 } else {
   puts "ERROR: Bitstream not found: channel_main.bit"
 }

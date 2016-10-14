@@ -1,7 +1,8 @@
+`include "constants.txt"
+
 // register_block.v
 //
-// This module provides access to 32 32-bit registers. R/W = read/write, RO = read-only
-//
+// This module provides access to 32 32-bit registers. R/W = read/write, RO = read-only.
 
 module register_block(
 	// clocks and reset
@@ -33,14 +34,14 @@ module register_block(
 	input [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
 	output [22:0] fixed_ddr3_start_addr,
 	output en_fixed_ddr3_start_addr,
-	output [11:0] muon_num_waveforms,		// number of waveforms to store per trigger
- 	output [21:0] muon_waveform_gap,		// idle time between waveforms 
-	output [11:0] laser_num_waveforms,		// number of waveforms to store per trigger
-	output [21:0] laser_waveform_gap,		// idle time between waveforms 
-	output [11:0] ped_num_waveforms,		// number of waveforms to store per trigger
-	output [21:0] ped_waveform_gap,			// idle time between waveforms 
-	output [10:0] async_num_bursts,         // number of 8-sample bursts in an ASYNC waveform
-	output [11:0] async_pre_trig,           // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	output [11:0] muon_num_waveforms,		 // number of waveforms to store per trigger
+ 	output [21:0] muon_waveform_gap,		 // idle time between waveforms 
+	output [11:0] laser_num_waveforms,		 // number of waveforms to store per trigger
+	output [21:0] laser_waveform_gap,		 // idle time between waveforms 
+	output [11:0] ped_num_waveforms,		 // number of waveforms to store per trigger
+	output [21:0] ped_waveform_gap,			 // idle time between waveforms 
+	output [10:0] async_num_bursts,          // number of 8-sample bursts in an ASYNC waveform
+	output [11:0] async_pre_trig,            // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
  
  	// generic register space connections
 	output [31:0] genreg_addr_ctrl,	         // generic register address and control output
@@ -97,16 +98,15 @@ module register_block(
 		if (wr_en && (reg_num[4:0] == 5'h04)) reg4_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h05)) reg5_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h06)) reg6_[31:0] <= rx_data[31:0];
-		//if (wr_en && (reg_num[3:0] == 4'h7)) reg7_[31:0] <= rx_data[31:0]; //R7 is read only
+		// R7  is read only
 		if (wr_en && (reg_num[4:0] == 5'h08)) reg8_[31:0] <= rx_data[31:0];
-		//if (wr_en && (reg_num[4:0] == 5'h09)) reg9_[31:0] <= rx_data[31:0]; //R9 is read only
-		//if (wr_en && (reg_num[4:0] == 5'h0a)) reg10_[31:0] <= rx_data[31:0]; //R10 is read only
-		//if (wr_en && (reg_num[4:0] == 5'h0b)) reg11_[31:0] <= rx_data[31:0]; //R11 is read only
-		//if (wr_en && (reg_num[4:0] == 5'h0c)) reg12_[31:0] <= rx_data[31:0]; //R12 is read only
+		// R9  is read only
+		// R10 is read only
+		// R11 is read only
+		// R12 is read only
 		if (wr_en && (reg_num[4:0] == 5'h0d)) reg13_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h0e)) reg14_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h0f)) reg15_[31:0] <= rx_data[31:0];
-
 		if (wr_en && (reg_num[4:0] == 5'h10)) reg16_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h11)) reg17_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h12)) reg18_[31:0] <= rx_data[31:0];
@@ -122,8 +122,7 @@ module register_block(
 		if (wr_en && (reg_num[4:0] == 5'h1c)) reg28_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h1d)) reg29_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h1e)) reg30_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[4:0] == 5'h1f)) reg31_[31:0] <= rx_data[31:0];
-
+		// R31 is read only
 	end
 
 	// Register to/from the ADC acquisition state machine
@@ -167,7 +166,7 @@ module register_block(
 	    .error(adc_buf_delay_data_error)                  // output, tap values not set properly
 	);
 
-	// R9 is read only
+	// R9  is read only
 	// R10 is read only
 	// R11 is read only
 	// R12 is read only
@@ -206,7 +205,9 @@ module register_block(
 
 	// R21
 	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-	assign async_pre_trig[11:0] = reg21_[11:0]; 
+	assign async_pre_trig[11:0] = reg21_[11:0];
+
+	// R31 is read only
 
 	reg [31:0] rdbk_reg;
 	assign tx_data[31:0] = rdbk_reg[31:0];
@@ -222,16 +223,15 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h04)) rdbk_reg[31:0] <= {9'b0, reg4_[22:0]};
 		if (rd_en && (reg_num[4:0] == 5'h05)) rdbk_reg[31:0] <= reg5_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h06)) rdbk_reg[31:0] <= reg6_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h07)) rdbk_reg[31:0] <= genreg_rd_data[31:0];  // data read from generic register interface
+		if (rd_en && (reg_num[4:0] == 5'h07)) rdbk_reg[31:0] <= genreg_rd_data[31:0]; // data read from generic register interface
 		if (rd_en && (reg_num[4:0] == 5'h08)) rdbk_reg[31:0] <= {27'b0, reg8_[4:0]};
-		if (rd_en && (reg_num[4:0] == 5'h09)) rdbk_reg[31:0] <= {7'b0, adc_buf_current_data_delay[24:0]};   // R9 is read only
+		if (rd_en && (reg_num[4:0] == 5'h09)) rdbk_reg[31:0] <= {7'b0, adc_buf_current_data_delay[24:0]};   // R9  is read only
 		if (rd_en && (reg_num[4:0] == 5'h0a)) rdbk_reg[31:0] <= {7'b0, adc_buf_current_data_delay[49:25]};  // R10 is read only
 		if (rd_en && (reg_num[4:0] == 5'h0b)) rdbk_reg[31:0] <= {17'b0, adc_buf_current_data_delay[64:50]}; // R11 is read only
 		if (rd_en && (reg_num[4:0] == 5'h0c)) rdbk_reg[31:0] <= {31'b0, adc_buf_delay_data_error};          // R12 is read only
 		if (rd_en && (reg_num[4:0] == 5'h0d)) rdbk_reg[31:0] <= reg13_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h0e)) rdbk_reg[11:0] <= {20'b0, reg14_[11:0]};
 		if (rd_en && (reg_num[4:0] == 5'h0f)) rdbk_reg[31:0] <= {10'b0, reg15_[21:0]};
-		
 		if (rd_en && (reg_num[4:0] == 5'h10)) rdbk_reg[31:0] <= {20'b0, reg16_[11:0]};
 		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= {10'b0, reg17_[21:0]};
 		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= {20'b0, reg18_[11:0]};
@@ -247,8 +247,8 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h1c)) rdbk_reg[31:0] <= reg28_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h1d)) rdbk_reg[31:0] <= reg29_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h1e)) rdbk_reg[31:0] <= reg30_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h1f)) rdbk_reg[31:0] <= reg31_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h1f)) rdbk_reg[31:0] <= {8'b0, `MAJOR_REV, `MINOR_REV, `PATCH_REV}; // R31 is read only
 
-		//else rdbk_reg[31:0] <= rdbk_reg[31:0];
+		// else rdbk_reg[31:0] <= rdbk_reg[31:0];
 	end
 endmodule	
