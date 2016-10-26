@@ -19,11 +19,9 @@
 // 1) Response Serial Number (RSN) matching the CSN
 // 2) Response Code (RC) equals the bitwise inverse of the CC
  
-
-module cc_wr_reg_sm(
-
+module cc_wr_reg_sm (
 	input clk,					// local clock
-	input reset,				// active-hi
+	input reset,				// active-high
 
 	input run_sm,  		 	    // run this state machine
 	output sm_running,			// we are running
@@ -55,7 +53,7 @@ module cc_wr_reg_sm(
 
     // Everything is already synchronous to the clock.
 
-	// State machine for executing the 'loopback' command
+	// State machine for executing the 'wr_reg' command
 	//  Leave the comments containing "synopsys" in your HDL code.
  
 	// Declare the symbolic names for states for the state machine

@@ -39,15 +39,15 @@ module adc_acq_top(
     output adc_clk,                 // ADC clock used by the FIFO
     output adc_acq_full_reset,      // reset all aspects of data collection/storage/readout
     output acq_done,                // acquisition is done
+    output [25:0] packed_adc_dat,   // two samples, with over-range bits, packed in one wide-word
+                                    //   bit[0]      = first overrange
+                                    //   bits[11:1]  = first ADC sample
+                                    //   bit[12]     = second overrange
+                                    //   bits[25:13] = second ADC sample
     output adc_acq_sm_idle          // ADC acquisition state machine is idle (used for front panel LED status)
 );
 
 wire [1:0] fill_type;           // to determine how much data to collect
-wire [25:0] packed_adc_dat;     // two samples, with over-range bits,  packed in one wide-word
-                                // bit[0]       = first overrange
-                                // bits[11:1]   = first ADC sample
-                                // bit[12]      = second overrange
-                                // bits[25:13]  = second ADC sample
 wire [22:0] num_fill_bursts;    // number of 8 (or 10)-sample bursts in a fill
 wire [11:0] num_waveforms;   	// number of waveforms to store per trigger
 wire [21:0] waveform_gap;		// idle time between waveforms 
@@ -65,21 +65,21 @@ assign acq_enabled = acq_enable0 | acq_enable1;
 // http://forums.xilinx.com/t5/Timing-Analysis/XDC-constraints-Source-Synchronous-ADC-DDR/td-p/292807
 // Use a SelectIO Wizard DDR input buffer
 selectio_wiz_0 adc_dat_buf (
-    .data_in_from_pins_p({adc_in_p[11:0],adc_ovr_p}),   // [12:0] array of ADC 'p' data pins and over-range
-    .data_in_from_pins_n({adc_in_n[11:0],adc_ovr_n}),   // [12:0] array of ADC 'n' data pins and over-range
-    .clk_in_p(adc_clk_p),                               // ADC 'p' clk pin
-    .clk_in_n(adc_clk_n),                               // ADC 'n' clk pin
-    .io_reset(adc_acq_full_reset),                      // synchronously negated 
-    .in_delay_reset(adc_buf_delay_data_reset),          // input wire in_delay_reset
-    .in_delay_tap_in({13{adc_buf_data_delay[4:0]}}),    // 13 input lines, 5 delay-tap-bits per line, always all the same
-    .in_delay_tap_out(adc_buf_current_data_delay[64:0]),// 13 lines *5 bits/line, current tap settings 
-    .in_delay_data_ce({13{1'b0}}),                      // 'ce' is unused
-    .in_delay_data_inc({13{1'b0}}),                     // 'inc' is unused
+    .data_in_from_pins_p({adc_in_p[11:0],adc_ovr_p}),    // [12:0] array of ADC 'p' data pins and over-range
+    .data_in_from_pins_n({adc_in_n[11:0],adc_ovr_n}),    // [12:0] array of ADC 'n' data pins and over-range
+    .clk_in_p(adc_clk_p),                                // ADC 'p' clk pin
+    .clk_in_n(adc_clk_n),                                // ADC 'n' clk pin
+    .io_reset(adc_acq_full_reset),                       // synchronously negated 
+    .in_delay_reset(adc_buf_delay_data_reset),           // input wire in_delay_reset
+    .in_delay_tap_in({13{adc_buf_data_delay[4:0]}}),     // 13 input lines, 5 delay-tap-bits per line, always all the same
+    .in_delay_tap_out(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings 
+    .in_delay_data_ce({13{1'b0}}),                       // 'ce' is unused
+    .in_delay_data_inc({13{1'b0}}),                      // 'inc' is unused
     .delay_clk(clk200),
-    .ref_clock(clk200),                                 // 200 MHz clock required to ensure tap value settings
-    .clk_out(adc_clk),                                  // normal rising-edge clock
-    .data_in_to_device(packed_adc_dat),                 // twice-as-wide SDR data
-    .delay_locked()                                     // not used
+    .ref_clock(clk200),                                  // 200 MHz clock required to ensure tap value settings
+    .clk_out(adc_clk),                                   // normal rising-edge clock
+    .data_in_to_device(packed_adc_dat),                  // twice-as-wide SDR data
+    .delay_locked()                                      // not used
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,7 +106,7 @@ always @(posedge adc_clk) begin
         // increment on every adc_clk
         dummy_dat[11:0] <= dummy_dat[11:0] + 1;
 end
-        
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // connect a pipeline of registers to hold all data for 1 burst.
 // register #0 will have the oldest data

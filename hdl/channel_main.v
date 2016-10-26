@@ -180,6 +180,8 @@ IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
 wire [11:0] adc_in_p, adc_in_n;
 assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d5p, adc_d4p, adc_d3p, adc_d2p, adc_d1p, adc_d0p};
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
+
+wire [25:0] packed_adc_dat;
  
 adc_acq_top adc_acq_top (
     // inputs
@@ -220,6 +222,7 @@ adc_acq_top adc_acq_top (
     .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
     .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .acq_done(acq_done),                                 // acquisition is done
+    .packed_adc_dat(packed_adc_dat[25:0]),               // 
     .adc_acq_sm_idle(adc_acq_sm_idle)                    // ADC acquisition state machine is idle (used for front panel LED status)
 );
 
@@ -458,6 +461,7 @@ command_top command_top(
     .clk(clk125),                // clock for the interconnect side of the FIFOs
     .resetN(reset_clk125N),      // active-lo reset for the interconnect side of the FIFOs
     .cnt_reset(rst_from_master), // reset, for fill number count
+    .adc_clk(adc_clk),           // ADC clock
 
     // channel 0 connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
@@ -509,6 +513,8 @@ command_top command_top(
     .genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
     .genreg_wr_data(genreg_wr_data[31:0]),
     .genreg_rd_data(genreg_rd_data[31:0]),
+
+    .packed_adc_dat(packed_adc_dat[25:0]),
 
     // interface to the AXIS 2:1 mux
     .use_ddr3_data(use_ddr3_data),              // the data source is the DDR3 memory

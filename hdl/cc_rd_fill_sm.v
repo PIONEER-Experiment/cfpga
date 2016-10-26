@@ -21,10 +21,9 @@
 // 1) Response Serial Number (RSN) matching the CSN
 // 2) Response Code (RC) equals the bitwise inverse of the CC
 
-module cc_rd_fill_sm(
-
+module cc_rd_fill_sm (
 	input clk,								// local clock
-	input reset,							// active-hi
+	input reset,							// active-high
 
 	input run_sm,  		 	    			// run this state machine
 	output reg sm_running,					// we are running
@@ -103,16 +102,15 @@ reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 // Reset the sm whenever we are not enabled
 always @ (posedge clk) begin
 	if (!run_sm) begin
-		CS <= 10'b0;			// set all state bits to 0
-		CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
+		CS <= 10'b0;      // set all state bits to 0
+		CS[IDLE] <= 1'b1; // set IDLE state bit to 1
 	end
-	else  CS <= NS;			// set state bits to next state
+	else CS <= NS;		  // set state bits to next state
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found 
-			or all_ddr3_words_sent) begin
-	NS = 10'b0;					// default all bits to zero; will overrride one bit
+always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent) begin
+	NS = 10'b0; // default all bits to zero; will overrride one bit
 
 	case (1'b1) //synopsys full_case parallel_case
 
@@ -124,7 +122,7 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
 		end
 
 		// We enter the CHK_FIFO_EMPTY state after we have been started.
-		// There should be a complete header in the fifo. If nothing is there, then we flag an error
+		// There should be a complete header in the FIFO. If nothing is there, then we flag an error
 		CS[CHK_FIFO_EMPTY]: begin
 			// See if there is something in the header FIFO
 			if (fill_header_fifo_empty)
@@ -158,7 +156,7 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
 		// We stay here until the TX FIFO  is ready to accept data
 		// The CSN is routed to the TX FIFO
 		CS[ECHO_CSN1]: begin
-			// Wait for the TX fifo to be ready, and for downstream system to be accepting data
+			// Wait for the TX FIFO to be ready, and for downstream system to be accepting data
 			if (tx_tready)
 				// Prepare to transmit the CSN
 				NS[ECHO_CSN2] = 1'b1;
@@ -167,7 +165,7 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
 				NS[ECHO_CSN1] = 1'b1;
 		end
 
-		// We enter the ECHO_CSN2 state whenever the TX fifo is ready to accept the CSN.
+		// We enter the ECHO_CSN2 state whenever the TX FIFO is ready to accept the CSN.
 		// We stay here for one cycle, during which we assert 'tx_tvalid'
 		CS[ECHO_CSN2]: begin
 			NS[ECHO_CC1] = 1'b1;
@@ -177,7 +175,7 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
 		// We stay here until the TX FIFO is ready to accept data
 		// The CC or its inverse is routed to the TX FIFO
 		CS[ECHO_CC1]: begin
-			// Wait for the TX fifo to be ready.
+			// Wait for the TX FIFO to be ready.
 			if (tx_tready)
 				// Prepare to transmit the CC or its inverse
 				NS[ECHO_CC2] = 1'b1;
@@ -186,7 +184,7 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
 				NS[ECHO_CC1] = 1'b1;
 		end
 
-		// We enter the ECHO_CC2 state whenever the TX fifo is ready to accept the CC.
+		// We enter the ECHO_CC2 state whenever the TX FIFO is ready to accept the CC.
 		// We stay here for one cycle, during which we assert 'tx_tvalid'.
 		// If there were any errors, we assert 'tx_tlast' and go to DONE.
 		CS[ECHO_CC2]: begin
@@ -244,9 +242,9 @@ always @ (posedge clk) begin
 	end
 	
 	if (NS[CHK_FIFO_EMPTY]) begin
-	   //if (~fill_header_fifo_empty) 		
-	   // remove the word from the FIFO head
-       //fill_header_fifo_rd_en <= 1'b1;
+	   	//if (~fill_header_fifo_empty) 		
+	   	// remove the word from the FIFO head
+       	//fill_header_fifo_rd_en <= 1'b1;
 	end
 
 	if (NS[ERROR1]) begin
@@ -264,8 +262,8 @@ always @ (posedge clk) begin
 		ddr3_rd_burst_cnt[23:0] <= fill_header_fifo_out[151:128];
 		// load the words_to_send counter - these are 32-bit words, so left-shift the burst count
 		ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
-	   // remove the word from the FIFO head
-       fill_header_fifo_rd_en <= 1'b1;		
+	    // remove the word from the FIFO head
+        fill_header_fifo_rd_en <= 1'b1;		
 	end
 
 	if (NS[ECHO_CSN1]) begin
@@ -318,7 +316,7 @@ always @ (posedge clk) begin
 	end
 end
 
-///////////////////////////////////////////////////////////////////////////////////////	
+/////////////////////////////////////////////////////////////////////////////////////////////
 // clear the error flag when IDLE and set the error flag whenever we are sent to state ERROR1
 always @ (posedge clk) begin
 	if (CS[IDLE] == 1'b1)

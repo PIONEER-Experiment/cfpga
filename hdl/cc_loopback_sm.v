@@ -12,11 +12,9 @@
 // 4) Response Data #1 (if needed) (RD1)
 // 5..end) Additional Response Parameters (RD2...)
  
-
-module cc_loopback_sm(
-
+module cc_loopback_sm (
 	input clk,					// local clock
-	input reset,				// active-hi
+	input reset,				// active-high
 
 	input run_sm,  		 	    // run this state machine
 	output sm_running,			// we are running

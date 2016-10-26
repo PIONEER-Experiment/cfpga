@@ -46,7 +46,9 @@ module register_block(
  	// generic register space connections
 	output [31:0] genreg_addr_ctrl,	         // generic register address and control output
 	output [31:0] genreg_wr_data,	         // generic register data written from Master FPGA 
-	input [31:0] genreg_rd_data		         // generic register data read by Master FPGA
+	input [31:0] genreg_rd_data,	         // generic register data read by Master FPGA
+
+	input [31:0] opt_data_integrity
 );
 
 	// make a register to hold the number of the selected register.
@@ -67,11 +69,7 @@ module register_block(
 	
 	// make a block of 32 32-bit registers
 	// those with explicit defaults follow below
-	reg [31:0] reg1_,  reg5_,  reg6_,  reg7_,
-			   reg9_,  reg10_, reg11_, reg12_,
-			   reg22_, reg23_, reg24_, reg25_,
-			   reg26_, reg27_, reg28_, reg29_,
-			   reg30_, reg31_;
+	reg [31:0] reg1_, reg5_, reg6_, reg23_, reg24_, reg25_, reg26_, reg27_, reg28_, reg29_, reg30_;
 
 	// set non-zero default register values
 	reg [31:0] reg0_  = 32'd1;        // initial fill number set to 1
@@ -113,7 +111,7 @@ module register_block(
 		if (wr_en && (reg_num[4:0] == 5'h13)) reg19_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h14)) reg20_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h15)) reg21_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[4:0] == 5'h16)) reg22_[31:0] <= rx_data[31:0];
+		// R22 is read only
 		if (wr_en && (reg_num[4:0] == 5'h17)) reg23_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h18)) reg24_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h19)) reg25_[31:0] <= rx_data[31:0];
@@ -207,6 +205,7 @@ module register_block(
 	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 	assign async_pre_trig[11:0] = reg21_[11:0];
 
+	// R22 is read only
 	// R31 is read only
 
 	reg [31:0] rdbk_reg;
@@ -238,7 +237,7 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= {10'b0, reg19_[21:0]};
 		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {21'b0, reg20_[10:0]};
 		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {20'b0, reg21_[11:0]};
-		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= reg22_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= opt_data_integrity[31:0]; // R22 is read only
 		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= reg23_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= reg24_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h19)) rdbk_reg[31:0] <= reg25_[31:0];

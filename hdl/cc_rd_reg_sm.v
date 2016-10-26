@@ -19,10 +19,9 @@
 // 1) Response Serial Number (RSN) matching the CSN
 // 2) Response Code (RC) equals the bitwise inverse of the CC
 
-module cc_rd_reg_sm(
-
+module cc_rd_reg_sm (
 	input clk,					// local clock
-	input reset,				// active-hi
+	input reset,				// active-high
 
 	input run_sm,  		 	    // run this state machine
 	output sm_running,			// we are running
@@ -54,7 +53,7 @@ module cc_rd_reg_sm(
 
 	// Everything is already synchronous to the clock.
 
-	// State machine for executing the 'loopback' command
+	// State machine for executing the 'rd_reg' command
 	//  Leave the comments containing "synopsys" in your HDL code.
  
 	// Declare the symbolic names for states for the state machine
@@ -99,10 +98,9 @@ module cc_rd_reg_sm(
 
 			// We will be in the IDLE state whenever the command dispatcher does not enable us.
 			// Once enabled, immediately start working
-			//
 			CS[IDLE]: begin
-					// Get register number.
-					NS[WAIT_REG_NUM] = 1'b1;
+				// Get register number.
+				NS[WAIT_REG_NUM] = 1'b1;
 			end
 
 			// We enter the WAIT_REG_NUM state after we have been started.
@@ -210,7 +208,7 @@ module cc_rd_reg_sm(
 				else
 					// there are no errors, so send the data
 					NS[XMIT_REG1] = 1'b1;
-				end
+			end
 
 			// We enter the XMIT_REG1 state after we have transmitted the CC.
 			// We stay here until the TX FIFO is ready to accept data.
@@ -229,8 +227,8 @@ module cc_rd_reg_sm(
 			// the TX FIFO that it is seeing good data.
 			// The register data is routed to the TX FIFO
 			CS[XMIT_REG2]: begin
-					// We are done
-					NS[DONE] = 1'b1;
+				// We are done
+				NS[DONE] = 1'b1;
 			end
 
 			// We enter the DONE state whenever we have finished this command.

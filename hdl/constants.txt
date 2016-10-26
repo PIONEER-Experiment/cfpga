@@ -9,7 +9,7 @@
 
 	// Define 8-bit constants to hold info about code version and functionality
 	`define	MAJOR_REV		8'd2	// major revision
-	`define	MINOR_REV		8'd0	// minor revision
+	`define	MINOR_REV		8'd1	// minor revision
 	`define PATCH_REV		8'd0	// patch revision
 	
 	// Define 5-bit constants for commands from the Master FPGA
@@ -23,5 +23,6 @@
 	`define	CC_WR_MEM		5'd7	// write to a range of memory locations
 	`define	CC_RD_FILL		5'd8	// read the next fill
 	`define CC_RD_ADC       5'd9 	// read a block directly from the ADC
+	`define CC_OPT_DELAY    5'd10   // optimize ADC tap delay
 
 `endif
