@@ -9,7 +9,7 @@
       <spirit:instanceName>wfd5_ddr3_r1</spirit:instanceName>
       <spirit:componentRef spirit:vendor="xilinx.com" spirit:library="ip" spirit:name="mig_7series" spirit:version="2.3"/>
       <spirit:configurableElementValues>
-        <spirit:configurableElementValue spirit:referenceId="PARAM_VALUE.XML_INPUT_FILE">mig_b.prj</spirit:configurableElementValue>
+        <spirit:configurableElementValue spirit:referenceId="PARAM_VALUE.XML_INPUT_FILE">mig_a.prj</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="PARAM_VALUE.RESET_BOARD_INTERFACE">Custom</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="PARAM_VALUE.MIG_DONT_TOUCH_PARAM">Custom</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="PARAM_VALUE.BOARD_MIG_PARAM">Custom</spirit:configurableElementValue>
@@ -18,7 +18,7 @@
         <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.COMBINED_INTERFACE">0</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.REFCLK_TYPE">NOBUF</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.MEM_TYPE">DDR3</spirit:configurableElementValue>
-        <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.TEMP_MON_CONTROL">INTERNAL</spirit:configurableElementValue>
+        <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.TEMP_MON_CONTROL">EXTERNAL</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.POLARITY">ACTIVE_HIGH</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.IS_CLK_SHARED">FALSE</spirit:configurableElementValue>
         <spirit:configurableElementValue spirit:referenceId="MODELPARAM_VALUE.SYSCLK_TYPE">NOBUF</spirit:configurableElementValue>

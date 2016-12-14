@@ -7,7 +7,7 @@ module circ_buf_to_ddr3_ASYNC(
     input reset_clk_adc,			// either 'ext_reset' or 'reset_clk50' is asserted
 	input cbuf_rd_en,				// moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
 	input cbuf_trig_en,				// triggering of new waveforms is enabled
-    input [15:0] channel_tag,       // stuff about the channel to put in the header
+    input [11:0] channel_tag,       // stuff about the channel to put in the header
     input [23:0] initial_fill_num,  // event number to assign to the first fill
     input initial_fill_num_wr,      // write-strobe to store the initial_fill_num
     input [10:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform
@@ -16,6 +16,7 @@ module circ_buf_to_ddr3_ASYNC(
 	input [15:0] circ_buf_trig_addr, // circular buffer address corresponding to a trigger, FIFO output
 	input trig_fifo_empty,			// no triggers available when asserted
 	input [1:0] fill_type,			// the levels on the 'acq_enable[1:0]' inputs
+    input [3:0] xadc_alarms,
 
     // outputs
 	output cbuf_rd_trig_wait,	// waiting for another trigger or the negation of 'cbuf_rd_en'	
@@ -68,7 +69,7 @@ always @(posedge adc_clk) begin
 		circ_buf_dat_reg0_[25:0] <= #1 circ_buf_dat_reg1_[25:0];
 	end
 end
-		
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // connect a mux that will supply either a fill header, a waveform header, ADC data, or a checksum
 // to the DDR3 write FIFO. All bit ordering is done in this mux
@@ -78,7 +79,7 @@ adc_dat_mux_ASYNC adc_dat_mux_ASYNC (
     .dat2_(circ_buf_dat_reg2_[25:0]),            // a pair of ADC samples and a pair of over-range bits
     .dat1_(circ_buf_dat_reg1_[25:0]),            // a pair of ADC samples and a pair of over-range bits
     .dat0_(circ_buf_dat_reg0_[25:0]),            // a pair of ADC samples and a pair of over-range bits
-    .channel_tag(channel_tag[15:0]),            // stuff about the channel to put in the header
+    .channel_tag(channel_tag[11:0]),            // stuff about the channel to put in the header
     .fill_type(fill_type[1:0]),                 // determine which burst count to use
     .num_fill_bursts(num_fill_bursts[22:0]),    // number of bursts of any type (header, data, checksum)
     .waveform_start_adr(waveform_start_adr[22:0]), // DDR3 burst memory location (3 LSBs=0) for a waveform
@@ -86,6 +87,7 @@ adc_dat_mux_ASYNC adc_dat_mux_ASYNC (
 	.fill_num(fill_num[23:0]),                  // fill number for this fill
     .async_num_bursts(async_num_bursts[10:0]),  // number of 8-sample bursts in an ASYNC waveform
 	.async_pre_trig(async_pre_trig[11:0]),    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .xadc_alarms(xadc_alarms[3:0]),
     .clk(adc_clk),
     .select_dat(adc_mux_dat_sel),               // selects data
     .select_fill_hdr(adc_mux_fill_hdr_sel),     // selects fill header

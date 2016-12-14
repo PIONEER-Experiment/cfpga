@@ -11,7 +11,7 @@ module adc_acq_top(
     input adc_clk_n,                // ADC 'n' clk pin
     input reset_clk50,              // synchronously negated  
     input clk200,                   // for input pin timing delay settings
-    input [15:0] channel_tag,       // stuff about the channel to put in the header
+    input [11:0] channel_tag,       // stuff about the channel to put in the header
     input [22:0] muon_num_bursts,   // number of sample bursts in a MUON fill
     input [22:0] laser_num_bursts,  // number of sample bursts in a LASER fill
     input [22:0] ped_num_bursts,    // number of sample bursts in a OPEDESTAL fill
@@ -30,6 +30,7 @@ module adc_acq_top(
     input [21:0] laser_waveform_gap,	// idle time between waveforms 
     input [11:0] ped_num_waveforms,		// number of waveforms to store per trigger
     input [21:0] ped_waveform_gap,		// idle time between waveforms 
+    input [3:0] xadc_alarms,
     // outputs
     output acq_enabled,             // the system is in acquisition mode, rather than readout mode
     output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
@@ -181,12 +182,11 @@ adc_waveform_gap_mux adc_waveform_gap_mux (
 // All bit ordering is done in this mux
 adc_dat_mux adc_dat_mux (
     // inputs
-    .dat4_(adc_dat_reg4_[25:0]),                // a pair of ADC samples and a pair of over-range bits
     .dat3_(adc_dat_reg3_[25:0]),                // a pair of ADC samples and a pair of over-range bits
     .dat2_(adc_dat_reg2_[25:0]),                // a pair of ADC samples and a pair of over-range bits
     .dat1_(adc_dat_reg1_[25:0]),                // a pair of ADC samples and a pair of over-range bits
     .dat0_(adc_dat_reg0_[25:0]),                // a pair of ADC samples and a pair of over-range bits
-    .channel_tag(channel_tag[15:0]),            // stuff about the channel to put in the header
+    .channel_tag(channel_tag[11:0]),            // stuff about the channel to put in the header
     .fill_type(fill_type[1:0]),                 // determine which burst count to use
     .num_fill_bursts(num_fill_bursts[22:0]),    // number of 8(or 10) sample bursts
     .burst_start_adr(burst_start_adr[22:0]),    // first DDR3 burst memory location (3 LSBs=0) for this fill
@@ -194,6 +194,7 @@ adc_dat_mux adc_dat_mux (
 	.current_waveform_num(current_waveform_num[11:0]),// the current waveform number, to be used in header
     .waveform_gap(waveform_gap[21:0]),	    	// idle time between waveforms
     .fill_num(fill_num[23:0]),                  // fill number for this fill
+    .xadc_alarms(xadc_alarms[3:0]),
     .clk(adc_clk),
     .select_dat(adc_mux_dat_sel),               // selects data
     .select_fill_hdr(adc_mux_fill_hdr_sel),     // selects fill header
@@ -271,7 +272,7 @@ adc_fill_cntr adc_fill_cntr (
     .init(initial_fill_num_wr),                 // initialize when programmed
     .enable(fill_cntr_en),                      // will be enabled once per fill
     // outputs
-   .fill_num(fill_num[23:0])                    // fill number for this fill
+    .fill_num(fill_num[23:0])                   // fill number for this fill
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -299,7 +300,7 @@ adc_acq_sm adc_acq_sm (
     .adc_mux_dat_sel(adc_mux_dat_sel),      // selects data
     .adc_mux_checksum_select(adc_mux_checksum_select),      // send the checksum to the FIFO 
     .adc_mux_checksum_update(adc_mux_checksum_update),      // update the checksum 
-     .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
+    .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
     .burst_cntr_init(burst_cntr_init),      // initialize when triggered
     .burst_cntr_en(burst_cntr_en),          // will be enabled once per burst
     .fill_cntr_en(fill_cntr_en),            // will be enabled once per fill

@@ -45,7 +45,8 @@ module ddr3_intf(
     output ddr3_reset_n,
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
-    output app_rdy                              // output, PHY calibration is done
+    output app_rdy,                             // output, PHY calibration is done
+    input [11:0] xadc_temp
 );
 
 //synchronize the 'reset' signal
@@ -172,7 +173,7 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     // clocks and resets
     .clk_ref_i(refclk),                             // input, 200 MHz for I/O timing adjustments
     .sys_clk_i(sysclk),                             // input, drives the Xilinx DDR3 IP
-    .sys_rst(reset_sync2),                          // input, reset at startup or when requested by master FPGA 
+    .sys_rst(reset_sync2),                          // input, reset at startup or when requested by master FPGA
     // Memory interface ports
     .ddr3_addr(ddr3_addr[12:0]),
     .ddr3_ba(ddr3_ba[2:0]),
@@ -213,7 +214,8 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     .app_ref_ack(),                                 // output, a refresh has been requested
     .app_zq_req(1'b0),                              // input, request a ZQ calibration
     .app_zq_ack(),                                  // output, a ZQ calibration has been requested
-    .init_calib_complete(init_calib_complete)       // output, PHY calibration is done
+    .init_calib_complete(init_calib_complete),      // output, PHY calibration is done
+    .device_temp_i(xadc_temp[11:0])                 // input, temperature measured by XADC
     // Debug Ports
     // .ddr3_ila_basic(ddr3_ila_basic),
     // .ddr3_ila_wrpath(ddr3_ila_wrpath),

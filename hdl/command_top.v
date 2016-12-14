@@ -39,7 +39,7 @@ module command_top (
 
 	// register to/from the ADC acquisition state machine
 	input  [23:0] fill_num,	                  // fill number for this fill
-	output [15:0] channel_tag,		          // stuff about the channel to put in the header
+	output [11:0] channel_tag,		          // stuff about the channel to put in the header
 	output [22:0] muon_num_bursts,	          // number of sample bursts in a MUON fill
 	output [22:0] laser_num_bursts,	          // number of sample bursts in a LASER fill
 	output [22:0] ped_num_bursts,	          // number of sample bursts in a PEDESTAL fill
@@ -59,6 +59,11 @@ module command_top (
 	output [21:0] ped_waveform_gap,			  // idle time between waveforms 
 	output [10:0] async_num_bursts,           // number of 8-sample bursts in an ASYNC waveform
 	output [11:0] async_pre_trig,             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+
+	input  [15:0] xadc_temp,
+	input  [15:0] xadc_vccint,
+	input  [15:0] xadc_vccaux,
+	input  [15:0] xadc_vccbram,
 
 	output [31:0] genreg_addr_ctrl,        	  // generic register address and control output
 	output [31:0] genreg_wr_data,	          // generic register data written from Master FPGA 
@@ -81,12 +86,12 @@ module command_top (
 	
 	wire [31:0] reg_data;
 	wire [ 4:0] data_delay_from_reg_block;
-	wire [ 4:0] data_delay_from_opt_sm;
+	wire [ 4:0] data_delay_from_map_sm;
 	wire data_reset_from_reg_block;
-	wire data_reset_from_opt_sm;
+	wire data_reset_from_map_sm;
 
-	wire start_opt;
-	wire opt_sm_error;
+	wire start_map;
+	wire map_sm_error;
 
 	///////////////////////////////////////////////////////////////////////////////////////////
 	// correct 'channel address' for channel 3 (hardware jumpers are set to 110 instead of 011)
@@ -124,50 +129,50 @@ module command_top (
 	// start with 'run_cmd_sm' which is a 'run someone' from the command sm.
 	// Use the actual command from the command register to activate 1 particular sm.
 	wire run_cmd_sm;    
-	wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_rd_fill, run_cc_opt_delay;
+	wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_rd_fill, run_cc_map_delay;
 	
 	assign run_cc_loopback  = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
 	assign run_cc_rd_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_RD_REG));
 	assign run_cc_wr_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_WR_REG));
 	assign run_cc_rd_fill   = (run_cmd_sm && (command_reg[4:0] == `CC_RD_FILL));
-	assign run_cc_opt_delay = (run_cmd_sm && (command_reg[4:0] == `CC_OPT_DELAY));
+	assign run_cc_map_delay = (run_cmd_sm && (command_reg[4:0] == `CC_MAP_DELAY));
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	// merge 'running' and 'done' signals from the state machines that handle individual commands.
 	// only 1 of each, from the activated sm, should ever be active at the same time
-	wire cmd_sm_running, opt_sm_running;
-	wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_opt_delay_running;
-	assign cmd_sm_running = cc_loopback_running || cc_rd_reg_running || cc_wr_reg_running || cc_rd_fill_running || cc_opt_delay_running;
+	wire cmd_sm_running, map_sm_running;
+	wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_map_delay_running;
+	assign cmd_sm_running = cc_loopback_running || cc_rd_reg_running || cc_wr_reg_running || cc_rd_fill_running || cc_map_delay_running;
 
-	wire cmd_sm_done, opt_sm_done;
-	wire cc_loopback_done, cc_rd_reg_done, cc_wr_reg_done, cc_rd_fill_done, cc_opt_delay_done;
-	assign cmd_sm_done = cc_loopback_done || cc_rd_reg_done || cc_wr_reg_done || cc_rd_fill_done || cc_opt_delay_done;
+	wire cmd_sm_done, map_sm_done;
+	wire cc_loopback_done, cc_rd_reg_done, cc_wr_reg_done, cc_rd_fill_done, cc_map_delay_done;
+	assign cmd_sm_done = cc_loopback_done || cc_rd_reg_done || cc_wr_reg_done || cc_rd_fill_done || cc_map_delay_done;
 
 	////////////////////////////////////////////////////////////////////
 	// every state machine will need to drive certain FIFO control lines
 	wire command_top_sm_rx_tready, loopback_sm_rx_tready, rd_reg_sm_rx_tready, wr_reg_sm_rx_tready;
 	assign rx_tready = command_top_sm_rx_tready || loopback_sm_rx_tready || rd_reg_sm_rx_tready || wr_reg_sm_rx_tready;
 		 
-	wire loopback_sm_tx_tvalid, rd_reg_sm_tx_tvalid, wr_reg_sm_tx_tvalid, rd_fill_sm_tx_tvalid, opt_delay_sm_tx_tvalid;
-	assign tx_tvalid = loopback_sm_tx_tvalid || rd_reg_sm_tx_tvalid || wr_reg_sm_tx_tvalid || rd_fill_sm_tx_tvalid || opt_delay_sm_tx_tvalid;
+	wire loopback_sm_tx_tvalid, rd_reg_sm_tx_tvalid, wr_reg_sm_tx_tvalid, rd_fill_sm_tx_tvalid, map_delay_sm_tx_tvalid;
+	assign tx_tvalid = loopback_sm_tx_tvalid || rd_reg_sm_tx_tvalid || wr_reg_sm_tx_tvalid || rd_fill_sm_tx_tvalid || map_delay_sm_tx_tvalid;
 
-	wire loopback_sm_tx_tlast, rd_reg_sm_tx_tlast, wr_reg_sm_tx_tlast, rd_fill_sm_tx_tlast, opt_delay_sm_tx_tlast;
-	assign tx_tlast = loopback_sm_tx_tlast || rd_reg_sm_tx_tlast || wr_reg_sm_tx_tlast || rd_fill_sm_tx_tlast || opt_delay_sm_tx_tlast;
+	wire loopback_sm_tx_tlast, rd_reg_sm_tx_tlast, wr_reg_sm_tx_tlast, rd_fill_sm_tx_tlast, map_delay_sm_tx_tlast;
+	assign tx_tlast = loopback_sm_tx_tlast || rd_reg_sm_tx_tlast || wr_reg_sm_tx_tlast || rd_fill_sm_tx_tlast || map_delay_sm_tx_tlast;
 
 	/////////////////////////////////////////////////
 	// connect a big mux to steer data to the TX FIFO
 	wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_delay_data;
-	wire [31:0] opt_data_integrity;
+	wire [31:0] map_data_integrity;
 	reg [31:0] tx_data_reg;
 
 	// synchronize current_delay
-    wire [31:0] opt_data_out;
+    wire [31:0] map_data_out;
     sync_2stage #(
         .WIDTH(32)
     ) current_delay_sync (
         .clk(clk),
-        .in(opt_data_integrity),
-        .out(opt_data_out)
+        .in(map_data_integrity),
+        .out(map_data_out)
     );
 
 	always @ (posedge clk) begin
@@ -176,22 +181,22 @@ module command_top (
 		if (send_inv_cmd)  	 tx_data_reg[31:0] <= ~command_reg[31:0];   // inverse of command
 		if (send_rx_data)  	 tx_data_reg[31:0] <= rx_data[31:0];		// loopback
 		if (send_reg_data) 	 tx_data_reg[31:0] <= reg_data[31:0];	   	// reading from a register
-		if (send_delay_data) tx_data_reg[31:0] <= opt_data_out[31:0];   // reading tap delay validity
+		if (send_delay_data) tx_data_reg[31:0] <= map_data_out[31:0];   // reading tap delay validity
 	end
 	assign tx_data[31:0] = tx_data_reg[31:0];
 	
 	// Create the mux control signals
 	// All state machines need to send the CSN
-	wire loopback_sm_send_csn, rd_reg_sm_send_csn, wr_reg_sm_send_csn, rd_fill_sm_send_csn, opt_delay_sm_send_csn;
-	assign send_csn = loopback_sm_send_csn || rd_reg_sm_send_csn || wr_reg_sm_send_csn || rd_fill_sm_send_csn || opt_delay_sm_send_csn;
+	wire loopback_sm_send_csn, rd_reg_sm_send_csn, wr_reg_sm_send_csn, rd_fill_sm_send_csn, map_delay_sm_send_csn;
+	assign send_csn = loopback_sm_send_csn || rd_reg_sm_send_csn || wr_reg_sm_send_csn || rd_fill_sm_send_csn || map_delay_sm_send_csn;
 	
 	// All state machines need to send the CC
-	wire loopback_sm_send_cmd, rd_reg_sm_send_cmd, wr_reg_sm_send_cmd, rd_fill_sm_send_cmd, opt_delay_sm_send_cmd;
-	assign send_cmd = loopback_sm_send_cmd || rd_reg_sm_send_cmd || wr_reg_sm_send_cmd || rd_fill_sm_send_cmd || opt_delay_sm_send_cmd;
+	wire loopback_sm_send_cmd, rd_reg_sm_send_cmd, wr_reg_sm_send_cmd, rd_fill_sm_send_cmd, map_delay_sm_send_cmd;
+	assign send_cmd = loopback_sm_send_cmd || rd_reg_sm_send_cmd || wr_reg_sm_send_cmd || rd_fill_sm_send_cmd || map_delay_sm_send_cmd;
 
 	// Only a few state machines need to send the inverse CC
-	wire rd_reg_sm_send_inv_cmd, wr_reg_sm_send_inv_cmd, rd_fill_sm_send_inv_cmd, opt_delay_sm_send_inv_cmd;
-	assign send_inv_cmd = rd_reg_sm_send_inv_cmd || wr_reg_sm_send_inv_cmd || rd_fill_sm_send_inv_cmd || opt_delay_sm_send_inv_cmd;
+	wire rd_reg_sm_send_inv_cmd, wr_reg_sm_send_inv_cmd, rd_fill_sm_send_inv_cmd, map_delay_sm_send_inv_cmd;
+	assign send_inv_cmd = rd_reg_sm_send_inv_cmd || wr_reg_sm_send_inv_cmd || rd_fill_sm_send_inv_cmd || map_delay_sm_send_inv_cmd;
 	
 	// Only the loopback state machine send RX DATA directly
 	wire loopback_sm_send_rx_data;
@@ -201,8 +206,8 @@ module command_top (
 	assign send_reg_data = rd_reg_sm_send_reg_data;
 
 
-	assign adc_buf_data_delay[4:0] = (opt_sm_running) ? data_delay_from_opt_sm[4:0] : data_delay_from_reg_block[4:0];
-	assign adc_buf_delay_data_reset = (opt_sm_running) ? data_reset_from_opt_sm : data_reset_from_reg_block;
+	assign adc_buf_data_delay[4:0] = (map_sm_running) ? data_delay_from_map_sm[4:0] : data_delay_from_reg_block[4:0];
+	assign adc_buf_delay_data_reset = (map_sm_running) ? data_reset_from_map_sm : data_reset_from_reg_block;
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// connect the state machine that receives and dispatches commands
@@ -328,7 +333,7 @@ module command_top (
 		.illegal_reg_num(illegal_reg_num),		                       // the desired register does not exist
 		// register to/from the ADC acquisition state machine
 		.fill_num(fill_num[23:0]),			                           // fill number for this fill
-		.channel_tag(channel_tag[15:0]), 		                       // stuff about the channel to put in the header
+		.channel_tag(channel_tag[11:0]), 		                       // stuff about the channel to put in the header
 		.muon_num_bursts(muon_num_bursts[22:0]),                       // number of sample bursts in a MUON fill
 		.laser_num_bursts(laser_num_bursts[22:0]),                     // number of sample bursts in a LASER fill
 		.ped_num_bursts(ped_num_bursts[22:0]),                         // number of sample bursts in a PEDESTAL fill
@@ -348,11 +353,16 @@ module command_top (
 	    .ped_waveform_gap(ped_waveform_gap[21:0]),				       // idle time between waveforms 
 		.async_num_bursts(async_num_bursts[10:0]),         		       // number of 8-sample bursts in an ASYNC waveform
 	    .async_pre_trig(async_pre_trig[11:0]),           		       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	    // slow control
+	    .xadc_temp(xadc_temp[15:0]),
+	    .xadc_vccint(xadc_vccint[15:0]),
+	    .xadc_vccaux(xadc_vccaux[15:0]),
+	    .xadc_vccbram(xadc_vccbram[15:0]),
 	    // general register block
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),
 		.genreg_rd_data(genreg_rd_data[31:0]),
-		.opt_data_integrity(opt_data_integrity[31:0])
+		.map_data_integrity(map_data_integrity[31:0])
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,41 +401,41 @@ module command_top (
 	);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// connect the state machine that processes the CC_OPT_DELAY command
-	cc_opt_delay_sm cc_opt_delay_sm (
+	// connect the state machine that processes the CC_MAP_DELAY command
+	cc_map_delay_sm cc_map_delay_sm (
 		.clk(clk),						          // local clock
 		.reset(reset),							  // active-high
 		// state machine control
-		.run_sm(run_cc_opt_delay),   	    	  // run this state machine
-		.sm_running(cc_opt_delay_running),		  // we are running
-		.sm_done(cc_opt_delay_done),			  // we are finished
+		.run_sm(run_cc_map_delay),   	    	  // run this state machine
+		.sm_running(cc_map_delay_running),		  // we are running
+		.sm_done(cc_map_delay_done),			  // we are finished
 		// TX FIFO
-		.tx_tvalid(opt_delay_sm_tx_tvalid),		  // the data we are presenting is valid
-		.tx_tlast(opt_delay_sm_tx_tlast),	   	  // this is the final word in the frame
+		.tx_tvalid(map_delay_sm_tx_tvalid),		  // the data we are presenting is valid
+		.tx_tlast(map_delay_sm_tx_tlast),	   	  // this is the final word in the frame
 		.tx_tready(tx_tready),                    // the TX FIFO is ready to accepted data
 		// TX mux control
-		.send_csn(opt_delay_sm_send_csn),      	  // send the CSN
-		.send_cmd(opt_delay_sm_send_cmd),  		  // send the CC
-		.send_inv_cmd(opt_delay_sm_send_inv_cmd), // send the inverse CC
+		.send_csn(map_delay_sm_send_csn),      	  // send the CSN
+		.send_cmd(map_delay_sm_send_cmd),  		  // send the CC
+		.send_inv_cmd(map_delay_sm_send_inv_cmd), // send the inverse CC
 		.send_data(send_delay_data),              // mux source is the delay register bank
 		// local controls
-		.opt_done(opt_sm_done),
-		.start_opt(start_opt)
+		.map_done(map_sm_done),
+		.start_map(start_map)
 	);
 	
-	opt_adc_delay opt_adc_delay (
+	map_adc_delay map_adc_delay (
     	.clk(adc_clk),                   				 // adc clock
     	.reset(reset),                 					 // active-high
-    	.run_sm(start_opt),               				 // run this state machine
-    	.sm_running(opt_sm_running),            		 // we are running
-    	.sm_done(opt_sm_done),             				 // we are finished
-    	.error_found(opt_sm_error),                      // error status
+    	.run_sm(start_map),               				 // run this state machine
+    	.sm_running(map_sm_running),            		 // we are running
+    	.sm_done(map_sm_done),             				 // we are finished
+    	.error_found(map_sm_error),                      // error status
     	.packed_adc_dat(packed_adc_dat[25:0]),           // ADC data
     	.current_delay(adc_buf_current_data_delay[4:0]), // current data delay
     	.ipbus_delay(data_delay_from_reg_block[4:0]),    // data delay setting from IPbus
-    	.data_delay(data_delay_from_opt_sm[4:0]),        // data delay to set
-    	.delay_reset(data_reset_from_opt_sm),            // reset to SelectIO Wizard
-    	.data_integrity(opt_data_integrity[31:0])
+    	.data_delay(data_delay_from_map_sm[4:0]),        // data delay to set
+    	.delay_reset(data_reset_from_map_sm),            // reset to SelectIO Wizard
+    	.data_integrity(map_data_integrity[31:0])
 	);
 
 endmodule

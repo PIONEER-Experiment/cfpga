@@ -1,9 +1,9 @@
-// opt_adc_delay.v
+// map_adc_delay.v
 // 
-// Optimize the ADC data tap delay value for a channel.
+// Map out the ADC data tap delay value for a channel.
 // Leave the comments containing "synopsys" in your HDL code.
 
-module opt_adc_delay (
+module map_adc_delay (
     input  clk,                       // adc clock
     input  reset,                     // active-high
     input  run_sm,                    // run this state machine
@@ -102,7 +102,7 @@ module opt_adc_delay (
 
         case (1'b1) //synopsys full_case parallel_case
 
-            // We will be in the IDLE state whenever cc_opt_delay_sm does not enable us.
+            // We will be in the IDLE state whenever cc_map_delay_sm does not enable us.
             // Once enabled, immediately start working.
             CS[IDLE] : begin
                 NS[RESET_IO] = 1'b1;

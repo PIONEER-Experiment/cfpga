@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // Logic to fill the circular buffer with ADC/dummy data
 
-module adc_to_circ_buf_ASYNC(
+module adc_to_circ_buf_ASYNC (
     // inputs
     input [11:0] adc_in_p,          // [11:0] array of ADC 'p' data pins
     input [11:0] adc_in_n,          // [11:0] array of ADC 'n' data pins
@@ -19,16 +19,15 @@ module adc_to_circ_buf_ASYNC(
 	input trig_pulse,				// single-period pulse from 'acq_trig' input
     // outputs
     output adc_clk,                 // 400 MHz ADC clock
+    output [25:0] packed_adc_dat,   // two samples, with over-range bits,  packed in one wide-word
+                                    // bit[0]      = first overrange
+                                    // bits[11:1]  = first ADC sample
+                                    // bit[12]     = second overrange
+                                    // bits[25:13] = second ADC sample
     output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
-	output reg [15:0] circ_buf_wr_addr,	// address to store data in circular buffer
-	output reg [25:0] circ_buf_wr_dat	// data to store in the circular buffer 
+	output reg [15:0] circ_buf_wr_addr,	      // address to store data in circular buffer
+	output reg [25:0] circ_buf_wr_dat	      // data to store in the circular buffer 
 );
-
-wire [25:0] packed_adc_dat;     // two samples, with over-range bits,  packed in one wide-word
-                                // bit[0]       = first overrange
-                                // bits[11:1]   = first ADC sample
-                                // bit[12]      = second overrange
-                                // bits[25:13]  = second ADC sample
                                  
 // We need a node called 'adc_acq_full_reset' in order to use the same timin constraint file for
 // both SYNC and ASYNC projects.

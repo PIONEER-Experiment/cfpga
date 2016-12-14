@@ -12,7 +12,7 @@
 // as a useful reference, here's the syntax to mark signals for debug:
 // (* mark_debug = "true" *) 
 
-module channel_main_async(
+module channel_main_async (
   // Utility
   output [9:0] debug,           // to 10-pin header
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
@@ -83,7 +83,7 @@ assign acq_enable1 = io[2];
 wire rst_from_master;
 assign rst_from_master = io[3];
 
-wire [15:0] channel_tag;                // stuff about the channel to put in the header
+wire [11:0] channel_tag;                // stuff about the channel to put in the header
 wire [22:0] muon_num_bursts;            // number of sample bursts in a MUON fill
 wire [22:0] laser_num_bursts;           // number of sample bursts in a LASER fill
 wire [22:0] ped_num_bursts;             // number of sample bursts in a PEDESTAL fill
@@ -130,9 +130,6 @@ wire [22:0] ddr3_rd_burst_addr;
 wire [4:0] adc_buf_data_delay;
 wire [64:0] adc_buf_current_data_delay;
 
-//wire [7:0] debug_wires;
-//assign debug[7:0] = debug_wires[7:0];
-
 // status signals for front panel LED
 wire aurora_channel_up;
 wire adc_acq_sm_idle;
@@ -164,20 +161,58 @@ BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
 
 // synchronous reset logic
 startup_reset startup_reset(
-	// inputs
-    .rst_from_master(rst_from_master),	// external reset of all acquisition logic
-    .clk50(clk50),              		// 50 MHz buffered clock 
-    .clk125(clk125),            		// buffered clock, 125 MHz
-	// outputs
-    .reset_clk50(reset_clk50),  		// active-high reset output, goes low after startup
-    .reset_clk125(reset_clk125) 		// active-high reset output, goes low after startup
+	  // inputs
+    .rst_from_master(rst_from_master), // external reset of all acquisition logic
+    .clk50(clk50),              		   // 50 MHz buffered clock 
+    .clk125(clk125),            		   // buffered clock, 125 MHz
+	  // outputs
+    .reset_clk50(reset_clk50),  		   // active-high reset output, goes low after startup
+    .reset_clk125(reset_clk125) 		   // active-high reset output, goes low after startup
 );
+
+
+// ======== communicate with FPGA XADC ========
+
+wire [15:0] xadc_temp;
+wire [15:0] xadc_vccint;
+wire [15:0] xadc_vccaux;
+wire [15:0] xadc_vccbram;
+
+wire xadc_reset;
+wire xadc_over_temp;
+wire [3:0] xadc_alarms;
+wire xadc_alarm_temp;
+wire xadc_alarm_vccint;
+wire xadc_alarm_vccaux;
+wire xadc_alarm_vccbram;
+wire xadc_eoc;
+wire xadc_eos;
+
+assign xadc_reset = reset_clk125 | rst_from_master;
+assign xadc_alarms = {xadc_alarm_temp, xadc_alarm_vccint, xadc_alarm_vccaux, xadc_alarm_vccbram};
+
+// XADC interface
+xadc_interface xadc_interface (
+  .dclk(clk125),
+  .reset(xadc_reset),
+  .measured_temp(xadc_temp[15:0]),
+  .measured_vccint(xadc_vccint[15:0]),
+  .measured_vccaux(xadc_vccaux[15:0]),
+  .measured_vccbram(xadc_vccbram[15:0]),
+  .over_temp(xadc_over_temp),
+  .alarm_temp(xadc_alarm_temp),
+  .alarm_vccint(xadc_alarm_vccint),
+  .alarm_vccaux(xadc_alarm_vccaux),
+  .alarm_vccbram(xadc_alarm_vccbram),
+  .eoc(xadc_eoc),
+  .eos(xadc_eos)
+);
+
 
 ////////////////////////////////////////////////////////////////////////////
 // dummy assignments to keep logic around
-// assign led2 = ~acq_trig;
-assign debug[8] = power_good;
-assign debug[9] = 1'b0;
+assign debug[8] = power_good[2] & power_good[1] & power_good[0];
+assign debug[9] = bbus_scl & bbus_sda;
 
 IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
  
@@ -187,7 +222,9 @@ IBUFDS adc_sync_in (.I(adc_syncp), .IB(adc_syncn), .O(adc_sync));
 wire [11:0] adc_in_p, adc_in_n;
 assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d5p, adc_d4p, adc_d3p, adc_d2p, adc_d1p, adc_d0p};
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
- 
+
+wire [25:0] packed_adc_dat;
+
 adc_acq_top_ASYNC adc_acq_top_ASYNC (
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
@@ -198,7 +235,7 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_clk_n(adc_clk_n),                               // ADC 'n' clk pin
     .reset_clk50(reset_clk50),                           // synchronously negated  
     .clk200(clk200),                                     // for input pin timing delay settings
-    .channel_tag(channel_tag[15:0]),                     // stuff about the channel to put in the header
+    .channel_tag(channel_tag[11:0]),                     // stuff about the channel to put in the header
     .initial_fill_num(initial_fill_num[23:0]),           // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr),           // write-strobe to store the initial_fill_num
     .ext_enable0(acq_enable0),                           // external 'enable' for triggers, and fill type
@@ -209,6 +246,7 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
 	  .async_num_bursts(async_num_bursts[10:0]),           // number of 8-sample bursts in an ASYNC waveform
     .async_pre_trig(async_pre_trig[11:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
     .ddr3_wr_en(ddr3_wr_en),							// writing of triggered events to memory is enabled
@@ -219,7 +257,8 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
     .adc_acq_sm_idle(adc_acq_sm_idle),                    // ADC acquisition state machine is idle (used for front panel LED status)
-    .calc_total_burst_count(calc_total_burst_count[23:0])
+    .calc_total_burst_count(calc_total_burst_count[23:0]),
+    .packed_adc_dat(packed_adc_dat[25:0])
 );
 
 wire ddr3_write_fifo_full;
@@ -299,7 +338,7 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
-
+    .xadc_temp(xadc_temp[11:0]),
     .ddr3_wr_control_sm_idle(ddr3_wr_control_sm_idle)
 );
 
@@ -423,13 +462,14 @@ assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 ///////////////////////////////////////////////////////////////////////////////////
 // Connect the command processor. This will receive commands from the Aurora serial
 // link and process them
-command_top command_top(
+command_top command_top (
     // clocks and reset
     .clk50(clk50),               // 50 MHz buffered clock 
     .reset_clk50(reset_clk50),   // active-high reset output, goes low after startup
     .clk(clk125),                // clock for the interconnect side of the FIFOs
     .resetN(reset_clk125N),      // active-lo reset for the interconnect side of the FIFOs
     .cnt_reset(rst_from_master), // reset, for fill number count
+    .adc_clk(adc_clk),           // ADC clock
 
     // channel 0 connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
@@ -457,7 +497,7 @@ command_top command_top(
 
     // Registers to/from the ADC acquisition state machine
     .fill_num(fill_num[23:0]),                                     // fill number for this fill
-    .channel_tag(channel_tag[15:0]),                               // stuff about the channel to put in the header
+    .channel_tag(channel_tag[11:0]),                               // stuff about the channel to put in the header
     .muon_num_bursts(muon_num_bursts[22:0]),                       // number of sample bursts in a MUON fill
     .laser_num_bursts(laser_num_bursts[22:0]),                     // number of sample bursts in a LASER fill
     .ped_num_bursts(ped_num_bursts[22:0]),                         // number of sample bursts in a PEDESTAL fill
@@ -469,25 +509,32 @@ command_top command_top(
     .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
     .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
     .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
-	.muon_num_waveforms(muon_num_waveforms[11:0]),		// number of waveforms to store per trigger
+	  .muon_num_waveforms(muon_num_waveforms[11:0]),		// number of waveforms to store per trigger
     .muon_waveform_gap(muon_waveform_gap[21:0]),		// idle time between waveforms 
     .laser_num_waveforms(laser_num_waveforms[11:0]),	// number of waveforms to store per trigger
     .laser_waveform_gap(laser_waveform_gap[21:0]),		// idle time between waveforms 
     .ped_num_waveforms(ped_num_waveforms[11:0]),		// number of waveforms to store per trigger
     .ped_waveform_gap(ped_waveform_gap[21:0]),			// idle time between waveforms 
-	.async_num_bursts(async_num_bursts[10:0]),       	// number of 8-sample bursts in an ASYNC waveform
-	.async_pre_trig(async_pre_trig[11:0]),           	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	  .async_num_bursts(async_num_bursts[10:0]),       	// number of 8-sample bursts in an ASYNC waveform
+	  .async_pre_trig(async_pre_trig[11:0]),           	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+
+    .xadc_temp(xadc_temp[15:0]),
+    .xadc_vccint(xadc_vccint[15:0]),
+    .xadc_vccaux(xadc_vccaux[15:0]),
+    .xadc_vccbram(xadc_vccbram[15:0]),
 
     .genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
     .genreg_wr_data(genreg_wr_data[31:0]),
     .genreg_rd_data(genreg_rd_data[31:0]),
 
+    .packed_adc_dat(packed_adc_dat[25:0]),
+
     // interface to the AXIS 2:1 mux
     .use_ddr3_data(use_ddr3_data),              // the data source is the DDR3 memory
     .aurora_ddr3_accept(aurora_ddr3_accept),    // DDR3 data has been accepted by the Aurora
     
-  // Status signal for front panel LED
-  .command_sm_idle(command_sm_idle)
+    // Status signal for front panel LED
+    .command_sm_idle(command_sm_idle)
 );
 
 

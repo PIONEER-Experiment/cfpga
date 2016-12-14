@@ -22,7 +22,7 @@ module register_block(
 
 	// Register to/from the ADC acquisition state machine
 	input [23:0] fill_num,	                 // fill number for this fill
-    output [15:0] channel_tag,		         // stuff about the channel to put in the header
+    output [11:0] channel_tag,		         // stuff about the channel to put in the header
 	output [22:0] muon_num_bursts,	         // number of sample bursts in a MUON fill
 	output [22:0] laser_num_bursts,          // number of sample bursts in a LASER fill
 	output [22:0] ped_num_bursts,	         // number of sample bursts in a PEDESTAL fill
@@ -43,12 +43,18 @@ module register_block(
 	output [10:0] async_num_bursts,          // number of 8-sample bursts in an ASYNC waveform
 	output [11:0] async_pre_trig,            // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
  
+	// slow control
+	input [15:0] xadc_temp,
+	input [15:0] xadc_vccint,
+	input [15:0] xadc_vccaux,
+	input [15:0] xadc_vccbram,
+
  	// generic register space connections
 	output [31:0] genreg_addr_ctrl,	         // generic register address and control output
 	output [31:0] genreg_wr_data,	         // generic register data written from Master FPGA 
 	input [31:0] genreg_rd_data,	         // generic register data read by Master FPGA
 
-	input [31:0] opt_data_integrity
+	input [31:0] map_data_integrity
 );
 
 	// make a register to hold the number of the selected register.
@@ -112,8 +118,8 @@ module register_block(
 		if (wr_en && (reg_num[4:0] == 5'h14)) reg20_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h15)) reg21_[31:0] <= rx_data[31:0];
 		// R22 is read only
-		if (wr_en && (reg_num[4:0] == 5'h17)) reg23_[31:0] <= rx_data[31:0];
-		if (wr_en && (reg_num[4:0] == 5'h18)) reg24_[31:0] <= rx_data[31:0];
+		// R23 is read only
+		// R24 is read only
 		if (wr_en && (reg_num[4:0] == 5'h19)) reg25_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h1a)) reg26_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h1b)) reg27_[31:0] <= rx_data[31:0];
@@ -133,7 +139,7 @@ module register_block(
 	// R1 - channel tag
 	// bits [2:0] from configuration jumpers
 	assign channel_tag[2:0] = ch_addr[2:0];	     // the channel address jumpers
-	assign channel_tag[15:3] = reg1_[15:3];
+	assign channel_tag[11:3] = reg1_[11:3];
 	
 	// R2 - Muon burst count
 	assign muon_num_bursts[22:0] = reg2_[22:0];
@@ -206,6 +212,8 @@ module register_block(
 	assign async_pre_trig[11:0] = reg21_[11:0];
 
 	// R22 is read only
+	// R23 is read only
+	// R24 is read only
 	// R31 is read only
 
 	reg [31:0] rdbk_reg;
@@ -237,9 +245,9 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= {10'b0, reg19_[21:0]};
 		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {21'b0, reg20_[10:0]};
 		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {20'b0, reg21_[11:0]};
-		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= opt_data_integrity[31:0]; // R22 is read only
-		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= reg23_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= reg24_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= map_data_integrity[31:0]; // R22 is read only
+		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= {xadc_vccint[15:0], xadc_temp[15:0]}; // R23 is read only
+		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= {xadc_vccbram[15:0], xadc_vccaux[15:0]}; // R24 is read only
 		if (rd_en && (reg_num[4:0] == 5'h19)) rdbk_reg[31:0] <= reg25_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h1a)) rdbk_reg[31:0] <= reg26_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h1b)) rdbk_reg[31:0] <= reg27_[31:0];

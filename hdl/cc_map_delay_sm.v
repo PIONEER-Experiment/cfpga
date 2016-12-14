@@ -1,23 +1,23 @@
-// cc_opt_delay_sm.v
+// cc_map_delay_sm.v
 // 
-// Optimize the ADC data tap delay value for a channel.
+// Map out the ADC data tap delay value for a channel.
 // The returned data is 65 bits
-//  `define CC_OPT_DELAY    5'd10   // Read a configuration register
+//  `define CC_MAP_DELAY    5'd10   // Read a configuration register
 // 
-// Structure of a command packet for CC_OPT_DELAY:
+// Structure of a command packet for CC_MAP_DELAY:
 // 1) Command Serial Number (CSN)
 // 2) Command Code (CC)
 // 
 // Structure of a "no error" response packet:
 // 1) Response Serial Number (RSN) matching the CSN
 // 2) Response Code (RC) matching the CC
-// 3) Contents of optimized data tap delay value
+// 3) Contents of mapped data tap delay values
 // 
 // Structure of an "error" response packet:
 // 1) Response Serial Number (RSN) matching the CSN
 // 2) Response Code (RC) equals the bitwise inverse of the CC
 
-module cc_opt_delay_sm (
+module cc_map_delay_sm (
     input  clk,             // local clock
     input  reset,           // active-high
 
@@ -35,8 +35,8 @@ module cc_opt_delay_sm (
     output send_data,       // mux source is delay register bank
 
     // local controls
-    input  opt_done,        // optimization is complete
-    output start_opt        // start tap delay optimization state machine
+    input  map_done,        // mapping is complete
+    output start_map        // start tap delay mapping state machine
 );
 
     // Make a register to hold error status
@@ -44,14 +44,14 @@ module cc_opt_delay_sm (
 
     // Everything is already synchronous to the clock.
 
-    // State machine for executing the 'opt_delay' command.
+    // State machine for executing the 'map_delay' command.
     // Leave the comments containing "synopsys" in your HDL code.
  
     // Declare the symbolic names for states for the state machine
     // Simplified one-hot encoding (each constant is an index into an array of bits)
     parameter [3:0]
         IDLE        = 4'd0,
-        START_OPT   = 4'd1,
+        START_MAP   = 4'd1,
         ERROR       = 4'd2,
         ECHO_CSN1   = 4'd3,
         ECHO_CSN2   = 4'd4,
@@ -78,7 +78,7 @@ module cc_opt_delay_sm (
     end
 
     // combinational always block to determine next state (use blocking [=] assignments) 
-    always @ (CS or opt_done or tx_tready or error_found) begin
+    always @ (CS or map_done or tx_tready or error_found) begin
         NS = 10'b0; // default all bits to zero; will overrride one bit
 
         case (1'b1) //synopsys full_case parallel_case
@@ -87,21 +87,21 @@ module cc_opt_delay_sm (
             // Once enabled, immediately start working.
             CS[IDLE] : begin
                 // Start the ADC data tap delay optimatization procedure
-                NS[START_OPT] = 1'b1;
+                NS[START_MAP] = 1'b1;
             end
 
-            // We enter the START_OPT state after we have been started.
-            // We stay here until the optimization procedure is complete.
-            CS[START_OPT] : begin
+            // We enter the START_MAP state after we have been started.
+            // We stay here until the mapping procedure is complete.
+            CS[START_MAP] : begin
                 if (error_found)
                     NS[ERROR] = 1'b1;
-                else if (opt_done)
+                else if (map_done)
                     NS[ECHO_CSN1] = 1'b1;
                 else
-                    NS[START_OPT] = 1'b1;
+                    NS[START_MAP] = 1'b1;
             end
 
-            // We enter the ERROR state whenever the optimization sm reports an error.
+            // We enter the ERROR state whenever the mapping sm reports an error.
             // We stay here for one cycle, during which the error flag is set.
             CS[ERROR] : begin
                 // Go start the response sequence
@@ -220,7 +220,7 @@ module cc_opt_delay_sm (
     assign tx_tlast = !error_found && (CS[XMIT_DELAY2] == 1'b1) || // send with register contents
                        error_found && (CS[ECHO_CC2]    == 1'b1);   // send with inverse CC
 
-    // enable optimization sm
-    assign start_opt = !(CS[IDLE] == 1'b1);
+    // enable mapping sm
+    assign start_map = !(CS[IDLE] == 1'b1);
 
 endmodule

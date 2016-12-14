@@ -421,5 +421,4 @@ assign debug[2] = sdenb;
 assign debug[1] = sreg_out[23];
 assign debug[0] = sdi; 
 
-
 endmodule

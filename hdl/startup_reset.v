@@ -1,17 +1,16 @@
 // startup_reset
 //
 // This module generates clocks and reset signals that will be asserted when the chip is
-// initially configured. After some time, the reset signals will be negated
-// synchronously with the appropriate clock. A clock must be present to negate the output.
+// initially configured. After some time, the reset signals will be negated synchronously
+// with the appropriate clock. A clock must be present to negate the output.
 
-module startup_reset(
-	input clk50,				// buffered clock, 50 MHz
-    input rst_from_master,		// external reset of all acquisition logic
-	input clk125,				// buffered clock, 125 MHz
-	output reset_clk50,	       	// active-high reset output, goes low after startup
-    output reset_clk125	       	// active-high reset output, goes low after startup
+module startup_reset (
+	input  clk50,			// buffered clock, 50 MHz
+    input  rst_from_master, // external reset of all acquisition logic
+	input  clk125,			// buffered clock, 125 MHz
+	output reset_clk50,    	// active-high reset output, goes low after startup
+    output reset_clk125    	// active-high reset output, goes low after startup
 );
-
 
 	// Connect a counter that will count up once the chip comes out of reset, until it reaches its maximum value.
 	// At that time, disable counting. Reset the counter anytime lock is lost.
