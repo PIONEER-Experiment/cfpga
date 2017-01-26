@@ -80,6 +80,9 @@ assign acq_enable1 = io[2];
 wire rst_from_master;
 assign rst_from_master = io[3];
 
+wire evt_cnt_reset;
+wire full_reset;
+
 wire [11:0] channel_tag;                // stuff about the channel to put in the header
 wire [22:0] muon_num_bursts;            // number of sample bursts in a MUON fill
 wire [22:0] laser_num_bursts;           // number of sample bursts in a LASER fill
@@ -155,15 +158,26 @@ wire gt_clk125, clk125;
 IBUFDS_GTE2 clk125_IBUFDS_GTE2 (.I(xcvr_clk), .IB(xcvr_clk_N), .O(gt_clk125), .CEB(1'b0), .ODIV2());
 BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
 
+wire reset_clk50, reset_clk125;
+
 // synchronous reset logic
 startup_reset startup_reset(
     // inputs
-    .rst_from_master(rst_from_master), // external reset of all acquisition logic
-    .clk50(clk50),                     // 50 MHz buffered clock 
-    .clk125(clk125),                   // buffered clock, 125 MHz
+    .rst_from_master(full_reset), // external reset of all acquisition logic
+    .clk50(clk50),                // 50 MHz buffered clock 
+    .clk125(clk125),              // buffered clock, 125 MHz
     // outputs
-    .reset_clk50(reset_clk50),         // active-high reset output, goes low after startup
-    .reset_clk125(reset_clk125)        // active-high reset output, goes low after startup
+    .reset_clk50(reset_clk50),    // active-high reset output, goes low after startup
+    .reset_clk125(reset_clk125)   // active-high reset output, goes low after startup
+);
+
+// reset from master logic
+master_reset master_reset (
+  .clk(clk50),
+  .rst(reset_clk50),
+  .rst_from_master(rst_from_master),
+  .short_reset(evt_cnt_reset),
+  .long_reset(full_reset)
 );
 
 
@@ -174,9 +188,7 @@ wire [15:0] xadc_vccint;
 wire [15:0] xadc_vccaux;
 wire [15:0] xadc_vccbram;
 
-wire xadc_reset;
 wire xadc_over_temp;
-wire [3:0] xadc_alarms;
 wire xadc_alarm_temp;
 wire xadc_alarm_vccint;
 wire xadc_alarm_vccaux;
@@ -184,13 +196,13 @@ wire xadc_alarm_vccbram;
 wire xadc_eoc;
 wire xadc_eos;
 
-assign xadc_reset = reset_clk125 | rst_from_master;
+wire [3:0] xadc_alarms;
 assign xadc_alarms = {xadc_alarm_temp, xadc_alarm_vccint, xadc_alarm_vccaux, xadc_alarm_vccbram};
 
 // XADC interface
 xadc_interface xadc_interface (
   .dclk(clk125),
-  .reset(xadc_reset),
+  .reset(reset_clk125),
   .measured_temp(xadc_temp[15:0]),
   .measured_vccint(xadc_vccint[15:0]),
   .measured_vccaux(xadc_vccaux[15:0]),
@@ -240,7 +252,6 @@ adc_acq_top adc_acq_top (
     .acq_enable0(acq_enable0),                           // indicates enabled for triggers, and fill type
     .acq_enable1(acq_enable1),                           // indicates enabled for triggers, and fill type
     .acq_trig(acq_trig),                                 // trigger the logic to start collecting data
-    .acq_reset(rst_from_master),                         // reset all of the acquisition logic
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
@@ -496,12 +507,12 @@ assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 // link and process them
 command_top command_top (
     // clocks and reset
-    .clk50(clk50),               // 50 MHz buffered clock 
-    .reset_clk50(reset_clk50),   // active-high reset output, goes low after startup
-    .clk(clk125),                // clock for the interconnect side of the FIFOs
-    .resetN(reset_clk125N),      // active-lo reset for the interconnect side of the FIFOs
-    .cnt_reset(rst_from_master), // reset, for fill number count
-    .adc_clk(adc_clk),           // ADC clock
+    .clk50(clk50),             // 50 MHz buffered clock 
+    .reset_clk50(reset_clk50), // active-high reset output, goes low after startup
+    .clk(clk125),              // clock for the interconnect side of the FIFOs
+    .resetN(reset_clk125N),    // active-lo reset for the interconnect side of the FIFOs
+    .cnt_reset(evt_cnt_reset), // reset, for fill number count
+    .adc_clk(adc_clk),         // ADC clock
 
     // channel 0 connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs

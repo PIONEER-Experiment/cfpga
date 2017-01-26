@@ -20,7 +20,6 @@ module adc_acq_top(
     input acq_enable0,              // indicates enabled for triggers, and fill type
     input acq_enable1,              // indicates enabled for triggers, and fill type
     input acq_trig,                 // trigger the logic to start collecting data
-    input acq_reset,                // reset all of the acquisition logic
     input adc_buf_delay_data_reset, // use the new delay settings
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
     input ddr3_wr_done,             // asserted when the 'ddr3_wr_control' is in the DONE state
@@ -283,7 +282,6 @@ adc_acq_sm adc_acq_sm (
     .acq_enable0(acq_enable0),              // enable the logic to accept triggers
     .acq_enable1(acq_enable1),              // enable the logic to accept triggers
     .acq_trig(acq_trig),                    // trigger the logic to start collecting data
-    .acq_reset(acq_reset),                  // reset from the Master FPGA
     .reset_clk50(reset_clk50),              // synchronously negated
     .burst_cntr_zero(burst_cntr_zero),      // all sample bursts have been saved
     .waveform_gap_zero(waveform_gap_zero),  // the idle time has elapsed

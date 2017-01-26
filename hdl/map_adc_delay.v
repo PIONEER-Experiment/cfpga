@@ -42,13 +42,8 @@ module map_adc_delay (
     //   Register #7 will have the newest data
     reg [23:0] adc_dat_reg0, adc_dat_reg1, adc_dat_reg2, adc_dat_reg3;
     reg [23:0] adc_dat_reg4, adc_dat_reg5, adc_dat_reg6, adc_dat_reg7;
-    reg [23:0] adc_dat_reg8, adc_dat_reg9, adc_dat_reg10, adc_dat_reg11;
     always @ (posedge clk) begin
-        adc_dat_reg11[23:0] <= {packed_adc_dat[25:14], packed_adc_dat[12:1]};
-        adc_dat_reg10[23:0] <= adc_dat_reg11[23:0];
-        adc_dat_reg9[23:0] <= adc_dat_reg10[23:0];
-        adc_dat_reg8[23:0] <= adc_dat_reg9[23:0];
-        adc_dat_reg7[23:0] <= adc_dat_reg8[23:0];
+        adc_dat_reg7[23:0] <= {packed_adc_dat[25:14], packed_adc_dat[12:1]};
         adc_dat_reg6[23:0] <= adc_dat_reg7[23:0];
         adc_dat_reg5[23:0] <= adc_dat_reg6[23:0];
         adc_dat_reg4[23:0] <= adc_dat_reg5[23:0];
@@ -62,8 +57,7 @@ module map_adc_delay (
     reg [7:0] count;
     wire [23:0] adc_dat_xor;
     assign adc_dat_xor[23:0] = adc_dat_reg0[23:0] ^ adc_dat_reg1[23:0] ^ adc_dat_reg2[23:0] ^ adc_dat_reg3[23:0] ^
-                               adc_dat_reg4[23:0] ^ adc_dat_reg5[23:0] ^ adc_dat_reg6[23:0] ^ adc_dat_reg7[23:0] ^
-                               adc_dat_reg8[23:0] ^ adc_dat_reg9[23:0] ^ adc_dat_reg10[23:0] ^ adc_dat_reg11[23:0];
+                               adc_dat_reg4[23:0] ^ adc_dat_reg5[23:0] ^ adc_dat_reg6[23:0] ^ adc_dat_reg7[23:0];
 
 
     // Declare the symbolic names for states for the state machine.

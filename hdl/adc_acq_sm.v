@@ -9,7 +9,6 @@ module adc_acq_sm (
     input acq_enable0,                  // indicates enabled for triggers, and fill type
     input acq_enable1,                  // indicates enabled for triggers, and fill type
     input acq_trig,                     // trigger the logic to start collecting data
-    input acq_reset,                    // reset from the Master FPGA
     input reset_clk50,                  // reset from internal logic, synched to CLK50
     input burst_cntr_zero,              // all sample bursts have been saved
     input waveform_gap_zero,   			// the idle time has elapsed
@@ -52,13 +51,11 @@ always @(posedge clk) begin
 end
 
 // sync and combine the external ACQ_RESET and the internal RESET_CLK50
-reg acq_reset_sync1, acq_reset_sync2, reset_clk50_sync1, reset_clk50_sync2; 
+reg reset_clk50_sync1, reset_clk50_sync2; 
 always @(posedge clk) begin
-    acq_reset_sync1 <= acq_reset;
-    acq_reset_sync2 <= acq_reset_sync1;
     reset_clk50_sync1 <= reset_clk50;
     reset_clk50_sync2 <= reset_clk50_sync1;
-    adc_acq_full_reset <= acq_reset_sync2 | reset_clk50_sync2;
+    adc_acq_full_reset <= reset_clk50_sync2;
 end
 
 // synchronize 'ddr3_wr_done'
