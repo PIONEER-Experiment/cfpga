@@ -35,6 +35,13 @@ reg [22:0] num_fill_bursts;			// total number of bursts in a fill
 
 assign calc_total_burst_count[23:0] = (async_num_bursts[10:0]+1)*current_waveform_num[22:0]+2;
 
+wire initial_fill_num_wr_sync;
+sync_2stage initial_fill_num_wr_sync_inst (
+    .clk(adc_clk),
+    .in(initial_fill_num_wr),
+    .out(initial_fill_num_wr_sync)
+);
+
 /////////////////////////////////////////////////////////////////////////////////////////////////                            
 // Subtract the pre-trigger count from the trigger address coming out of the FIFO. The FIFO is in
 // FWFT mode, but beware of latency from when 'trig_addr_rd_en' is asserted until the subtracted value is valid.
@@ -158,7 +165,7 @@ adc_fill_cntr adc_fill_cntr (
     // inputs
     .initial_fill_num(initial_fill_num[23:0]),  // always positive
     .clk(adc_clk),
-    .init(initial_fill_num_wr),                 // initialize when programmed
+    .init(initial_fill_num_wr_sync),            // initialize when programmed
     .enable(fill_cntr_en),                      // will be enabled once per fill
     // outputs
    .fill_num(fill_num[23:0])                    // fill number for this fill

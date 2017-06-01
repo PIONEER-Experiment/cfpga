@@ -204,6 +204,13 @@ adc_dat_mux adc_dat_mux (
     .adc_acq_out_dat(adc_acq_out_dat[131:0])    // 132-bit: 4-bit tag plus 128-bit header or ADC data   
 );
 
+wire initial_fill_num_wr_sync;
+sync_2stage initial_fill_num_wr_sync_inst (
+    .clk(adc_clk),
+    .in(initial_fill_num_wr),
+    .out(initial_fill_num_wr_sync)
+);
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // connect a counter that will calculate the DDR3 starting address of the next fill
 // It will be initialized when the fill number is written.
@@ -211,7 +218,7 @@ adc_dat_mux adc_dat_mux (
 adc_address_cntr adc_address_cntr (
     // inputs
     .clk(adc_clk),
-    .init(initial_fill_num_wr),                  // initialize to zero when the fill number is written
+    .init(initial_fill_num_wr_sync),             // initialize to zero when the fill number is written
     .enable(address_cntr_en),                    // increment
     // outputs
     .burst_start_adr(burst_start_adr[22:0])      // first DDR3 burst memory location for this fill
@@ -268,7 +275,7 @@ adc_fill_cntr adc_fill_cntr (
     // inputs
     .initial_fill_num(initial_fill_num[23:0]),  // always positive
     .clk(adc_clk),
-    .init(initial_fill_num_wr),                 // initialize when programmed
+    .init(initial_fill_num_wr_sync),            // initialize when programmed
     .enable(fill_cntr_en),                      // will be enabled once per fill
     // outputs
     .fill_num(fill_num[23:0])                   // fill number for this fill

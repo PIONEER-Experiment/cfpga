@@ -134,7 +134,7 @@ module register_block(
 	assign initial_fill_num[23:0] = reg0_[23:0];
 	// Send R0 'wr_en' to the ADC acquisition controller
 	// fill number will be set back to initial value after a reset
-	assign initial_fill_num_wr  = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
+	assign initial_fill_num_wr = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
 
 	// R1 - channel tag
 	// bits [2:0] from configuration jumpers

@@ -161,7 +161,7 @@ BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
 wire reset_clk50, reset_clk125;
 
 // synchronous reset logic
-startup_reset startup_reset(
+startup_reset startup_reset (
     // inputs
     .rst_from_master(full_reset), // external reset of all acquisition logic
     .clk50(clk50),                // 50 MHz buffered clock 
@@ -171,11 +171,19 @@ startup_reset startup_reset(
     .reset_clk125(reset_clk125)   // active-high reset output, goes low after startup
 );
 
+
+wire rst_from_master_sync;
+sync_2stage rst_from_master_sync_inst (
+    .clk(clk50),
+    .in(rst_from_master),
+    .out(rst_from_master_sync)
+);
+
 // reset from master logic
 master_reset master_reset (
   .clk(clk50),
   .rst(reset_clk50),
-  .rst_from_master(rst_from_master),
+  .rst_from_master(rst_from_master_sync),
   .short_reset(evt_cnt_reset),
   .long_reset(full_reset)
 );

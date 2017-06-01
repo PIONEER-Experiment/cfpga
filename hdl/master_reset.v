@@ -1,4 +1,7 @@
 // master reset interpreter
+//
+// Asserts 'short_reset' if 'rst_from_master' is less than 100-ns wide;
+// otherwise, 'long_reset' is asserted.
 
 module master_reset (
     input  clk,             // sampling clock
@@ -8,25 +11,27 @@ module master_reset (
     output long_reset       // active-high reset output, for long duration
 );
 
-    parameter [2:0]
-        IDLE = 3'd0,
-        MON0 = 3'd1,
-        MON1 = 3'd2,
-        MON2 = 3'd3,
-        MON3 = 3'd4,
-        SRST = 3'd5,
-        WAIT = 3'd6,
-        LRST = 3'd7;
+    parameter [3:0]
+        IDLE  = 4'd0,
+        MON0  = 4'd1,
+        MON1  = 4'd2,
+        MON2  = 4'd3,
+        MON3  = 4'd4,
+        SRST1 = 4'd5,
+        SRST2 = 4'd6,
+        WAIT  = 4'd7,
+        LRST1 = 4'd8,
+        LRST2 = 4'd9;
 
-    reg [7:0] CS;
-    reg [7:0] NS;
+    reg [9:0] CS;
+    reg [9:0] NS;
 
 
     // sequential always block for state transitions (use non-blocking [<=] assignments)
     // Reset the sm whenever we get to the end of a frame
     always @ (posedge clk) begin
         if (rst) begin
-            CS <= 8'b0;       // set all state bits to 0
+            CS <= 10'b0;      // set all state bits to 0
             CS[IDLE] <= 1'b1; // set IDLE state bit to 1
         end
         else CS <= NS;        // set state bits to next state
@@ -34,7 +39,7 @@ module master_reset (
 
     // combinational always block to determine next state (use blocking [=] assignments)
     always @ (CS or rst_from_master) begin
-        NS = 8'b0; // default all bits to zero; will overrride one bit
+        NS = 10'b0; // default all bits to zero; will override one bit
 
         case (1'b1)
 
@@ -68,22 +73,30 @@ module master_reset (
                     NS[WAIT] = 1'b1;
                 else
                     // short reset action
-                    NS[SRST] = 1'b1;
+                    NS[SRST1] = 1'b1;
             end
 
-            CS[SRST]: begin
+            CS[SRST1]: begin
+                NS[SRST2] = 1'b1;
+            end
+
+            CS[SRST2]: begin
                 NS[IDLE] = 1'b1;
             end
 
             CS[WAIT]: begin
                 // wait for reset to go low before asserting full reset
                 if (~rst_from_master)
-                    NS[LRST] = 1'b1;
+                    NS[LRST1] = 1'b1;
                 else
                     NS[WAIT] = 1'b1;
             end
 
-            CS[LRST]: begin
+            CS[LRST1]: begin
+                NS[LRST2] = 1'b1;
+            end
+
+            CS[LRST2]: begin
                 NS[IDLE] = 1'b1;
             end
 
@@ -92,7 +105,7 @@ module master_reset (
 
 
     // static assignments
-    assign short_reset = CS[SRST];
-    assign long_reset  = CS[LRST];
+    assign short_reset = CS[SRST1] | CS[SRST2]; // 40-ns wide
+    assign long_reset  = CS[LRST1] | CS[LRST2]; // 40-ns wide
 
 endmodule
