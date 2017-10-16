@@ -29,8 +29,6 @@ module ddr3_intf_ASYNC(
     output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
     input ddr3_rd_fifo_almost_full,             // there is not much room left    
     output ddr3_rd_fifo_input_tlast,            // the last burst for this fill 
-    //other
-    input [23:0] calc_total_burst_count,
     // connections to the DDR3 chips
     output [12:0] ddr3_addr,
     output [2:0] ddr3_ba,
@@ -47,8 +45,7 @@ module ddr3_intf_ASYNC(
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
     output app_rdy,                              // output, PHY calibration is done
-    input [11:0] xadc_temp,
-    output ddr3_wr_control_sm_idle
+    input [11:0] xadc_temp
 );
 // for fast simulation uncomment the next 3 lines, and comment out lines marked farther into this file.
 //wire app_wdf_rdy;				// for fast simulation ONLY
@@ -108,8 +105,7 @@ ddr3_wr_control_ASYNC ddr3_wr_control_ASYNC (
     // User interface clock and reset   
     .clk(ddr3_domain_clk),
     .reset(ddr3_domain_reset),
-    .acq_enabled(ddr3_wr_en_sync2),                // input, writing is enabled
-	.ddr3_wr_en(ddr3_wr_en),		// writing of triggered events to memory is enabled
+    .acq_enabled(ddr3_wr_en_sync2),                 // input, writing is enabled
     // Connections to the FIFO from the ADC
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),     // input, next 'write' data from the ADC FIFO
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),        // input, data is available when this is not asserted
@@ -128,9 +124,7 @@ ddr3_wr_control_ASYNC ddr3_wr_control_ASYNC (
     .ddr3_wr_sync_err(ddr3_wr_sync_err),            // synchronization error flag
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
-    .acq_done(acq_done),                             // input, asserted when the 'adc_acq_sm' is in the DONE state
-    .calc_total_burst_count(calc_total_burst_count[23:0]),
-    .ddr3_wr_control_sm_idle(ddr3_wr_control_sm_idle)
+    .acq_done(acq_done)                             // input, asserted when the 'adc_acq_sm' is in the DONE state
 );
 
 ///////////////////////////////////////////////////////////////
@@ -248,6 +242,7 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     // .dbg_po_f_stg23_sel(dbg_po_f_stg23_sel),
     // .dbg_po_f_dec(dbg_po_f_dec),
 );
+
 
 //*************************************************************************
 // read data shift latch

@@ -8,7 +8,6 @@ module ddr3_wr_control_ASYNC (
     input clk,                            // DDR3 domain user clock
     input reset,
     input acq_enabled,                    // input, writing is enabled
-    input ddr3_wr_en,		// writing of triggered events to memory is enabled
     // Connections to the FIFO from the ADC
     input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
     input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
@@ -28,14 +27,11 @@ module ddr3_wr_control_ASYNC (
     output reg ddr3_wr_sync_err,
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
-    input acq_done,                        // asserted when the 'adc_acq_sm' is in the DONE state
-    input [23:0] calc_total_burst_count,
-    output reg ddr3_wr_control_sm_idle
+    input acq_done                        // asserted when the 'adc_acq_sm' is in the DONE state
 );
 
-// 
-//  Leave the comments containing "synopsys" in your HDL code.
- 
+// Leave the comments containing "synopsys" in your HDL code.
+
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
@@ -122,10 +118,10 @@ reg init_address_cntr;   // will be asserted by the state machine
 reg init_address_cntr_to_1;   // will be asserted by the state machine
 wire address_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
-    if (reset) address_cntr[23:0] <= 24'b0;
-    else if (init_address_cntr_to_1) address_cntr[23:0] <= 1;
-    else if (init_address_cntr) address_cntr[23:0] <= ddr3_wr_fifo_dat[10:0] + 1; // num_fill_bursts + 1 to account for waveform header (from the waveform header not fill header...)
-    else if (address_cntr_zero) address_cntr[23:0] <= 24'b0; 
+    if (reset) address_cntr[23:0] <= 24'd0;
+    else if (init_address_cntr_to_1) address_cntr[23:0] <= 24'd1;
+    else if (init_address_cntr) address_cntr[23:0] <= {10'd0, ddr3_wr_fifo_dat[13:0]} + 1; // num_fill_bursts + 1 to account for waveform header (from the waveform header not fill header...)
+    else if (address_cntr_zero) address_cntr[23:0] <= 24'b0;
     else if (address_accept) address_cntr[23:0] <= address_cntr[23:0] - 1;
 end
 // create a flag that gets set when the address counter is down to zero
@@ -141,14 +137,14 @@ reg init_burst_cntr;   // will be asserted by the state machine
 reg init_burst_cntr_to_1;   // will be asserted by the state machine
 wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
-    if (reset) burst_cntr[23:0] <= 24'b0;
-    else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 1;
-    else if (init_burst_cntr) burst_cntr[23:0] <= ddr3_wr_fifo_dat[10:0] + 1; // num_fill_bursts + 1 to account for waveform header (from the waveform header not fill header...)
-    else if (burst_cntr_zero) burst_cntr[23:0] <= 24'b0; 
+    if (reset) burst_cntr[23:0] <= 24'd0;
+    else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 24'd1;
+    else if (init_burst_cntr) burst_cntr[23:0] <= {10'd0, ddr3_wr_fifo_dat[13:0]} + 1; // num_fill_bursts + 1 to account for waveform header (from the waveform header not fill header...)
+    else if (burst_cntr_zero) burst_cntr[23:0] <= 24'b0;
     else if (data_accept) burst_cntr[23:0] <= burst_cntr[23:0] - 1;
 end
 // create a flag that gets set when the burst counter is down to zero
-assign burst_cntr_zero = (burst_cntr[23:0] == 24'b0) ? 1'b1 : 1'b0;
+assign burst_cntr_zero = (burst_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 
 // Create a counter that will control when addresses are sent to the DDR3 interface.
 // Since addresses come from a counter, we always have addresses available. However, when we
@@ -326,21 +322,17 @@ always @ (posedge clk) begin
 		init_total_burst_count	<= 1'b0;
         ddr3_wr_sync_err    	<= 1'b0;
         fill_header_wr_en   	<= 1'b0;
-        ddr3_wr_control_sm_idle <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
-        ddr3_wr_control_sm_idle <= 1'b1;
     end
     
     if (NS[INIT_ALL]) begin
        // initialize the total_burst counter to 1 (to include fill header)
 		init_total_burst_count	<= 1'b1;
-        ddr3_wr_control_sm_idle <= 1'b1;
     end
 
     if (NS[WAIT]) begin
-        ddr3_wr_control_sm_idle <= 1'b1;
     end
 
     if (NS[INIT_FILL]) begin

@@ -40,8 +40,9 @@ module register_block(
 	output [21:0] laser_waveform_gap,		 // idle time between waveforms 
 	output [11:0] ped_num_waveforms,		 // number of waveforms to store per trigger
 	output [21:0] ped_waveform_gap,			 // idle time between waveforms 
-	output [10:0] async_num_bursts,          // number of 8-sample bursts in an ASYNC waveform
-	output [11:0] async_pre_trig,            // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	output [13:0] async_num_bursts,          // number of 8-sample bursts in an ASYNC waveform
+	output [15:0] async_pre_trig,            // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	input  [22:0] current_waveform_num,
  
 	// slow control
 	input [15:0] xadc_temp,
@@ -53,7 +54,6 @@ module register_block(
 	output [31:0] genreg_addr_ctrl,	         // generic register address and control output
 	output [31:0] genreg_wr_data,	         // generic register data written from Master FPGA 
 	input [31:0] genreg_rd_data,	         // generic register data read by Master FPGA
-
 	input [31:0] map_data_integrity
 );
 
@@ -138,23 +138,23 @@ module register_block(
 
 	// R1 - channel tag
 	// bits [2:0] from configuration jumpers
-	assign channel_tag[2:0] = ch_addr[2:0];	     // the channel address jumpers
+	assign channel_tag[ 2:0] = ch_addr[2:0]; // the channel address jumpers
 	assign channel_tag[11:3] = reg1_[11:3];
 	
 	// R2 - Muon burst count
-	assign muon_num_bursts[22:0] = reg2_[22:0];
+	assign muon_num_bursts[22:0]  = reg2_[22:0];
 
 	// R3 - Laser burst count
 	assign laser_num_bursts[22:0] = reg3_[22:0];
 
 	// R4 - Pedestal burst count
-	assign ped_num_bursts[22:0] = reg4_[22:0];
+	assign ped_num_bursts[22:0]   = reg4_[22:0];
 
 	// R5
 	assign genreg_addr_ctrl[31:0] = reg5_[31:0]; // address and control for the generic register interface
 
 	// R6
-	assign genreg_wr_data[31:0]  = reg6_[31:0];	 // data written to generic register interface
+	assign genreg_wr_data[31:0]   = reg6_[31:0]; // data written to generic register interface
 
 	// R7 is read only
 
@@ -205,11 +205,11 @@ module register_block(
 
 	// R20
 	// number of 8-sample bursts in an ASYNC waveform
-	assign async_num_bursts[10:0] = reg20_[10:0];         
+	assign async_num_bursts[13:0] = reg20_[13:0];         
 
 	// R21
 	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-	assign async_pre_trig[11:0] = reg21_[11:0];
+	assign async_pre_trig[15:0] = reg21_[15:0];
 
 	// R22 is read only
 	// R23 is read only
@@ -223,7 +223,7 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h00)) rdbk_reg[31:0] <= {8'b0, fill_num[23:0]};
 		// R1 bits [2:0] from the channel address jumpers
 		// R1 bits [31:16] always read back as zero
-		if (rd_en && (reg_num[4:0] == 5'h01)) rdbk_reg[31:0] <= {16'h0000, reg1_[15:3], ch_addr[2:0]};
+		if (rd_en && (reg_num[4:0] == 5'h01)) rdbk_reg[31:0] <= {20'h0000, reg1_[11:3], ch_addr[2:0]};
 		// R2, R3, R4 bits [31:24] always read back as zero
 		if (rd_en && (reg_num[4:0] == 5'h02)) rdbk_reg[31:0] <= {9'b0, reg2_[22:0]};
 		if (rd_en && (reg_num[4:0] == 5'h03)) rdbk_reg[31:0] <= {9'b0, reg3_[22:0]};
@@ -243,8 +243,8 @@ module register_block(
 		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= {10'b0, reg17_[21:0]};
 		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= {20'b0, reg18_[11:0]};
 		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= {10'b0, reg19_[21:0]};
-		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {21'b0, reg20_[10:0]};
-		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {20'b0, reg21_[11:0]};
+		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {current_waveform_num[17:0], reg20_[13:0]};
+		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {11'b0, current_waveform_num[22:18], reg21_[15:0]};
 		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= map_data_integrity[31:0]; // R22 is read only
 		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= {xadc_vccint[15:0], xadc_temp[15:0]}; // R23 is read only
 		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= {xadc_vccbram[15:0], xadc_vccaux[15:0]}; // R24 is read only

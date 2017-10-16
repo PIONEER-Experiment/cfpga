@@ -39,15 +39,10 @@ module map_adc_delay (
 
     // Connect a pipeline of registers to hold all data for 1 burst.
     //   Register #0 will have the oldest data
-    //   Register #7 will have the newest data
+    //   Register #3 will have the newest data
     reg [23:0] adc_dat_reg0, adc_dat_reg1, adc_dat_reg2, adc_dat_reg3;
-    reg [23:0] adc_dat_reg4, adc_dat_reg5, adc_dat_reg6, adc_dat_reg7;
     always @ (posedge clk) begin
-        adc_dat_reg7[23:0] <= {packed_adc_dat[25:14], packed_adc_dat[12:1]};
-        adc_dat_reg6[23:0] <= adc_dat_reg7[23:0];
-        adc_dat_reg5[23:0] <= adc_dat_reg6[23:0];
-        adc_dat_reg4[23:0] <= adc_dat_reg5[23:0];
-        adc_dat_reg3[23:0] <= adc_dat_reg4[23:0];
+        adc_dat_reg3[23:0] <= {packed_adc_dat[25:14], packed_adc_dat[12:1]};
         adc_dat_reg2[23:0] <= adc_dat_reg3[23:0];
         adc_dat_reg1[23:0] <= adc_dat_reg2[23:0];
         adc_dat_reg0[23:0] <= adc_dat_reg1[23:0];
@@ -56,8 +51,7 @@ module map_adc_delay (
     // internal signals
     reg [7:0] count;
     wire [23:0] adc_dat_xor;
-    assign adc_dat_xor[23:0] = adc_dat_reg0[23:0] ^ adc_dat_reg1[23:0] ^ adc_dat_reg2[23:0] ^ adc_dat_reg3[23:0] ^
-                               adc_dat_reg4[23:0] ^ adc_dat_reg5[23:0] ^ adc_dat_reg6[23:0] ^ adc_dat_reg7[23:0];
+    assign adc_dat_xor[23:0] = adc_dat_reg0[23:0] ^ adc_dat_reg1[23:0] ^ adc_dat_reg2[23:0] ^ adc_dat_reg3[23:0];
 
 
     // Declare the symbolic names for states for the state machine.

@@ -33,32 +33,30 @@ module cc_loopback_sm (
 	output send_csn,			// send the CSN
 	output send_cmd,			// send the CC
 	output send_rx_data			// mux source is RX FIFO
-	);
+);
 
 	reg was_last_reg;            // remembers when 'rx_last' is received
 	
     // Everything is already synchronous to the clock.
 
 	// State machine for executing the 'loopback' command
-	//  Leave the comments containing "synopsys" in your HDL code.
+	// Leave the comments containing "synopsys" in your HDL code.
  
 	// Declare the symbolic names for states for the state machine
 	// Simplified one-hot encoding (each constant is an index into an array of bits)
-	parameter [3:0]
-		IDLE			= 4'd0,
-		ECHO_CSN1		= 4'd1,
-		ECHO_CSN2		= 4'd2,
-		ECHO_CC1		= 4'd3,
-		ECHO_CC2		= 4'd4,
-		ECHO_DATA1		= 4'd5,
-		ECHO_DATA2		= 4'd6,
-		ECHO_DATA3		= 4'd7,
-		ECHO_DATA4		= 4'd8,
-		DONE			= 4'd9;
-				
+	parameter [2:0]
+		IDLE       = 3'd0,
+		ECHO_CSN1  = 3'd1,
+		ECHO_CSN2  = 3'd2,
+		ECHO_CC1   = 3'd3,
+		ECHO_CC2   = 3'd4,
+		ECHO_DATA1 = 3'd5,
+		ECHO_DATA2 = 3'd6,
+		DONE       = 3'd7;
+
 	// Declare current state and next state variables
-	reg [11:0] /* synopsys enum STATE_TYPE */ CS;
-	reg [11:0] /* synopsys enum STATE_TYPE */ NS;
+	reg [7:0] /* synopsys enum STATE_TYPE */ CS;
+	reg [7:0] /* synopsys enum STATE_TYPE */ NS;
 	//synopsys state_vector CS
 
  
@@ -66,21 +64,20 @@ module cc_loopback_sm (
 	// Reset the sm whenever we are not enabled
 	always @ (posedge clk) begin
 		if (!run_sm) begin
-			CS <= 12'b0;				// set all state bits to 0
-			CS[IDLE] <= 1'b1;		// set IDLE state bit to 1
+			CS <= 8'd0;	  // set all state bits to 0
+			CS[IDLE] <= 1'b1; // set IDLE state bit to 1
 		end
-		else  CS <= NS;			// set state bits to next state
+		else CS <= NS;		  // set state bits to next state
 	end
 
 	// combinational always block to determine next state  (use blocking [=] assignments) 
 	always @ (CS or rx_tvalid or rx_tlast or tx_tready or was_last_reg) begin
-		NS = 12'b0;					// default all bits to zero; will overrride one bit
+		NS = 8'd0; // default all bits to zero; will overrride one bit
 
 		case (1'b1) //synopsys full_case parallel_case
 
 			// We will be in the IDLE state whenever the command dispatcher does not enable us.
 			// Once enabled, immediately start working
-			//
 			CS[IDLE]: begin
 					// Start echoing CSN.
 					NS[ECHO_CSN1] = 1'b1;
@@ -102,7 +99,6 @@ module cc_loopback_sm (
 			// We enter the ECHO_CSN2 state whenever the TX fifo is ready to accept the CSN.
 			// We stay here for one cycle, during which we assert 'tx_tvalid'
 			CS[ECHO_CSN2]: begin
-				// 
 				NS[ECHO_CC1] = 1'b1;
 			end
 
@@ -122,7 +118,6 @@ module cc_loopback_sm (
 			// We enter the ECHO_CC2 state whenever the TX fifo is ready to accept the CC.
 			// We stay here for one cycle, during which we assert 'tx_tvalid'
 			CS[ECHO_CC2]: begin
-				// 
 				NS[ECHO_DATA1] = 1'b1;
 			end
 
@@ -172,11 +167,11 @@ module cc_loopback_sm (
 	// assert 'sm_done' whenever we are in the DONE state
 	assign sm_done = (CS[DONE] == 1'b1);
 
-	assign send_csn = (CS[ECHO_CSN1] == 1'b1 || CS[ECHO_CSN2] == 1'b1 );			// send the CSN
-	assign send_cmd = (CS[ECHO_CC1] == 1'b1 || CS[ECHO_CC2] == 1'b1 );			// send the CC
-	assign send_rx_data  = (CS[ECHO_DATA1] == 1'b1 || CS[ECHO_DATA2] == 1'b1);	// mux source is RX FIFO
-	assign rx_tready = (CS[ECHO_DATA2] == 1'b1); 
-	assign tx_tvalid  = (CS[ECHO_CSN2] == 1'b1 || CS[ECHO_CC2] == 1'b1 || CS[ECHO_DATA2] == 1'b1);
-	assign tx_tlast   = (CS[ECHO_DATA2] == 1'b1) && rx_tlast;
+	assign send_csn     = (CS[ECHO_CSN1]  == 1'b1 || CS[ECHO_CSN2]  == 1'b1); // send the CSN
+	assign send_cmd     = (CS[ECHO_CC1]   == 1'b1 || CS[ECHO_CC2]   == 1'b1); // send the CC
+	assign send_rx_data = (CS[ECHO_DATA1] == 1'b1 || CS[ECHO_DATA2] == 1'b1); // mux source is RX FIFO
+	assign rx_tready    = (CS[ECHO_DATA2] == 1'b1); 
+	assign tx_tvalid    = (CS[ECHO_CSN2]  == 1'b1 || CS[ECHO_CC2]   == 1'b1 || CS[ECHO_DATA2] == 1'b1);
+	assign tx_tlast     = (CS[ECHO_DATA2] == 1'b1) && rx_tlast;
 	
 endmodule

@@ -57,8 +57,10 @@ module command_top (
 	output [21:0] laser_waveform_gap,		  // idle time between waveforms 
 	output [11:0] ped_num_waveforms,		  // number of waveforms to store per trigger
 	output [21:0] ped_waveform_gap,			  // idle time between waveforms 
-	output [10:0] async_num_bursts,           // number of 8-sample bursts in an ASYNC waveform
-	output [11:0] async_pre_trig,             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	output [13:0] async_num_bursts,           // number of 8-sample bursts in an ASYNC waveform
+	output [15:0] async_pre_trig,             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	input  [25:0] packed_adc_dat,
+	input  [22:0] current_waveform_num,
 
 	input  [15:0] xadc_temp,
 	input  [15:0] xadc_vccint,
@@ -69,13 +71,11 @@ module command_top (
 	output [31:0] genreg_wr_data,	          // generic register data written from Master FPGA 
 	input  [31:0] genreg_rd_data,	          // generic register data read by Master FPGA
 
-	input  [25:0] packed_adc_dat,
-
 	// interface to the AXIS 2:1 MUX
 	output use_ddr3_data,			          // the data source is the DDR3 memory
 	input  aurora_ddr3_accept,		          // DDR3 data has been accepted by the Aurora
 
-	// status for front panel LED
+	// status signals
 	output command_sm_idle
 );
 
@@ -351,14 +351,15 @@ module command_top (
 	    .laser_waveform_gap(laser_waveform_gap[21:0]),			       // idle time between waveforms 
 		.ped_num_waveforms(ped_num_waveforms[11:0]),			       // number of waveforms to store per trigger
 	    .ped_waveform_gap(ped_waveform_gap[21:0]),				       // idle time between waveforms 
-		.async_num_bursts(async_num_bursts[10:0]),         		       // number of 8-sample bursts in an ASYNC waveform
-	    .async_pre_trig(async_pre_trig[11:0]),           		       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+		.async_num_bursts(async_num_bursts[13:0]),         		       // number of 8-sample bursts in an ASYNC waveform
+	    .async_pre_trig(async_pre_trig[15:0]),           		       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	    .current_waveform_num(current_waveform_num[22:0]),
 	    // slow control
 	    .xadc_temp(xadc_temp[15:0]),
 	    .xadc_vccint(xadc_vccint[15:0]),
 	    .xadc_vccaux(xadc_vccaux[15:0]),
 	    .xadc_vccbram(xadc_vccbram[15:0]),
-	    // general register block
+	    // generic register block
 		.genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
 		.genreg_wr_data(genreg_wr_data[31:0]),
 		.genreg_rd_data(genreg_rd_data[31:0]),

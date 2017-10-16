@@ -254,6 +254,8 @@ always @ (posedge clk) begin
 		// load the address pointer
 		if (en_fixed_ddr3_start_addr) // if fixed start address is enabled
 			ddr3_rd_start_addr[22:0] <= fixed_ddr3_start_addr[22:0];
+		else if (fill_header_fifo_out[26]) // if async mode
+			ddr3_rd_start_addr[22:0] <= 23'd0;
 		else
 			ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[75:53];
 
@@ -263,7 +265,7 @@ always @ (posedge clk) begin
 		// load the words_to_send counter - these are 32-bit words, so left-shift the burst count
 		ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
 	    // remove the word from the FIFO head
-        fill_header_fifo_rd_en <= 1'b1;		
+        fill_header_fifo_rd_en <= 1'b1;
 	end
 
 	if (NS[ECHO_CSN1]) begin

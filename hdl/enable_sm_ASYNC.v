@@ -20,32 +20,36 @@ module enable_sm_ASYNC (
     output reg adc_acq_sm_idle,	// ADC acquisition state machine is idle (used for front panel LED status)
     output reg ext_done         // external output indicating acquisition is done
 
-);      
+);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Sync the two 'ext_enable' inputs to the ADC clock domain. OR them together.
-reg enable_sync1, enable_sync2;
+reg enable_sync1;
+reg enable_sync2;
 always @(posedge adc_clk) begin
 	enable_sync1 <= #1 ext_enable0 | ext_enable1;
 	enable_sync2 <= #1 enable_sync1;
 end
  
 // synchronize 'ddr3_wr_done'
-reg ddr3_wr_done_sync1, ddr3_wr_done_sync2;
+reg ddr3_wr_done_sync1;
+reg ddr3_wr_done_sync2;
 always @ (posedge adc_clk) begin
     ddr3_wr_done_sync1 <= #1 ddr3_wr_done;
     ddr3_wr_done_sync2 <= #1 ddr3_wr_done_sync1;
 end
-  
+
 // synchronize 'ext_trig' and create a pulse when it is asserted
-reg trig_sync1, trig_sync2, trig_sync3;
+reg trig_sync1, trig_sync2, trig_sync3, trig_sync4, trig_sync5;
 always @ (posedge adc_clk) begin
     trig_sync1 <= #1 ext_trig;
     trig_sync2 <= #1 trig_sync1;
     trig_sync3 <= #1 trig_sync2;
-	// assert 'trig_pulse' when 'ext_trig' has gotten to the second register, but not the third
+    trig_sync4 <= #1 trig_sync3;
+    trig_sync5 <= #1 trig_sync4;
+	// assert 'trig_pulse' when 'ext_trig' has gotten to the fourth register, but not the fifth
     // pass triggers only during the TRIG_ENABLED state
-    trig_pulse <= #1 ((trig_sync2 & ~trig_sync3) &&  cbuf_trig_en);
+    trig_pulse <= #1 ((trig_sync4 & ~trig_sync5) && cbuf_trig_en);
 end
 
 // synchronize the 'reset_clk50' signal to the 'adc_clk'

@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // Move data from the circular buffer to the DDR3 input FIFO
 
-module circ_buf_to_ddr3_ASYNC(
+module circ_buf_to_ddr3_ASYNC (
     // inputs
     input adc_clk,                 	// ADC clock used by the FIFO
     input reset_clk_adc,			// either 'ext_reset' or 'reset_clk50' is asserted
@@ -10,8 +10,8 @@ module circ_buf_to_ddr3_ASYNC(
     input [11:0] channel_tag,       // stuff about the channel to put in the header
     input [23:0] initial_fill_num,  // event number to assign to the first fill
     input initial_fill_num_wr,      // write-strobe to store the initial_fill_num
-    input [10:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform
-	input [11:0] async_pre_trig,    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    input [13:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform
+	input [15:0] async_pre_trig,    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 	input [25:0] circ_buf_rd_dat,	// 26-bit wide data from the circular buffer 
 	input [15:0] circ_buf_trig_addr, // circular buffer address corresponding to a trigger, FIFO output
 	input trig_fifo_empty,			// no triggers available when asserted
@@ -25,15 +25,12 @@ module circ_buf_to_ddr3_ASYNC(
 	output reg [15:0] circ_buf_rd_addr,	// read address for the circular buffer
     output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,       	// current data should be stored in the FIFO
-    output [23:0] calc_total_burst_count
+    output [22:0] current_waveform_num
 );
 
-wire [22:0] current_waveform_num;	// the current waveform number, to be used in header
-wire [22:0] burst_adr;				// DDR3 burst memory location (3 LSBs=0) for a waveform
-reg [22:0] waveform_start_adr;		// DDR3 burst memory location (3 LSBs=0) for a waveform
-reg [22:0] num_fill_bursts;			// total number of bursts in a fill
-
-assign calc_total_burst_count[23:0] = (async_num_bursts[10:0]+1)*current_waveform_num[22:0]+2;
+wire [22:0] burst_adr;		    // DDR3 burst memory location (3 LSBs=0) for a waveform
+reg  [22:0] waveform_start_adr; // DDR3 burst memory location (3 LSBs=0) for a waveform
+reg  [22:0] num_fill_bursts;	// total number of bursts in a fill
 
 wire initial_fill_num_wr_sync;
 sync_2stage initial_fill_num_wr_sync_inst (
@@ -47,7 +44,7 @@ sync_2stage initial_fill_num_wr_sync_inst (
 // FWFT mode, but beware of latency from when 'trig_addr_rd_en' is asserted until the subtracted value is valid.
 reg [15:0] circ_buf_start_addr;
 always @(posedge adc_clk) begin
-	circ_buf_start_addr[15:0] <= #1 circ_buf_trig_addr[15:0] - {{4{1'b0}}, async_pre_trig[11:0]};
+	circ_buf_start_addr[15:0] <= #1 circ_buf_trig_addr[15:0] - async_pre_trig[15:0];
 end 		 
   
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,8 +89,8 @@ adc_dat_mux_ASYNC adc_dat_mux_ASYNC (
     .waveform_start_adr(waveform_start_adr[22:0]), // DDR3 burst memory location (3 LSBs=0) for a waveform
 	.current_waveform_num(current_waveform_num[22:0]),// the current waveform number, to be used in header
 	.fill_num(fill_num[23:0]),                  // fill number for this fill
-    .async_num_bursts(async_num_bursts[10:0]),  // number of 8-sample bursts in an ASYNC waveform
-	.async_pre_trig(async_pre_trig[11:0]),    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .async_num_bursts(async_num_bursts[13:0]),  // number of 8-sample bursts in an ASYNC waveform
+	.async_pre_trig(async_pre_trig[15:0]),    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .xadc_alarms(xadc_alarms[3:0]),
     .clk(adc_clk),
     .select_dat(adc_mux_dat_sel),               // selects data
@@ -114,10 +111,10 @@ adc_dat_mux_ASYNC adc_dat_mux_ASYNC (
 burst_address_cntr_ASYNC burst_address_cntr_ASYNC (
     // inputs
     .clk(adc_clk),
-    .init(burst_adr_cntr_init),			// initialize to '1' at the start of a fill
-    .enable(burst_adr_cntr_en),			// increment
+    .init(burst_adr_cntr_init), // initialize to '1' at the start of a fill
+    .enable(burst_adr_cntr_en), // increment
     // outputs
-    .burst_adr(burst_adr[22:0])					// current DDR3 burst memory location
+    .burst_adr(burst_adr[22:0]) // current DDR3 burst memory location
 );
 // latch the start address for a waveform
 always @(posedge adc_clk) begin
@@ -136,12 +133,12 @@ end
 // It will be enabled when each data burst is sent out.
 burst_cntr_ASYNC burst_cntr_ASYNC (
     // inputs
-    .async_num_bursts(async_num_bursts[10:0]),	// number of 8 sample bursts
+    .async_num_bursts(async_num_bursts[13:0]), // number of 8 sample bursts
     .clk(adc_clk),
-    .init(burst_cntr_init),                     // initialize when triggered
-    .enable(burst_cntr_en),                     // will be enabled once per burst
+    .init(burst_cntr_init),                    // initialize when triggered
+    .enable(burst_cntr_en),                    // will be enabled once per burst
     // outputs
-    .at_zero(burst_cntr_zero)                   // all sample bursts have been saved
+    .at_zero(burst_cntr_zero)                  // all sample bursts have been saved
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -151,10 +148,10 @@ burst_cntr_ASYNC burst_cntr_ASYNC (
 waveform_cntr_ASYNC waveform_cntr_ASYNC (
     // inputs
     .clk(adc_clk),
-    .init(waveform_cntr_init),              // initialize when triggered
-    .enable(waveform_cntr_en),             	// will be enabled once for each waveform
+    .init(waveform_cntr_init),                        // initialize when triggered
+    .enable(waveform_cntr_en),             	          // will be enabled once for each waveform
     // outputs
-    .current_waveform_num(current_waveform_num[22:0])// to be used in header
+    .current_waveform_num(current_waveform_num[22:0]) // to be used in header
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,12 +160,12 @@ waveform_cntr_ASYNC waveform_cntr_ASYNC (
 // It will be enabled when each fill is done
 adc_fill_cntr adc_fill_cntr (
     // inputs
-    .initial_fill_num(initial_fill_num[23:0]),  // always positive
+    .initial_fill_num(initial_fill_num[23:0]), // always positive
     .clk(adc_clk),
-    .init(initial_fill_num_wr_sync),            // initialize when programmed
-    .enable(fill_cntr_en),                      // will be enabled once per fill
+    .init(initial_fill_num_wr_sync),           // initialize when programmed
+    .enable(fill_cntr_en),                     // will be enabled once per fill
     // outputs
-   .fill_num(fill_num[23:0])                    // fill number for this fill
+   .fill_num(fill_num[23:0])                   // fill number for this fill
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -190,7 +187,7 @@ circ_buf_to_ddr3_sm_ASYNC circ_buf_to_ddr3_sm_ASYNC (
 	.save_last_adr(save_last_adr),			// latch the last DDR3 address for a fill, it it the total count
     .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
 	.init_circ_buf_rd_addr(init_circ_buf_rd_addr), // initialize the counter with the start of the buffer area to be saved
-    .inc_circ_buf_rd_addr(inc_circ_buf_rd_addr), 	// increment the address
+    .inc_circ_buf_rd_addr(inc_circ_buf_rd_addr),   // increment the address
 	.latch_circ_buf_dat(latch_circ_buf_dat),	// save the current 32-bit data word from the circular buffer
     .select_dat(adc_mux_dat_sel),               // selects data
 	.select_fill_hdr(adc_mux_fill_hdr_sel),     // selects fill header

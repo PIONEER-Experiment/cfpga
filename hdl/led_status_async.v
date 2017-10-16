@@ -8,8 +8,7 @@ module led_status_async (
   output green_led,
   input  aurora_channel_up,
   input  adc_acq_sm_idle,
-  input  command_sm_idle,
-  input  ddr3_wr_control_sm_idle
+  input  command_sm_idle
 );
 
 // the LEDs are active low:

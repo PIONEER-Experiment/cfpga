@@ -18,7 +18,7 @@ module circ_buf_to_ddr3_sm_ASYNC (
 	output reg select_dat,				// selects data from the MUX
 	output reg select_waveform_hdr,		// selects waveform header
 	output reg select_checksum,			// selects checksum, send the checksum to the FIFO 
-	output reg checksum_update,			// update the checksum 
+	output reg checksum_update,			// update the checksum
 	output reg checksum_init,			// initialize the checksum
 	output reg adc_acq_out_valid,  		// current output from the MUX should be stored in the FIFO
 	output reg burst_adr_cntr_en,		// increment the next starting address
@@ -29,11 +29,11 @@ module circ_buf_to_ddr3_sm_ASYNC (
 	output reg burst_cntr_en,			// will be enabled once per burst
 	output reg waveform_cntr_init,      // initialize when triggered
 	output reg waveform_cntr_en,        // will be enabled once after each waveform
-	output reg fill_cntr_en			// will be enabled once per fill
+	output reg fill_cntr_en			    // will be enabled once per fill
 );      
 
- 
-//  Leave the comments containing "synopsys" in your HDL code.
+
+// Leave the comments containing "synopsys" in your HDL code.
 
 // delay the 'adc_acq_out_valid' signal to allow for the memory reading delay
 reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
@@ -88,8 +88,8 @@ always @ (posedge adc_clk) begin
         CS <= #1 NS;         // set state bits to next state
 end
 
-// combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero)    begin
+// combinational always block to determine next state (use blocking [=] assignments) 
+always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero) begin
     NS = {18{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
@@ -118,11 +118,11 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
         		// This branch has top priority, so that we always process all accepted triggers.
                 NS[WAVEFORM_INIT1] = 1'b1;
 	        else if (!cbuf_trig_en && got_trig)
-                 // the fill is over, and we had at least 1 trigger, so go handle the fill header and checksum
-                 NS[FILL_DONE1] = 1'b1;
+                // the fill is over, and we had at least 1 trigger, so go handle the fill header and checksum
+                NS[FILL_DONE1] = 1'b1;
 	        else if (!cbuf_trig_en && !got_trig)
-                 // the fill is over, but there were no triggers, so go clean up and end
-                 NS[NO_TRIGGER] = 1'b1;
+                // the fill is over, but there were no triggers, so go clean up and end
+                NS[NO_TRIGGER] = 1'b1;
        		else
 				// wait here
             	NS[TRIG_WAIT] = 1'b1;
@@ -248,16 +248,16 @@ always @ (posedge adc_clk) begin
     	select_dat        		<= #1 1'b0;	// selects data from the MUX
     	select_checksum        	<= #1 1'b0;	// selects checksum, send the checksum to the FIFO 
     	immed_adc_acq_out_valid	<= #1 1'b0;	// current output from the MUX should be stored in the FIFO
-    	start_dlyd_adc_acq_out_valid  <= #1 1'b0;	// prepare for current output from the MUX should be stored in the FIFO
-   		//checksum_update        	<= #1 1'b0;	// update the checksum 
+    	start_dlyd_adc_acq_out_valid <= #1 1'b0; // prepare for current output from the MUX should be stored in the FIFO
+   		// checksum_update      <= #1 1'b0;	// update the checksum 
 		checksum_init        	<= #1 1'b0;	// initialize the checksum
     	save_start_adr        	<= #1 1'b0;	// latch the first DDR3 address for a waveform
 		save_last_adr        	<= #1 1'b0;	// latch the last DDR3 address for a fill, it it the total count
     	trig_addr_rd_en        	<= #1 1'b0;	// read a trigger address from the FIFO
     	burst_cntr_init        	<= #1 1'b0;	// initialize when triggered
     	burst_cntr_en        	<= #1 1'b0;	// will be enabled once per burst
-    	waveform_cntr_init      <= #1 1'b0;    // initialize when a fill starts
-    	waveform_cntr_en        <= #1 1'b0;    // will be enabled once after each waveform
+    	waveform_cntr_init      <= #1 1'b0; // initialize when a fill starts
+    	waveform_cntr_en        <= #1 1'b0; // will be enabled once after each waveform
      	inc_circ_buf_rd_addr    <= #1 1'b0;	// increment the circular buffer address
     	latch_circ_buf_dat      <= #1 1'b0;	// save the current 32-bit data word from the circular buffer
     	burst_adr_cntr_en 		<= #1 1'b0;	// increment the next starting address
@@ -336,7 +336,7 @@ always @ (posedge adc_clk) begin
 	   	// signal the mux to output the ADC data burst
     	select_dat        		<= #1 1'b1;
     	// update the checksum
-    	//checksum_update        	<= #1 1'b1; 
+    	// checksum_update      <= #1 1'b1; 
     end
 
     if (NS[LOOP4]) begin

@@ -22,6 +22,6 @@ module led_status (
 //              e.g., red means "error" or "busy"
 
 assign green_led = ~(aurora_channel_up && adc_acq_sm_idle && command_sm_idle);
-assign red_led = ~green_led;
+assign red_led   = ~green_led;
 
 endmodule

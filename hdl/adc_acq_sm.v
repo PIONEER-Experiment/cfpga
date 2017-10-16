@@ -40,14 +40,24 @@ module adc_acq_sm (
 
 
 // synchronize ENABLE and TRIGGER inputs to this clock domain
-reg acq_enable0_sync1, acq_enable0_sync2, acq_enable1_sync1, acq_enable1_sync2, acq_trig_sync1, acq_trig_sync2; 
+reg acq_enable0_sync1, acq_enable0_sync2, acq_enable0_sync3, acq_enable0_sync4;
+reg acq_enable1_sync1, acq_enable1_sync2, acq_enable1_sync3, acq_enable1_sync4;
+reg acq_trig_sync1, acq_trig_sync2, acq_trig_sync3, acq_trig_sync4; 
 always @(posedge clk) begin
     acq_enable0_sync1 <= acq_enable0;
     acq_enable0_sync2 <= acq_enable0_sync1;
+    acq_enable0_sync3 <= acq_enable0_sync2;
+    acq_enable0_sync4 <= acq_enable0_sync3;
+
     acq_enable1_sync1 <= acq_enable1;
     acq_enable1_sync2 <= acq_enable1_sync1;
+    acq_enable1_sync3 <= acq_enable1_sync2;
+    acq_enable1_sync4 <= acq_enable1_sync3;
+
     acq_trig_sync1 <= acq_trig;
     acq_trig_sync2 <= acq_trig_sync1;
+    acq_trig_sync3 <= acq_trig_sync2;
+    acq_trig_sync4 <= acq_trig_sync3;
 end
 
 // sync and combine the external ACQ_RESET and the internal RESET_CLK50
@@ -67,9 +77,9 @@ end
 
 // We are in acquisition mode whenever the ENABLE inputs are not both zero.
 // When they are both zero, we are in readout mode.
-reg adc_acq_mode_enabled;   // we are enabled to accept triggers and store data
+reg adc_acq_mode_enabled; // we are enabled to accept triggers and store data
 always @(posedge clk) begin
-    if ( acq_enable0_sync2 |  acq_enable1_sync2)
+    if (acq_enable0_sync4 | acq_enable1_sync4)
         adc_acq_mode_enabled <= 1'b1;
     else
         adc_acq_mode_enabled <= 1'b0;
@@ -77,7 +87,7 @@ end
 
 // The fill type is determined by combining the ENABLE inputs
 always @(posedge clk) begin
-    fill_type[1:0] <= {acq_enable1_sync2, acq_enable0_sync2};
+    fill_type[1:0] <= {acq_enable1_sync4, acq_enable0_sync4};
 end
      
 //  Leave the comments containing "synopsys" in your HDL code.
@@ -122,14 +132,14 @@ end
 
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr3_wr_done_sync2 or last_waveform or waveform_gap_zero)    begin
+always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr3_wr_done_sync2 or last_waveform or waveform_gap_zero)    begin
     NS = 19'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
 
         // Stay in the IDLE state until we are both armed and triggered.
         CS[IDLE]: begin
-            if (adc_acq_mode_enabled && acq_trig_sync2)
+            if (adc_acq_mode_enabled && acq_trig_sync4)
                 NS[FILL_INIT1] = 1'b1;
             else
                 NS[IDLE] = 1'b1;
@@ -251,7 +261,7 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync2 or burst_cntr_zero or ddr
         // Stay in the DONE state until the trigger is negated.
         // This prevents false retriggering.
         CS[DONE]: begin
-            if (adc_acq_mode_enabled && acq_trig_sync2)
+            if (adc_acq_mode_enabled && acq_trig_sync4)
                 NS[DONE] = 1'b1;
             else
                 NS[IDLE] = 1'b1;

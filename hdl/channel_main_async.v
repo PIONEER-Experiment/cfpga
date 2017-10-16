@@ -68,7 +68,7 @@ module channel_main_async (
   input adc_syncp, adc_syncn
 );
 
-wire [23:0] calc_total_burst_count;
+wire [22:0] current_waveform_num;
 
 // Assignments for 'io' lines:
 //   io[0]   : 'readout_pause'
@@ -98,8 +98,8 @@ wire [11:0] laser_num_waveforms;		// number of waveforms to store per trigger
 wire [21:0] laser_waveform_gap;			// idle time between waveforms 
 wire [11:0] ped_num_waveforms;			// number of waveforms to store per trigger
 wire [21:0] ped_waveform_gap;			// idle time between waveforms 
-wire [10:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform
-wire [11:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+wire [13:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform
+wire [15:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
 wire adc_acq_out_valid;
 wire [131:0] ddr3_wr_fifo_dat;          // 132-bit 4-bit tag plus header or ADC data from 'ddr3_write_fifo'
@@ -137,7 +137,6 @@ wire [64:0] adc_buf_current_data_delay;
 wire aurora_channel_up;
 wire adc_acq_sm_idle;
 wire command_sm_idle;
-wire ddr3_wr_control_sm_idle;
 
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
@@ -264,8 +263,8 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
-	  .async_num_bursts(async_num_bursts[10:0]),           // number of 8-sample bursts in an ASYNC waveform
-    .async_pre_trig(async_pre_trig[11:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	  .async_num_bursts(async_num_bursts[13:0]),           // number of 8-sample bursts in an ASYNC waveform
+    .async_pre_trig(async_pre_trig[15:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
@@ -277,7 +276,7 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
     .adc_acq_sm_idle(adc_acq_sm_idle),                    // ADC acquisition state machine is idle (used for front panel LED status)
-    .calc_total_burst_count(calc_total_burst_count[23:0]),
+    .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0])
 );
 
@@ -339,9 +338,6 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
     .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast),    // the last burst for this fill 
 
-    // other
-    .calc_total_burst_count(calc_total_burst_count[23:0]),
-
     // connections to the DDR3 chips
     .ddr3_addr(ddr3_addr[12:0]),
     .ddr3_ba(ddr3_ba[2:0]),
@@ -358,8 +354,7 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
-    .xadc_temp(xadc_temp[11:0]),
-    .ddr3_wr_control_sm_idle(ddr3_wr_control_sm_idle)
+    .xadc_temp(xadc_temp[11:0])
 );
 
 ////////////////////////////////////////////////////////////////////////////
@@ -429,8 +424,7 @@ led_status_async led_status_async (
     .green_led(led2),
     .aurora_channel_up(aurora_channel_up),
     .adc_acq_sm_idle(adc_acq_sm_idle),
-    .command_sm_idle(command_sm_idle),
-    .ddr3_wr_control_sm_idle(ddr3_wr_control_sm_idle)
+    .command_sm_idle(command_sm_idle)
 );
  
 ////////////////////////////////////////////////////////////////////////////
@@ -515,7 +509,7 @@ command_top command_top (
     .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go
     .reading_done(reading_done),                        // output, reading is complete
 
-    // Registers to/from the ADC acquisition state machine
+    // registers to/from the ADC acquisition state machine
     .fill_num(fill_num[23:0]),                                     // fill number for this fill
     .channel_tag(channel_tag[11:0]),                               // stuff about the channel to put in the header
     .muon_num_bursts(muon_num_bursts[22:0]),                       // number of sample bursts in a MUON fill
@@ -535,8 +529,10 @@ command_top command_top (
     .laser_waveform_gap(laser_waveform_gap[21:0]),		// idle time between waveforms 
     .ped_num_waveforms(ped_num_waveforms[11:0]),		// number of waveforms to store per trigger
     .ped_waveform_gap(ped_waveform_gap[21:0]),			// idle time between waveforms 
-	  .async_num_bursts(async_num_bursts[10:0]),       	// number of 8-sample bursts in an ASYNC waveform
-	  .async_pre_trig(async_pre_trig[11:0]),           	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+	  .async_num_bursts(async_num_bursts[13:0]),       	// number of 8-sample bursts in an ASYNC waveform
+	  .async_pre_trig(async_pre_trig[15:0]),           	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .packed_adc_dat(packed_adc_dat[25:0]),
+    .current_waveform_num(current_waveform_num[22:0]),
 
     .xadc_temp(xadc_temp[15:0]),
     .xadc_vccint(xadc_vccint[15:0]),
@@ -547,13 +543,11 @@ command_top command_top (
     .genreg_wr_data(genreg_wr_data[31:0]),
     .genreg_rd_data(genreg_rd_data[31:0]),
 
-    .packed_adc_dat(packed_adc_dat[25:0]),
-
     // interface to the AXIS 2:1 mux
     .use_ddr3_data(use_ddr3_data),              // the data source is the DDR3 memory
     .aurora_ddr3_accept(aurora_ddr3_accept),    // DDR3 data has been accepted by the Aurora
     
-    // Status signal for front panel LED
+    // status signals
     .command_sm_idle(command_sm_idle)
 );
 
