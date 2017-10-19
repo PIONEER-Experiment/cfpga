@@ -75,7 +75,7 @@ module register_block(
 	
 	// make a block of 32 32-bit registers
 	// those with explicit defaults follow below
-	reg [31:0] reg1_, reg5_, reg6_, reg23_, reg24_, reg25_, reg26_, reg27_, reg28_, reg29_, reg30_;
+	reg [31:0] reg1_, reg5_, reg6_, reg26_, reg27_, reg28_, reg29_, reg30_;
 
 	// set non-zero default register values
 	reg [31:0] reg0_  = 32'd1;        // initial fill number set to 1
@@ -120,7 +120,7 @@ module register_block(
 		// R22 is read only
 		// R23 is read only
 		// R24 is read only
-		if (wr_en && (reg_num[4:0] == 5'h19)) reg25_[31:0] <= rx_data[31:0];
+		// R25 is read only
 		if (wr_en && (reg_num[4:0] == 5'h1a)) reg26_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h1b)) reg27_[31:0] <= rx_data[31:0];
 		if (wr_en && (reg_num[4:0] == 5'h1c)) reg28_[31:0] <= rx_data[31:0];
@@ -159,8 +159,8 @@ module register_block(
 	// R7 is read only
 
 	// R8
-	assign adc_buf_data_delay[4:0] = reg8_[4:0]; // tap value for the data bus delay
 	// When we write a new delay, we need to assert 'adc_buf_delay_data_reset'. Use this SM.
+	assign adc_buf_data_delay[4:0] = reg8_[4:0]; // tap value for the data bus delay
 	data_delay_reset data_delay_reset(
 	    .clk(clk50),                                      // input, 50 MHz buffered clock
 	    .reset(reset_clk50),                              // input, start-up reset to initialize SM
@@ -181,11 +181,11 @@ module register_block(
 	
 	// R14
 	// number of muon waveforms to store per trigger
-	assign muon_num_waveforms[11:0] = reg14_[11:0];
+	assign muon_num_waveforms[11:0]  = reg14_[11:0];
 
 	// R15
 	// idle time between laser waveforms
-	assign laser_waveform_gap[21:0] = reg15_[21:0]; 
+	assign laser_waveform_gap[21:0]  = reg15_[21:0];
 
 	// R16
 	// number of laser waveforms to store per trigger
@@ -193,7 +193,7 @@ module register_block(
 
 	// R17
 	// idle time between pedestal waveforms
-	assign ped_waveform_gap[21:0] = reg17_[21:0]; 
+	assign ped_waveform_gap[21:0]  = reg17_[21:0];
 
 	// R18
 	// number of pedestal waveforms to store per trigger
@@ -201,19 +201,20 @@ module register_block(
 
 	// R19
 	// idle time between muon waveforms
-	assign muon_waveform_gap[21:0] = reg19_[21:0]; 
+	assign muon_waveform_gap[21:0] = reg19_[21:0];
 
 	// R20
 	// number of 8-sample bursts in an ASYNC waveform
-	assign async_num_bursts[13:0] = reg20_[13:0];         
+	assign async_num_bursts[13:0] = reg20_[13:0];
 
 	// R21
 	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-	assign async_pre_trig[15:0] = reg21_[15:0];
+	assign async_pre_trig[15:0]   = reg21_[15:0];
 
 	// R22 is read only
 	// R23 is read only
 	// R24 is read only
+	// R25 is read only
 	// R31 is read only
 
 	reg [31:0] rdbk_reg;
@@ -225,30 +226,30 @@ module register_block(
 		// R1 bits [31:16] always read back as zero
 		if (rd_en && (reg_num[4:0] == 5'h01)) rdbk_reg[31:0] <= {20'h0000, reg1_[11:3], ch_addr[2:0]};
 		// R2, R3, R4 bits [31:24] always read back as zero
-		if (rd_en && (reg_num[4:0] == 5'h02)) rdbk_reg[31:0] <= {9'b0, reg2_[22:0]};
-		if (rd_en && (reg_num[4:0] == 5'h03)) rdbk_reg[31:0] <= {9'b0, reg3_[22:0]};
-		if (rd_en && (reg_num[4:0] == 5'h04)) rdbk_reg[31:0] <= {9'b0, reg4_[22:0]};
+		if (rd_en && (reg_num[4:0] == 5'h02)) rdbk_reg[31:0] <= { 9'd0, reg2_[22:0]};
+		if (rd_en && (reg_num[4:0] == 5'h03)) rdbk_reg[31:0] <= { 9'd0, reg3_[22:0]};
+		if (rd_en && (reg_num[4:0] == 5'h04)) rdbk_reg[31:0] <= { 9'd0, reg4_[22:0]};
 		if (rd_en && (reg_num[4:0] == 5'h05)) rdbk_reg[31:0] <= reg5_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h06)) rdbk_reg[31:0] <= reg6_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h07)) rdbk_reg[31:0] <= genreg_rd_data[31:0]; // data read from generic register interface
-		if (rd_en && (reg_num[4:0] == 5'h08)) rdbk_reg[31:0] <= {27'b0, reg8_[4:0]};
-		if (rd_en && (reg_num[4:0] == 5'h09)) rdbk_reg[31:0] <= {7'b0, adc_buf_current_data_delay[24:0]};   // R9  is read only
-		if (rd_en && (reg_num[4:0] == 5'h0a)) rdbk_reg[31:0] <= {7'b0, adc_buf_current_data_delay[49:25]};  // R10 is read only
-		if (rd_en && (reg_num[4:0] == 5'h0b)) rdbk_reg[31:0] <= {17'b0, adc_buf_current_data_delay[64:50]}; // R11 is read only
-		if (rd_en && (reg_num[4:0] == 5'h0c)) rdbk_reg[31:0] <= {31'b0, adc_buf_delay_data_error};          // R12 is read only
+		if (rd_en && (reg_num[4:0] == 5'h08)) rdbk_reg[31:0] <= {27'd0, reg8_[4:0]};
+		if (rd_en && (reg_num[4:0] == 5'h09)) rdbk_reg[31:0] <= { 7'd0, adc_buf_current_data_delay[24: 0]}; // R9  is read only
+		if (rd_en && (reg_num[4:0] == 5'h0a)) rdbk_reg[31:0] <= { 7'd0, adc_buf_current_data_delay[49:25]}; // R10 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0b)) rdbk_reg[31:0] <= {17'd0, adc_buf_current_data_delay[64:50]}; // R11 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0c)) rdbk_reg[31:0] <= {31'd0, adc_buf_delay_data_error};          // R12 is read only
 		if (rd_en && (reg_num[4:0] == 5'h0d)) rdbk_reg[31:0] <= reg13_[31:0];
-		if (rd_en && (reg_num[4:0] == 5'h0e)) rdbk_reg[11:0] <= {20'b0, reg14_[11:0]};
-		if (rd_en && (reg_num[4:0] == 5'h0f)) rdbk_reg[31:0] <= {10'b0, reg15_[21:0]};
-		if (rd_en && (reg_num[4:0] == 5'h10)) rdbk_reg[31:0] <= {20'b0, reg16_[11:0]};
-		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= {10'b0, reg17_[21:0]};
-		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= {20'b0, reg18_[11:0]};
-		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= {10'b0, reg19_[21:0]};
-		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {current_waveform_num[17:0], reg20_[13:0]};
-		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {11'b0, current_waveform_num[22:18], reg21_[15:0]};
-		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= map_data_integrity[31:0]; // R22 is read only
-		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= {xadc_vccint[15:0], xadc_temp[15:0]}; // R23 is read only
+		if (rd_en && (reg_num[4:0] == 5'h0e)) rdbk_reg[11:0] <= {20'd0, reg14_[11:0]};
+		if (rd_en && (reg_num[4:0] == 5'h0f)) rdbk_reg[31:0] <= {10'd0, reg15_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h10)) rdbk_reg[31:0] <= {20'd0, reg16_[11:0]};
+		if (rd_en && (reg_num[4:0] == 5'h11)) rdbk_reg[31:0] <= {10'd0, reg17_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h12)) rdbk_reg[31:0] <= {20'd0, reg18_[11:0]};
+		if (rd_en && (reg_num[4:0] == 5'h13)) rdbk_reg[31:0] <= {10'd0, reg19_[21:0]};
+		if (rd_en && (reg_num[4:0] == 5'h14)) rdbk_reg[31:0] <= {18'd0, reg20_[13:0]};
+		if (rd_en && (reg_num[4:0] == 5'h15)) rdbk_reg[31:0] <= {16'd0, reg21_[15:0]};
+		if (rd_en && (reg_num[4:0] == 5'h16)) rdbk_reg[31:0] <= map_data_integrity[31:0];                // R22 is read only
+		if (rd_en && (reg_num[4:0] == 5'h17)) rdbk_reg[31:0] <= {xadc_vccint[15:0], xadc_temp[15:0]};    // R23 is read only
 		if (rd_en && (reg_num[4:0] == 5'h18)) rdbk_reg[31:0] <= {xadc_vccbram[15:0], xadc_vccaux[15:0]}; // R24 is read only
-		if (rd_en && (reg_num[4:0] == 5'h19)) rdbk_reg[31:0] <= reg25_[31:0];
+		if (rd_en && (reg_num[4:0] == 5'h19)) rdbk_reg[31:0] <= { 9'd0, current_waveform_num[22:0]};     // R25 is read only
 		if (rd_en && (reg_num[4:0] == 5'h1a)) rdbk_reg[31:0] <= reg26_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h1b)) rdbk_reg[31:0] <= reg27_[31:0];
 		if (rd_en && (reg_num[4:0] == 5'h1c)) rdbk_reg[31:0] <= reg28_[31:0];
