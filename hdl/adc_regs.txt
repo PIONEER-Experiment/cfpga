@@ -14,6 +14,7 @@
 	// ===========================================
 	`define	ADC_DEF_REG00		24'h8000_00		// Enable 4-wire communication
 	`define	ADC_DEF_REG01		24'h8002_01		// Disable interleaving correction, enable HP mode
+   // `define  ADC_DEF_REG01     24'h8000_01    // Disable interleaving correction, disable HP mode for test pattern
 	`define	ADC_DEF_REG02		24'h0f80_02		//
 	`define	ADC_DEF_REG03		24'h4b18_03		//
 	`define	ADC_DEF_REG0E		24'haaa8_0e		//
@@ -24,5 +25,14 @@
 	`define	ADC_DEF_REG38		24'hffff_38		//
 	`define	ADC_DEF_REG3A		24'hd81b_3a		// 3.5 mA LVDS current strength, 2 kOhm LVDS internal termination
 	`define	ADC_DEF_REG66		24'hffff_66		//
+   `define  ADC_DEF_REG3C     24'h0000_3c    // setup for digitization results
+   `define  ADC_DEF_REG3D     24'h0000_3d    // setup for digitization results
+   `define  ADC_DEF_REG3E     24'h0000_3e    // setup for digitization results
+   //`define  ADC_DEF_REG3C     24'h9554_3c    // setup for 555 / AAA test pattern
+   //`define  ADC_DEF_REG3D     24'h2AA8_3d    // setup for 555 / AAA test pattern
+   //`define  ADC_DEF_REG3E     24'h1554_3e    // setup for 555 / AAA test pattern
 
+   // number of payload values to initialize
+   //`define  ADC_DEF_NUMBER  4'd12
+   `define  ADC_DEF_NUMBER  4'd14
 `endif

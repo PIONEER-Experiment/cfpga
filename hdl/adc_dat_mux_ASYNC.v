@@ -60,7 +60,9 @@ assign waveform_header[ 51: 26] = {waveform_start_adr[22:0], 3'd0}; // 26-bit wa
 assign waveform_header[ 74: 52] = current_waveform_num[22:0];       // 23-bit waveform (trigger) index
 assign waveform_header[ 97: 75] = 23'd0;                            // 23-bit unused
 assign waveform_header[109: 98] = channel_tag[11:0];                // 12-bit channel tag
-assign waveform_header[113:110] = xadc_alarms[3:0];                 //  4-bit alarms from XADC
+assign waveform_header[113:110] = 4'd0;                             //  test to see if this cures the problem.
+
+//assign waveform_header[113:110] = xadc_alarms[3:0];                 //  4-bit alarms from XADC
 assign waveform_header[125:114] = 12'd0;                            // 12-bit unused
 assign waveform_header[127:126] = 2'b01;                            //  2-bit header tag; this pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
 assign waveform_header[131:128] = 4'd2;                             //  4-bit burst contents tag, tag = '2' for waveform header

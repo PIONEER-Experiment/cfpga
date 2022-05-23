@@ -89,6 +89,9 @@ begin
         4'b1001 : default_reg[23:0] = `ADC_DEF_REG38;
         4'b1010 : default_reg[23:0] = `ADC_DEF_REG3A;
         4'b1011 : default_reg[23:0] = `ADC_DEF_REG66;
+        4'b1100 : default_reg[23:0] = `ADC_DEF_REG3C;
+        4'b1101 : default_reg[23:0] = `ADC_DEF_REG3D;
+        4'b1110 : default_reg[23:0] = `ADC_DEF_REG3E;
     endcase
 end
 
@@ -175,7 +178,7 @@ begin
 
             if (write_cnt[15:0] != 16'd40)          // stay here if the register isn't written yet
                 startup_state <= STARTUP_WRITE;
-            else if (default_reg_sel[3:0] == 4'd12) // check that we've finished writing all the registers
+            else if (default_reg_sel[3:0] == `ADC_DEF_NUMBER) // check that we've finished writing all the registers
                 startup_state <= STARTUP_DONE;
             else                                    // load the new register value to be written
                 startup_state <= STARTUP_LOAD;
