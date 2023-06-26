@@ -169,7 +169,7 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
 
         // We need to build the 'fill header' and then use its value
         // to update the checksum. Then we write the checksum, and finally write the fill header.
-       q // Stay in FILL_DONE1 state for one period.
+        // Stay in FILL_DONE1 state for one period.
         CS[FILL_DONE1]: begin
                 NS[FILL_DONE2] = 1'b1;
         end

@@ -100,20 +100,22 @@ parameter [4:0]
     RUN2            = 5'd8,
     RUN3            = 5'd9,
     RUN4            = 5'd10,
-    CHECKSUM1       = 5'd11,
-    CHECKSUM2       = 5'd12,
-    DDR3_WAIT       = 5'd13,
-    DONE            = 5'd14;
+    WAVEFORM_TST1   = 5'd11'
+    WAVEFORM_TST2   = 5'd12'
+    CHECKSUM1       = 5'd13,
+    CHECKSUM2       = 5'd14,
+    DDR3_WAIT       = 5'd15,
+    DONE            = 5'd16;
     
 // Declare current state and next state variables
-reg [14:0] /* synopsys enum STATE_TYPE */ CS;
-reg [14:0] /* synopsys enum STATE_TYPE */ NS;
+reg [16:0] /* synopsys enum STATE_TYPE */ CS;
+reg [16:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
     if (adc_acq_full_reset) begin
-        CS <= 15'b0;      // set all state bits to 0
+        CS <= 17'b0;      // set all state bits to 0
         CS[IDLE] <= 1'b1; // set IDLE state bit to 1
     end
     else
@@ -123,7 +125,7 @@ end
 // lkg -- will need to update the sensitivity list
 // combinational always block to determine next state  (use blocking [=] assignments) 
 always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr3_wr_done_sync2 )    begin
-    NS = 15'b0; // default all bits to zero; will overrride one bit
+    NS = 17'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
 
@@ -211,10 +213,7 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr
         // If this was the last waveform, go do checksum stuff.
         // Otherwise, start a gap.
         CS[WAVEFORM_TST2]: begin
-            if (last_waveform)
-                NS[CHECKSUM1] = 1'b1;
-               else
-                NS[WAVEFORM_GAP1] = 1'b1;
+            NS[CHECKSUM1] = 1'b1;
         end
  
 
@@ -274,7 +273,6 @@ always @ (posedge clk) begin
         adc_mux_dat_sel         <= 1'b0;
         adc_mux_checksum_select <= 1'b0;
         adc_mux_checksum_update <= 1'b0;
-        waveform_cntr_en        <= 1'b0;
         burst_cntr_init         <= 1'b0;
         burst_cntr_en           <= 1'b0;
         fill_cntr_en            <= 1'b0;
