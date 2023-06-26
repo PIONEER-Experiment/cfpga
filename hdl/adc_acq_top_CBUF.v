@@ -41,11 +41,11 @@ module adc_acq_top_cbuf(
 );
 
 wire [22:0] burst_start_adr;// first DDR3 burst memory location for this fill (3 LSBs = 0)
-wire [25:0] circ_buf_wr_dat;   // data to write to the circular buffer
-wire [15:0] circ_buf_wr_addr;   // address to write to the circular buffer
-wire [25:0] circ_buf_rd_dat;   // data read from the circular buffer
-wire [15:0] circ_buf_rd_addr;   // address to read from the circular buffer
-wire [15:0] circ_buf_trig_addr;   // circular buffer address corresponding to a trigger, FIFO output
+reg [25:0] circ_buf_wr_dat;   // data to write to the circular buffer
+reg [15:0] circ_buf_wr_addr;   // address to write to the circular buffer
+reg [25:0] circ_buf_rd_dat;   // data read from the circular buffer
+reg [15:0] circ_buf_rd_addr;   // address to read from the circular buffer
+reg [15:0] circ_buf_trig_addr;   // circular buffer address corresponding to a trigger, FIFO output
 wire [11:0] current_waveform_num;// the current waveform number, to be used in header
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
