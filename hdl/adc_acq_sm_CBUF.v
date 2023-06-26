@@ -100,8 +100,8 @@ parameter [4:0]
     RUN2            = 5'd8,
     RUN3            = 5'd9,
     RUN4            = 5'd10,
-    WAVEFORM_TST1   = 5'd11'
-    WAVEFORM_TST2   = 5'd12'
+    WAVEFORM_TST1   = 5'd11,
+    WAVEFORM_TST2   = 5'd12,
     CHECKSUM1       = 5'd13,
     CHECKSUM2       = 5'd14,
     DDR3_WAIT       = 5'd15,
