@@ -170,7 +170,7 @@ circ_buf_to_ddr3_sm_CBUF circ_buf_to_ddr3_sm_CBUF (
     .burst_cntr_init(burst_cntr_init),      // initialize when triggered
     .burst_cntr_en(burst_cntr_en),          // will be enabled once per burst
     .waveform_cntr_init(waveform_cntr_init),                  // initialize when triggered
-    .waveform_cntr_en(waveform_cntr_en)                  // will be enabled once after each waveform
+    .waveform_cntr_en(waveform_cntr_en),                  // will be enabled once after each waveform
     .fill_cntr_en(fill_cntr_en),            // will be enabled once per fill
 );
 

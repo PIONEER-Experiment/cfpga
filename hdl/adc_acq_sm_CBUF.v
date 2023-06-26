@@ -26,7 +26,7 @@ module adc_acq_sm_cbuf (
     output reg burst_cntr_en,           // will be enabled once per burst
     output reg fill_cntr_en,            // will be enabled once per fill
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
-    outpet reg acq_enabled,             // writing triggered data to DDR3 in progress
+    output reg acq_enabled,             // writing triggered data to DDR3 in progress
     output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
     output reg acq_done,                // acquisition is done
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
