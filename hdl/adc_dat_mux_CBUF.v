@@ -55,11 +55,10 @@ wire [131:0] waveform_header;
 reg  [4  :0] latched_xadc_alarms;
 assign waveform_header[ 13:  0] = async_num_bursts[13:0];           // 14-bit value for number of bursts per trigger from register R20
 assign waveform_header[ 25: 14] = async_pre_trig[11:0];             // 12-bit LSB value for number of pre-trigger ADC pairs from register R21
-assign waveform_header[ 51: 26] = {waveform_start_adr[22:0], 3'd0}; // 26-bit waveform starting address
-assign waveform_header[ 74: 52] = current_waveform_num[22:0];       // 23-bit waveform (trigger) index
+assign waveform_header[ 51: 26] = {burst_start_adr[22:0], 3'd0};    // 26-bit waveform starting address
+assign waveform_header[ 74: 52] = 23'd1;                            // 23-bit waveform (trigger) index
 assign waveform_header[ 97: 75] = 23'd0;                            // 23-bit unused
 assign waveform_header[109: 98] = channel_tag[11:0];                // 12-bit channel tag
-//assign waveform_header[113:110] = 4'd0;                             //  test to see if this cures the problem.
 
 assign waveform_header[113:110] = latched_xadc_alarms[3:0];         //  4-bit alarms from XADC
 assign waveform_header[125:114] = 12'd0;                            // 12-bit unused
