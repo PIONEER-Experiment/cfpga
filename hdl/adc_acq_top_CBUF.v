@@ -61,8 +61,9 @@ assign cbuf_enabled = acq_enable0 | acq_enable1;
 // acq_enabled is high.
 reg cbuf_sync1, cbuf_sync2, cbuf_wr_en;
 always @ (posedge adc_clk) begin
-    cbuf_sync2       <= #1 acq_sync1;
-    cbuf_wr_en <= #1 acq_sync2;
+    cbuf_sync1 <= #1 cbuf_enabled;
+    cbuf_sync2 <= #1 cbuf_sync1;
+    cbuf_wr_en <= #1 cbuf_sync2;
 end
 
 
@@ -255,19 +256,6 @@ adc_dat_mux_CBUF adc_dat_mux_CBUF (
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-// connect a counter that will calculate the DDR3 starting address of the next fill
-// It will be initialized when the fill number is written.
-// It will increment every time data is written to the FIFO
-adc_address_cntr adc_address_cntr (
-    // inputs
-    .clk(adc_clk),
-    .init(initial_fill_num_wr_sync), // initialize to zero when the fill number is written
-    .enable(address_cntr_en),// increment
-    // outputs
-    .burst_start_adr(burst_start_adr[22:0])  // first DDR3 burst memory location for this fill
-);
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
 // connect a down-counter that will keep track of how many bursts have been saved
 // It will be initialized when a trigger occurs.
 // It will be enabled when each burst is sent out.
@@ -324,6 +312,10 @@ adc_acq_sm_cbuf adc_acq_sm_cbuf (
     .acq_enabled(acq_enabled),  // writing triggered data to DDR3 in progress
     .adc_acq_full_reset(adc_acq_full_reset),// synchronously negated
     .acq_done(acq_done),// acquisition is done
+    .init_circ_buf_rd_addr(init_circ_buf_rd_addr), // initialize the counter with the start of the buffer area to be saved
+    .inc_circ_buf_rd_addr(inc_circ_buf_rd_addr),   // increment the circular buffer address
+    .trig_addr_rd_en(trig_addr_rd_en),             // read a trigger address from the FIFO
+    .latch_circ_buf_dat(latch_circ_buf_dat),       // save the current 32-bit data word from the circular buffer
     .sm_idle(adc_acq_sm_idle)   // state machine is idle
 );
 

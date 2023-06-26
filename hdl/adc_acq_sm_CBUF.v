@@ -29,8 +29,12 @@ module adc_acq_sm_cbuf (
     output reg acq_enabled,             // writing triggered data to DDR3 in progress
     output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
     output reg acq_done,                // acquisition is done
+    output reg init_circ_buf_rd_addr,   // initialize the counter with the start of the buffer area to be saved
+    output reg inc_circ_buf_rd_addr,    // increment the circular buffer address
+    output reg trig_addr_rd_en,         // read a trigger address from the FIFO
+    output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
-);      
+);
 
 
 // synchronize ENABLE and TRIGGER inputs to this clock domain
@@ -279,6 +283,9 @@ always @ (posedge clk) begin
         adc_acq_out_valid       <= 1'b0;
         acq_done                <= 1'b0;
         sm_idle                 <= 1'b0;
+        init_circ_buf_rd_addr,  <= 1'b0;
+        inc_circ_buf_rd_addr,   <= 1'b0;
+        trig_addr_rd_en,        <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
@@ -301,6 +308,10 @@ always @ (posedge clk) begin
         // at the start of a waveform, conditionally reset the counter that provides dummy data
         // 0 -> free-run,  1 -> reset every waveform
         dummy_dat_reset         <= dummy_dat_reset_mode;
+        // initialize the counter with the start address of the circular buffer area to be saved
+        init_circ_buf_rd_addr   <= #1 1'b1;
+        // pull the trigger address out of the FIFO; the FIFI is in FWFT mode
+        trig_addr_rd_en           <= #1 1'b1;
     end
 
     // lkg -- the burst counter init may need to morph into what triggers the circ buffer -> ddr3 transfer
@@ -316,9 +327,15 @@ always @ (posedge clk) begin
         adc_acq_out_valid        <= 1'b1;
         // increment the next fill address
         address_cntr_en          <= 1'b1;
+        // increment the circular buffer address
+        inc_circ_buf_rd_addr    <= #1 1'b1;
     end
 
     if (NS[RUN1]) begin
+        // save the current 32-bit data word from the circular buffer
+        latch_circ_buf_dat      <= #1 1'b1;
+        // increment the circular buffer address
+        inc_circ_buf_rd_addr    <= #1 1'b1;
         // decrement the burst counter
         burst_cntr_en           <= 1'b1;
      end
