@@ -283,9 +283,10 @@ always @ (posedge clk) begin
         adc_acq_out_valid       <= 1'b0;
         acq_done                <= 1'b0;
         sm_idle                 <= 1'b0;
-        init_circ_buf_rd_addr,  <= 1'b0;
-        inc_circ_buf_rd_addr,   <= 1'b0;
-        trig_addr_rd_en,        <= 1'b0;
+        init_circ_buf_rd_addr   <= 1'b0;
+        inc_circ_buf_rd_addr    <= 1'b0;
+        trig_addr_rd_en         <= 1'b0;
+        latch_circ_buf_dat      <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
