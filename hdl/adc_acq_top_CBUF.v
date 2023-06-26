@@ -40,6 +40,7 @@ module adc_acq_top_cbuf(
     output adc_acq_sm_idle  // ADC acquisition state machine is idle (used for front panel LED status)
 );
 
+wire [1:0] fill_type;           // to determine how much data to collect
 wire [22:0] burst_start_adr;// first DDR3 burst memory location for this fill (3 LSBs = 0)
 reg [25:0] circ_buf_wr_dat;   // data to write to the circular buffer
 reg [15:0] circ_buf_wr_addr;   // address to write to the circular buffer
@@ -240,7 +241,7 @@ adc_dat_mux_CBUF adc_dat_mux_CBUF (
     .dat0_(circ_buf_dat_reg0_[25:0]),            // a pair of ADC samples and a pair of over-range bits
     .channel_tag(channel_tag[11:0]),            // stuff about the channel to put in the header
     .fill_type(fill_type[1:0]),                 // determine which burst count to use
-    .waveform_start_adr(waveform_start_adr[22:0]), // DDR3 burst memory location (3 LSBs=0) for a waveform
+    .burst_start_adr(burst_start_adr[22:0]), // DDR3 burst memory location (3 LSBs=0) for a waveform
     .fill_num(fill_num[23:0]),                  // fill number for this fill
     .xadc_alarms(xadc_alarms[3:0]),
     .clk(adc_clk),
