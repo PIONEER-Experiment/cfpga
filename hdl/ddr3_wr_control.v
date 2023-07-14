@@ -9,9 +9,9 @@ module ddr3_wr_control (
     input reset,
     input acq_enabled,                    // input, writing is enabled
     // Connections to the FIFO from the ADC
-    input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
-    input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
-    output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
+    (* mark_debug = "true" *) input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
+    (* mark_debug = "true" *) input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
+    (* mark_debug = "true" *) output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
     // 'write' ports to memory
     output  app_wdf_wren,                 // output, request to perform a 'write' 
     input app_wdf_rdy,                    // input, memory can accept data
@@ -108,10 +108,10 @@ assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 // For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever an address is accepted. This happens when
 // we are asserting 'wr_app_en' and receiving 'wr_app_rdy'.
-reg [23:0] address_cntr;
+(* mark_debug = "true" *) reg [23:0] address_cntr;
 reg init_address_cntr;   // will be asserted by the state machine
 reg init_address_cntr_to_1;   // will be asserted by the state machine
-wire address_cntr_zero;  // the counter is at zero
+(* mark_debug = "true" *) wire address_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) address_cntr[23:0] <= 24'b0;
     else if (init_address_cntr_to_1) address_cntr[23:0] <= 1;
@@ -127,10 +127,10 @@ assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 // For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever we get a successful write. This happens when
 // we are asserting 'wdf_wren' and receiving 'wdf_rdy'.
-reg [23:0] burst_cntr;
+(* mark_debug = "true" *) reg [23:0] burst_cntr;
 reg init_burst_cntr;   // will be asserted by the state machine
 reg init_burst_cntr_to_1;   // will be asserted by the state machine
-wire burst_cntr_zero;  // the counter is at zero
+(* mark_debug = "true" *) wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) burst_cntr[23:0] <= 24'b0;
     else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 1;
@@ -161,7 +161,7 @@ end
 assign address_allow = ~(address_control == 0);
     
 // Declare current state and next state variables
-reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
