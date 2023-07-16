@@ -104,6 +104,7 @@ end
 assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 
 // number of bits used for the burst count differs between pattern and circular buffer
+wire pattern_mask[22:0], cbuf_mask[22:0], burst_mask[22:0];
 assign pattern_mask[22:0] = {23{1'b1}};
 assign    cbuf_mask[22:0] = {9{1'b0}},14{1'b1}};
 assign   burst_mask[22:0] = ddr3_wr_fifo_dat[114] ? cbuf_mask[22:0] : pattern_mask[22:0];
