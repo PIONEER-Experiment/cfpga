@@ -13,7 +13,7 @@ module ddr3_wr_control (
     (* mark_debug = "true" *) input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
     (* mark_debug = "true" *) output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
     // 'write' ports to memory
-    address_acceptoutput  app_wdf_wren,                 // output, request to perform a 'write'
+    (* mark_debug = "true" *) output  app_wdf_wren,                 // output, request to perform a 'write'
     (* mark_debug = "true" *) input app_wdf_rdy,                    // input, memory can accept data
     output  app_wdf_end,                  // output, last data cycle
     // 'write' ports to address controller
@@ -105,7 +105,7 @@ assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 
 // number of bits used for the burst count differs between pattern and circular buffer
 assign pattern_mask[22:0] = {23{1'b1}};
-assign    cbuf_mask[22:0] = {10'd0,14{1'b1}};
+assign    cbuf_mask[22:0] = {9{1'b0}},14{1'b1}};
 assign   burst_mask[22:0] = ddr3_wr_fifo_dat[114] ? cbuf_mask[22:0] : pattern_mask[22:0];
 
 // Create an address counter that will count how many addresses are accepted
