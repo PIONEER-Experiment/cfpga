@@ -301,7 +301,7 @@ wire en_fixed_ddr3_start_addr;
 
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
-ddr3_intf ddr3_intf(
+ddr3_intf_cbuf ddr3_intf_cbuf(
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
     .sysclk(clk200),                    // input, drives the Xilinx DDR3 IP
