@@ -24,7 +24,7 @@ module adc_acq_sm_cbuf (
     output reg adc_mux_checksum_update, // update the checksum 
     output reg burst_cntr_init,         // initialize when triggered
     output reg burst_cntr_en,           // will be enabled once per burst
-    output reg fill_cntr_en,            // will be enabled once per fill
+    (* mark_debug = "true" *) output reg fill_cntr_en,            // will be enabled once per fill
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
     output reg acq_enabled,             // writing triggered data to DDR3 in progress
     output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage

@@ -22,13 +22,13 @@ module adc_dat_mux_CBUF (
     input clk,
     input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    input select_fill_hdr,                 // selects fill header
-    input select_waveform_hdr,         // selects waveform header
-    input select_dat,                  // selects data
-    input select_checksum,             // selects checksum
+    (* mark_debug = "true" *) input select_fill_hdr,                 // selects fill header
+    (* mark_debug = "true" *) input select_waveform_hdr,         // selects waveform header
+    (* mark_debug = "true" *) input select_dat,                  // selects data
+    (* mark_debug = "true" *) input select_checksum,             // selects checksum
     input checksum_update,               // update the checksum
     // outputs
-    output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
+    (* mark_debug = "true" *) output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
 );
 
 //////////////////////////////////////
