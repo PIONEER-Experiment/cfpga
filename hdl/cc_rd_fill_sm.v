@@ -26,7 +26,7 @@ module cc_rd_fill_sm (
     input reset,                            // active-high
 
     input run_sm,                               // run this state machine
-    output reg sm_running,                    // we are running
+    (* mark_debug = "true" *) output reg sm_running,                    // we are running
     output reg sm_done,                        // we are finished
 
     output reg tx_tvalid,                    // the data we are presenting is valid
@@ -40,13 +40,13 @@ module cc_rd_fill_sm (
     // interface to the header FIFO
     input fill_header_fifo_empty,            // a header is available when not asserted
     output reg fill_header_fifo_rd_en,        // remove the current data from the FIFO
-    input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
-    input [22:0] fixed_ddr3_start_addr,
-    input en_fixed_ddr3_start_addr,
+    (* mark_debug = "true" *) input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
+    (* mark_debug = "true" *) input [22:0] fixed_ddr3_start_addr,
+    (* mark_debug = "true" *) input en_fixed_ddr3_start_addr,
 
     // interface to the DDR3 memory
-    output reg [22:0] ddr3_rd_start_addr,    // the address of the first requested 128-bit burst
-    output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
+    (* mark_debug = "true" *) output reg [22:0] ddr3_rd_start_addr,    // the address of the first requested 128-bit burst
+    (* mark_debug = "true" *) output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
     output reg enable_reading,                 // start the 'ddr3_rd_control'
     input reading_done,                       // reading is complete
     
@@ -66,12 +66,12 @@ end
 reg [127:0] saved_header;
     
 // make a register to hold error status
-reg error_found;
+(* mark_debug = "true" *) reg error_found;
 
 // make a counter to keep track of how many 32-bit DDR3 words still need to
 // be accepted by the Aurora interface
-reg [25:0] ddr3_words_to_send;
-reg all_ddr3_words_sent;
+(* mark_debug = "true" *) reg [25:0] ddr3_words_to_send;
+(* mark_debug = "true" *) reg all_ddr3_words_sent;
 always @(posedge clk) begin
     all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 25'b0);
 end
@@ -94,7 +94,7 @@ parameter [3:0]
     DONE                = 4'd9;
                 
 // Declare current state and next state variables
-reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
