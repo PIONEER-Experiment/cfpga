@@ -19,8 +19,8 @@ module adc_dat_mux_ASYNC (
     input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
     input [22:0] waveform_start_adr,   // first DDR3 memory location for this waveform
     input [23:0] fill_num,             // fill number for this fill
-	input [22:0] current_waveform_num, // the current waveform number, to be used in header
-	input [3:0] xadc_alarms,
+    input [22:0] current_waveform_num, // the current waveform number, to be used in header
+    input [3:0] xadc_alarms,
     input clk,
     input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
 	input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform

@@ -38,13 +38,14 @@ module adc_dat_mux (
 wire [131:0] fill_header;
 assign fill_header[ 23:  0] = fill_num[23:0];                // 24-bit fill number, always positive, 
 assign fill_header[ 25: 24] = fill_type[1:0];                //  2-bit fill type
-assign fill_header[     26] = 1'b0;						     //  1-bit reserved for future 3-bit fill type
+assign fill_header[     26] = 1'b0;                          //  1-bit fill header format: sync=0, async=1
 assign fill_header[ 49: 27] = num_fill_bursts[22:0];         // 23-bit burst count, 
 assign fill_header[ 75: 50] = {burst_start_adr[22:0], 3'd0}; // 23-bit DDR3 burst address, 3 LSBs always zero, 
 assign fill_header[ 87: 76] = num_waveforms[11:0];           // 12-bit number of waveforms to store per trigger
-assign fill_header[109: 88] = waveform_gap[21:0];	         // 22-bit idle time between waveforms
-assign fill_header[121:110]	= channel_tag[11:0];             // 12-bit channel info
-assign fill_header[125:122] = xadc_alarms[3:0];              //  4-bit alarms from XADC
+assign fill_header[109: 88] = waveform_gap[21:0];	          // 22-bit idle time between waveforms
+assign fill_header[121:110] = channel_tag[11:0];             // 12-bit channel info
+assign fill_header[122:122] = 1'b0;                          //  1-bit sync = async=0, cbuf=1 flag, if needed
+assign fill_header[125:123] = 3'd0;                          //  unused
 // make the next 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
 assign fill_header[127:126]	= 2'b01;
 // tag = '1' for fill header
@@ -53,15 +54,17 @@ assign fill_header[131:128]	= 4'd1;
 ///////////////////////////////
 // assemble the waveform header
 wire [131:0] waveform_header;
-assign waveform_header[ 22:  0] = num_fill_bursts[22:0];         // 23-bit burst count, 
+reg  [4  :0] latched_xadc_alarms;
+assign waveform_header[ 22:  0] = num_fill_bursts[22:0];         // 23-bit burst count,
 assign waveform_header[ 24: 23] = fill_type[1:0];    	         //  2-bit fill type
 assign waveform_header[     25] = 1'b0;						     //  1-bit reserved for future 3-bit fill type
 assign waveform_header[ 51: 26] = {burst_start_adr[22:0], 3'd0}; // 23-bit DDR3 burst address, 3 LSBs always zero, 
 assign waveform_header[ 63: 52] = num_waveforms[11:0];           // 12-bit number of waveforms to store per trigger
 assign waveform_header[ 75: 64] = current_waveform_num[11:0];    // 12-bit current waveform number
-assign waveform_header[ 97: 76] = waveform_gap[21:0];	         // 22-bit idle time between waveforms
+assign waveform_header[ 97: 76] = waveform_gap[21:0];	           // 22-bit idle time between waveforms
 assign waveform_header[109: 98] = channel_tag[11:0];             // 12-bit channel info
-assign waveform_header[125:110]	= 16'b0;		                 // 16-bit spare 
+assign waveform_header[113:110] = latched_xadc_alarms[3:0];      //  4-bit alarms from XADC
+assign waveform_header[125:114]	= 12'b0;		                    // 12-bit spare
 // make the next 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
 assign waveform_header[127:126]	= 2'b01;
 // tag = '2' for waveform header
@@ -131,6 +134,7 @@ always @(posedge clk) begin
 		adc_acq_out_dat[131:0] <= fill_header[131:0];
 	end
 	if (select_waveform_hdr) begin
+      latched_xadc_alarms[3:0] <= xadc_alarms[3:0];
 		// connect waveform header bits
 		adc_acq_out_dat[131:0] <= waveform_header[131:0];
 	end

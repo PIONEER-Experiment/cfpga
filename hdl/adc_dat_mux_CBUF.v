@@ -32,32 +32,33 @@ module adc_dat_mux_CBUF (
 );
 
 //////////////////////////////////////
-// assemble the async mode fill header
+// assemble the cbuf mode fill header
 wire [131:0] fill_header;
-assign fill_header[ 23:  0] = fill_num[23:0];             // 24-bit fill number from register R0, incremented each fill
-assign fill_header[ 25: 24] = fill_type[1:0];             //  2-bit fill type from pins "ACQ_ENABLE[1:0]"
-assign fill_header[     26] = 1'b0;                       //  1-bit reserved for future 3-bit fill type
-assign fill_header[ 40: 27] = async_num_bursts[13:0];     // 14-bit value for number of bursts per trigger from register R20
-assign fill_header[ 52: 41] = async_pre_trig[11:0];       // 12-bit LSB value for number of pre-trigger ADC pairs from register R21
-assign fill_header[ 75: 53] = burst_start_adr[22:0];      // 23-bit DDR3 burst address, physical (16 bit word) address would require 3 LSBs of zero
-assign fill_header[ 98: 76] = 23'd1;                      // 23-bit final waveform (trigger) count.  By def just 1 for cbuf mode
-assign fill_header[102: 99] = async_pre_trig[15:12];      //  4-bit MSB value for number of pre-trigger ADC pairs from register R21
-assign fill_header[    103] = 1'b1;                       //  1-bit sync = async=0, cbuf=1 flag, if needed
-assign fill_header[109:104] = 6'd0;                       //  7-bit unused
-assign fill_header[121:110] = channel_tag[11:0];          // 12-bit channel tag
-assign fill_header[125:122] = 4'd0;                       //  4-bit unused
-assign fill_header[127:126] = 2'b01;                      //  2-bit header tag; this pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
-assign fill_header[131:128] = 4'd1;                       //  4-bit burst contents tag, tag = '1' for fill header
+assign fill_header[ 23:  0] = fill_num[23:0];                // 24-bit fill number from register R0, incremented each fill
+assign fill_header[ 25: 24] = fill_type[1:0];                //  2-bit fill type from pins "ACQ_ENABLE[1:0]"
+assign fill_header[     26] = 0'b1;                          //  1-bit sync = async=0, cbuf=1 flag, if needed
+assign fill_header[ 40: 27] = async_num_bursts[13:0];        // 14-bit value for number of bursts per trigger from register R20
+assign fill_header[ 49: 41] = 9'd0;                          //  9-bit all zero for compatibility with burst count for sync mode
+assign fill_header[ 75: 50] = {burst_start_adr[22:0], 3'd0}; // 23-bit DDR3 burst address, 3 LSBs always zero,
+assign fill_header[ 87: 76] = 12'd1;                         // 12-bit final waveform (trigger) count.  By def just 1 for cbuf mode
+assign fill_header[103: 88] = async_pre_trig[15:0];          // 16-bit number of pre-trigger ADC pairs from register R21
+assign fill_header[109:104] = 5'd0;                          //  5-bit unused
+assign fill_header[121:110] = channel_tag[11:0];             // 12-bit channel tag
+assign fill_header[122:122] = 1'b1;                          //  1-bit sync = async=0, cbuf=1 flag, if needed
+assign fill_header[125:123] = 3'd0;                          //  unused
+assign fill_header[127:126] = 2'b01;                         //  2-bit header tag; this pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
+assign fill_header[131:128] = 4'd1;                          //  4-bit burst contents tag, tag = '1' for fill header
 
 //////////////////////////////////////////
-// assemble the async mode waveform header
+// assemble the cbuf mode waveform header
 wire [131:0] waveform_header;
 reg  [4  :0] latched_xadc_alarms;
 assign waveform_header[ 13:  0] = async_num_bursts[13:0];           // 14-bit value for number of bursts per trigger from register R20
 assign waveform_header[ 25: 14] = async_pre_trig[11:0];             // 12-bit LSB value for number of pre-trigger ADC pairs from register R21
 assign waveform_header[ 51: 26] = {burst_start_adr[22:0], 3'd0};    // 26-bit waveform starting address
 assign waveform_header[ 74: 52] = 23'd1;                            // 23-bit waveform (trigger) index
-assign waveform_header[ 97: 75] = 23'd0;                            // 23-bit unused
+assign waveform_header[ 78: 75] = async_pre_trig[15:12];            //  4-bit MSB value for number of pre-trigger ADC pairs from register R21
+assign waveform_header[ 97: 79] = 19'd0;                            // 19-bit unused
 assign waveform_header[109: 98] = channel_tag[11:0];                // 12-bit channel tag
 
 assign waveform_header[113:110] = latched_xadc_alarms[3:0];         //  4-bit alarms from XADC
@@ -126,12 +127,12 @@ end
 // make a mux to select fill header, waveform header, data, or checksum
 always @(posedge clk) begin
     if (select_fill_hdr) begin
-        // latch the xadc alarms so that they cannot change between checksum calc and sending data
-        latched_xadc_alarms[3:0] <= xadc_alarms[3:0];
         // connect fill header bits
         adc_acq_out_dat[131:0] <= #1 fill_header[131:0];
     end
     if (select_waveform_hdr) begin
+    // latch the xadc alarms so that they cannot change between checksum calc and sending data
+        latched_xadc_alarms[3:0] = xadc_alarms[3:0];
         // connect waveform header bits
         adc_acq_out_dat[131:0] <= #1 waveform_header[131:0];
     end
