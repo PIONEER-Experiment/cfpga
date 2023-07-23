@@ -36,7 +36,7 @@ module adc_dat_mux_CBUF (
 wire [131:0] fill_header;
 assign fill_header[ 23:  0] = fill_num[23:0];                // 24-bit fill number from register R0, incremented each fill
 assign fill_header[ 25: 24] = fill_type[1:0];                //  2-bit fill type from pins "ACQ_ENABLE[1:0]"
-assign fill_header[     26] = 0'b1;                          //  1-bit sync = async=0, cbuf=1 flag, if needed
+assign fill_header[     26] = 1'b0;                          //  1-bit fill header format: sync=0, async=1
 assign fill_header[ 40: 27] = async_num_bursts[13:0];        // 14-bit value for number of bursts per trigger from register R20
 assign fill_header[ 49: 41] = 9'd0;                          //  9-bit all zero for compatibility with burst count for sync mode
 assign fill_header[ 75: 50] = {burst_start_adr[22:0], 3'd0}; // 23-bit DDR3 burst address, 3 LSBs always zero,
