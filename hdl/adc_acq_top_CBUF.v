@@ -60,7 +60,8 @@ assign cbuf_enabled = acq_enable0 | acq_enable1;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // synchronize 'cbuf_enabled' to the adc_clock.  Writing to the circular buffer valid as long as
 // acq_enabled is high.
-reg cbuf_sync1, cbuf_sync2, cbuf_wr_en;
+reg cbuf_sync1, cbuf_sync2
+(* mark_debug = "true" *) reg cbuf_wr_en;
 always @ (posedge adc_clk) begin
     cbuf_sync1 <= #1 cbuf_enabled;
     cbuf_sync2 <= #1 cbuf_sync1;
@@ -71,7 +72,8 @@ end
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // synchronize 'acq_trig' and create a pulse when it is asserted
 // copied from enable_sm_ASYNC -- not clear why 5 stages needed...
-reg trig_pulse, trig_sync1, trig_sync2, trig_sync3, trig_sync4, trig_sync5;
+(* mark_debug = "true" *) reg trig_pulse;
+reg trig_sync1, trig_sync2, trig_sync3, trig_sync4, trig_sync5;
 always @ (posedge adc_clk) begin
     trig_sync1 <= #1 acq_trig;
     trig_sync2 <= #1 trig_sync1;

@@ -17,11 +17,11 @@ module adc_acq_sm_cbuf (
     output reg [1:0] fill_type,         // determine which burst count to use (not in cbuf mode)
     output reg address_cntr_en,         // increment the next starting address
     output reg dummy_dat_reset,         // reset the dummy data counter
-    output reg adc_mux_fill_hdr_sel,    // selects fill header
-    output reg adc_mux_wfm_hdr_sel,     // selects waveform header
-    output reg adc_mux_dat_sel,         // selects data
-    output reg adc_mux_checksum_select, // selects checksum 
-    output reg adc_mux_checksum_update, // update the checksum 
+    (* mark_debug = "true" *) output reg adc_mux_fill_hdr_sel,    // selects fill header
+    (* mark_debug = "true" *) output reg adc_mux_wfm_hdr_sel,     // selects waveform header
+    (* mark_debug = "true" *) output reg adc_mux_dat_sel,         // selects data
+    (* mark_debug = "true" *) output reg adc_mux_checksum_select, // selects checksum
+    (* mark_debug = "true" *) output reg adc_mux_checksum_update, // update the checksum
     output reg burst_cntr_init,         // initialize when triggered
     output reg burst_cntr_en,           // will be enabled once per burst
     (* mark_debug = "true" *) output reg fill_cntr_en,            // will be enabled once per fill

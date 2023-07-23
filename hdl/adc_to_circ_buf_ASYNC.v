@@ -3,7 +3,7 @@
 
 module adc_to_circ_buf_ASYNC (
     // inputs
-    input [11:0] adc_in_p,          // [11:0] array of ADC 'p' data pins
+    (* mark_debug = "true" *) input [11:0] adc_in_p,          // [11:0] array of ADC 'p' data pins
     input [11:0] adc_in_n,          // [11:0] array of ADC 'n' data pins
     input adc_ovr_p,                // ADC 'p' over-range pin
     input adc_ovr_n,                // ADC 'n' over-range pin
@@ -11,7 +11,7 @@ module adc_to_circ_buf_ASYNC (
     input adc_clk_n,                // ADC 'n' clk pin
     input reset_clk_adc,			// synchronously negated reset all of the acquisition logic  
     input clk200,                   // for input pin timing delay settings
-    input cbuf_wr_en,				// writing into the circ buf by the ADC is enabled, must extend past final trigger
+    (* mark_debug = "true" *) input cbuf_wr_en,				// writing into the circ buf by the ADC is enabled, must extend past final trigger
     input adc_buf_delay_data_reset, // use the new delay settings
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
 	input dummy_dat_reset_mode,		// if true, reset the dummy data source for each trigger
@@ -25,8 +25,8 @@ module adc_to_circ_buf_ASYNC (
                                     // bit[12]     = second overrange
                                     // bits[25:13] = second ADC sample
     output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
-	output reg [15:0] circ_buf_wr_addr,	      // address to store data in circular buffer
-	output reg [25:0] circ_buf_wr_dat	      // data to store in the circular buffer 
+    (* mark_debug = "true" *) output reg [15:0] circ_buf_wr_addr,	      // address to store data in circular buffer
+    (* mark_debug = "true" *) output reg [25:0] circ_buf_wr_dat	      // data to store in the circular buffer
 );
                                  
 // We need a node called 'adc_acq_full_reset' in order to use the same timin constraint file for
