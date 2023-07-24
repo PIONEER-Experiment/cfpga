@@ -44,9 +44,9 @@ wire [1:0] fill_type;           // to determine how much data to collect
 wire [22:0] burst_start_adr;// first DDR3 burst memory location for this fill (3 LSBs = 0)
 wire [25:0] circ_buf_wr_dat;   // data to write to the circular buffer
 wire [15:0] circ_buf_wr_addr;    // address to write to the circular buffer
-wire [25:0] circ_buf_rd_dat;     // data read from the circular buffer
-reg [15:0] circ_buf_rd_addr;   // address to read from the circular buffer
-wire [15:0] circ_buf_trig_addr;   // circular buffer address corresponding to a trigger, FIFO output
+(* mark_debug = "true" *) wire [25:0] circ_buf_rd_dat;     // data read from the circular buffer
+(* mark_debug = "true" *) reg [15:0] circ_buf_rd_addr;   // address to read from the circular buffer
+(* mark_debug = "true" *) wire [15:0] circ_buf_trig_addr;   // circular buffer address corresponding to a trigger, FIFO output
 wire [11:0] current_waveform_num;// the current waveform number, to be used in header
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,7 +60,7 @@ assign cbuf_enabled = acq_enable0 | acq_enable1;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // synchronize 'cbuf_enabled' to the adc_clock.  Writing to the circular buffer valid as long as
 // acq_enabled is high.
-reg cbuf_sync1, cbuf_sync2
+reg cbuf_sync1, cbuf_sync2;
 (* mark_debug = "true" *) reg cbuf_wr_en;
 always @ (posedge adc_clk) begin
     cbuf_sync1 <= #1 cbuf_enabled;
@@ -199,7 +199,7 @@ adc_address_cntr adc_address_cntr (
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Subtract the pre-trigger count from the trigger address coming out of the FIFO. The FIFO is in
 // FWFT mode, but beware of latency from when 'trig_addr_rd_en' is asserted until the subtracted value is valid.
-reg [15:0] circ_buf_start_addr;
+(* mark_debug = "true" *) reg [15:0] circ_buf_start_addr;
 always @(posedge adc_clk) begin
     circ_buf_start_addr[15:0] <= #1 circ_buf_trig_addr[15:0] - async_pre_trig[15:0];
 end
