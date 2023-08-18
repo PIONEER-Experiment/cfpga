@@ -26,6 +26,7 @@ module adc_acq_sm_cbuf (
     output reg burst_cntr_en,           // will be enabled once per burst
     (* mark_debug = "true" *) output reg fill_cntr_en,            // will be enabled once per fill
     (* mark_debug = "true" *) output reg adc_acq_out_valid,       // current data should be stored in the FIFO
+    (* mark_debug = "true" *) output reg trig_pulse,
     output reg acq_enabled,             // writing triggered data to DDR3 in progress
     output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
     output reg acq_done,                // acquisition is done
@@ -42,7 +43,7 @@ reg acq_enable0_sync1, acq_enable0_sync2, acq_enable0_sync3;
 (* mark_debug = "true" *) reg acq_enable0_sync4;
 reg acq_enable1_sync1, acq_enable1_sync2, acq_enable1_sync3;
 (* mark_debug = "true" *) reg acq_enable1_sync4;
-reg acq_trig_sync1, acq_trig_sync2, acq_trig_sync3;
+reg acq_trig_sync1, acq_trig_sync2, acq_trig_sync3, acq_trig_sync5;
 (* mark_debug = "true" *) reg acq_trig_sync4;
 always @(posedge clk) begin
     acq_enable0_sync1 <= acq_enable0;
@@ -59,6 +60,10 @@ always @(posedge clk) begin
     acq_trig_sync2 <= acq_trig_sync1;
     acq_trig_sync3 <= acq_trig_sync2;
     acq_trig_sync4 <= acq_trig_sync3;
+    acq_trig_sync5 <= acq_trig_sync4;
+    // assert 'trig_pulse' when 'ext_trig' has gotten to the fourth register, but not the fifth
+    // pass triggers only during the ACQ_ENABLED state
+    trig_pulse <= #1 ((trig_sync4 & ~trig_sync5) && adc_acq_mode_enabled);
 end
 
 // sync and combine the external ACQ_RESET and the internal RESET_CLK50
@@ -148,7 +153,7 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr
         // Stay in the WATCH state until we are both armed and triggered.
         // reading of the DDR3 can occur while we are in this state
         CS[WATCH_FOR_TRIG]: begin
-            if (acq_trig_sync4)
+            if (trig_pulse)
                 NS[FILL_INIT1] = 1'b1;
             else
                 NS[IDLE] = 1'b1;

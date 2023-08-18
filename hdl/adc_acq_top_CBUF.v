@@ -71,19 +71,20 @@ end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // synchronize 'acq_trig' and create a pulse when it is asserted
-// copied from enable_sm_ASYNC -- not clear why 5 stages needed...
-(* mark_debug = "true" *) reg trig_pulse;
-reg trig_sync1, trig_sync2, trig_sync3, trig_sync4, trig_sync5;
-always @ (posedge adc_clk) begin
-    trig_sync1 <= #1 acq_trig;
-    trig_sync2 <= #1 trig_sync1;
-    trig_sync3 <= #1 trig_sync2;
-    trig_sync4 <= #1 trig_sync3;
-    trig_sync5 <= #1 trig_sync4;
-    // assert 'trig_pulse' when 'ext_trig' has gotten to the fourth register, but not the fifth
-    // pass triggers only during the ACQ_ENABLED state (cbuf_wr_en is synched to that state in the adc_clk domain)
-    trig_pulse <= #1 ((trig_sync4 & ~trig_sync5) && cbuf_wr_en);
-end
+// copied from enable_sm_ASYNC -- the 5th stage is to turn the signal into a pulse
+//(* mark_debug = "true" *) reg trig_pulse;
+//reg trig_sync1, trig_sync2, trig_sync3, trig_sync4, trig_sync5;
+//always @ (posedge adc_clk) begin
+//    trig_sync1 <= #1 acq_trig;
+//    trig_sync2 <= #1 trig_sync1;
+//    trig_sync3 <= #1 trig_sync2;
+//    trig_sync4 <= #1 trig_sync3;
+//    trig_sync5 <= #1 trig_sync4;
+//    // assert 'trig_pulse' when 'ext_trig' has gotten to the fourth register, but not the fifth
+//    // pass triggers only during the ACQ_ENABLED state (cbuf_wr_en is synched to that state in the adc_clk domain)
+//    trig_pulse <= #1 ((trig_sync4 & ~trig_sync5) && cbuf_wr_en);
+//end
+wire trig_pulse;
 
 // synchronize the 'reset_clk50' signal to the 'adc_clk'
 reg reset_sync1, reset_sync2;
@@ -312,6 +313,7 @@ adc_acq_sm_cbuf adc_acq_sm_cbuf (
     .burst_cntr_en(burst_cntr_en),  // will be enabled once per burst
     .fill_cntr_en(fill_cntr_en),// will be enabled once per fill
     .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
+    .trig_pulse(trig_pulse), // pulsified acq_trig signal
     .acq_enabled(acq_enabled),  // writing triggered data to DDR3 in progress
     .adc_acq_full_reset(adc_acq_full_reset),// synchronously negated
     .acq_done(acq_done),// acquisition is done
