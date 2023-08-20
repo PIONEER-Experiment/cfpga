@@ -64,7 +64,7 @@ always @(posedge clk) begin
     acq_trig_sync5 <= acq_trig_sync4;
     // assert 'trig_pulse' when 'ext_trig' has gotten to the fourth register, but not the fifth
     // pass triggers only during the ACQ_ENABLED state
-    trig_pulse <= #1 ((trig_sync4 & ~trig_sync5) && adc_acq_mode_enabled);
+    trig_pulse <= #1 ((acq_trig_sync4 & ~acq_trig_sync5) && adc_acq_mode_enabled);
 end
 
 // sync and combine the external ACQ_RESET and the internal RESET_CLK50
