@@ -10,6 +10,7 @@ module adc_acq_sm_cbuf (
     input acq_enable1,                  // indicates enabled for triggers, and fill type
     input acq_trig,                     // trigger the logic to start collecting data
     input reset_clk50,                  // reset from internal logic, synched to CLK50
+    (* mark_debug = "true" *) input trig_fifo_empty,              // no trigger address is available for reading yet
     (* mark_debug = "true" *) input burst_cntr_zero,              // all sample bursts have been saved
     input ddr3_wr_done,                 // asserted when the 'ddr3_wr_control' is in the DONE state
     input dummy_dat_reset_mode,         // channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
@@ -151,12 +152,13 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr
         end
 
         // Stay in the WATCH state until we are both armed and triggered.
+        // We will wait here until the circular buffer trigger address is available
         // reading of the DDR3 can occur while we are in this state
         CS[WATCH_FOR_TRIG]: begin
-            if (trig_pulse)
+            if (!trig_fifo_empty)
                 NS[FILL_INIT1] = 1'b1;
             else
-                NS[IDLE] = 1'b1;
+                NS[WATCH_FOR_TRIG] = 1'b1;
         end
 
         // We use 2 states to initialize for a new fill.
@@ -324,7 +326,6 @@ always @ (posedge clk) begin
         trig_addr_rd_en           <= #1 1'b1;
     end
 
-    // lkg -- the burst counter init may need to morph into what triggers the circ buffer -> ddr3 transfer
     if (NS[WAVEFORM_INIT2]) begin
         // initialize the burst counter with the current fill size
         burst_cntr_init         <= 1'b1;

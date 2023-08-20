@@ -15,7 +15,7 @@ module burst_cntr_ASYNC (
     output reg at_zero             // all sample bursts have been saved
 );
 
-reg [13:0] burst_cntr;
+(* mark_debug = "true" *) reg [13:0] burst_cntr;
 
 // set the 'at_zero' flag when the count is zero
 always @(posedge clk) begin

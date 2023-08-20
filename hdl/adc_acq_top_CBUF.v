@@ -297,6 +297,7 @@ adc_acq_sm_cbuf adc_acq_sm_cbuf (
     .acq_enable1(acq_enable1),  // enable the logic to accept triggers
     .acq_trig(acq_trig),// trigger the logic to start collecting data
     .reset_clk50(reset_clk50),  // synchronously negated
+    .trig_fifo_empty(trig_fifo_empty),  // a trigger address is available
     .burst_cntr_zero(burst_cntr_zero),  // all sample bursts have been saved
     .ddr3_wr_done(ddr3_wr_done),// asserted when the 'ddr3_wr_control' is in the DONE state
     .dummy_dat_reset_mode(dummy_dat_reset_mode),// channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
