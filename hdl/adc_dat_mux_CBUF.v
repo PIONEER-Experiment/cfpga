@@ -10,10 +10,10 @@
 
 module adc_dat_mux_CBUF (
     // inputs
-    input [25:0] dat3_,                // a pair of ADC samples and a pair of over-range bits
-    input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
-    input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
-    input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [25:0] dat3_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
     input [11:0] channel_tag,          // stuff about the channel to put in the header
     input [1:0] fill_type,             // to determine how much data to collect
     input [22:0] burst_start_adr,      // first DDR3 memory location for this fill

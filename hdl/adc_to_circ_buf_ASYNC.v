@@ -3,7 +3,7 @@
 
 module adc_to_circ_buf_ASYNC (
     // inputs
-    (* mark_debug = "true" *) input [11:0] adc_in_p,          // [11:0] array of ADC 'p' data pins
+    input [11:0] adc_in_p,          // [11:0] array of ADC 'p' data pins
     input [11:0] adc_in_n,          // [11:0] array of ADC 'n' data pins
     input adc_ovr_p,                // ADC 'p' over-range pin
     input adc_ovr_n,                // ADC 'n' over-range pin
@@ -66,7 +66,7 @@ selectio_wiz_0 adc_dat_buf (
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // create a counter that can provide dummy data for checking system integrity
-reg [11:0] dummy_data;
+(* mark_debug = "true" *) reg [11:0] dummy_data;
 always @(posedge adc_clk) begin
     if (reset_clk_adc || (dummy_dat_reset_mode & trig_pulse))
         // clear to zero at full reset, or when triggered and in dummy_data_reset' mode.

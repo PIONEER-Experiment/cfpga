@@ -34,7 +34,7 @@ module adc_acq_sm_cbuf (
     output reg init_circ_buf_rd_addr,   // initialize the counter with the start of the buffer area to be saved
     output reg inc_circ_buf_rd_addr,    // increment the circular buffer address
     output reg trig_addr_rd_en,         // read a trigger address from the FIFO
-    output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
+    (* mark_debug = "true" *) output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
 );
 
