@@ -305,7 +305,7 @@ always @ (posedge clk) begin
         burst_cntr_init         <= 1'b0;
         burst_cntr_en           <= 1'b0;
         fill_cntr_en            <= 1'b0;
-        adc_acq_out_valid       <= 1'b0;
+        immed_adc_acq_out_valid <= 1'b0;
         acq_done                <= 1'b0;
         sm_idle                 <= 1'b0;
         init_circ_buf_rd_addr   <= 1'b0;
@@ -325,8 +325,8 @@ always @ (posedge clk) begin
 
     if (NS[FILL_INIT2]) begin
        // write the fill header to the FIFO
-       adc_acq_out_valid        <= 1'b1;
-        // increment the next fill address
+       immed_adc_acq_out_valid        <= 1'b1;
+       // increment the next fill address
        address_cntr_en          <= 1'b1;
     end
 
@@ -349,7 +349,7 @@ always @ (posedge clk) begin
 
     if (NS[WAVEFORM_INIT3]) begin
         // write the waveform header to the FIFO
-        adc_acq_out_valid        <= 1'b1;
+        immed_adc_acq_out_valid        <= 1'b1;
         // increment the next fill address
         address_cntr_en          <= 1'b1;
         // increment the circular buffer address
@@ -412,7 +412,7 @@ always @ (posedge clk) begin
 
     if (NS[CHECKSUM2]) begin
         // write the checksum to the FIFO
-        adc_acq_out_valid       <= 1'b1;
+        immed_adc_acq_out_valid       <= 1'b1;
         // increment the next fill address
         address_cntr_en         <= 1'b1;
         // increment the fill counter
