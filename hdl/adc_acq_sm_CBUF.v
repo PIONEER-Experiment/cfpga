@@ -101,16 +101,15 @@ end
 // delay the 'adc_acq_out_valid' signal to allow for the memory reading delay
 (* mark_debug = "true" *) reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
 reg delay2, delay1, delay0;
-always @ (posedge adc_clk) begin
+always @ (posedge clk) begin
    adc_acq_out_valid <= #1 immed_adc_acq_out_valid | dlyd_adc_acq_out_valid;
-   checksum_update <= #1 delay0;
+   adc_mux_checksum_update <= #1 delay0;
    // run the delay pipeline
    dlyd_adc_acq_out_valid <= #1 delay0;
    delay2 <= #1 delay1;
    delay1 <= #1 delay0;
    delay0 <= #1 start_dlyd_adc_acq_out_valid;
 end
-assign adc_mux_checksum_update = checksum_update;
 
 //  Leave the comments containing "synopsys" in your HDL code.
  
@@ -392,18 +391,18 @@ always @ (posedge clk) begin
         inc_circ_buf_rd_addr    <= #1 1'b1;
     end
 
-    if (NS[WAVEFORM_TEST1]) begin
+    if (NS[WAVEFORM_TST1]) begin
        // save the current 32-bit data word from the circular buffer
        latch_circ_buf_dat      <= #1 1'b1;
          // signal the mux to continue to output the ADC data burst
-       select_dat              <= #1 1'b1;
+       adc_mux_dat_sel         <= #1 1'b1;
     end
     
-    if (NS[WAVEFORM_TEST2]) begin
+    if (NS[WAVEFORM_TST2]) begin
        // save the current 32-bit data word from the circular buffer
        latch_circ_buf_dat      <= #1 1'b1;
          // signal the mux to continue to output the ADC data burst
-       select_dat              <= #1 1'b1;
+       adc_mux_dat_sel         <= #1 1'b1;
     end
 
     if (NS[CHECKSUM1]) begin
