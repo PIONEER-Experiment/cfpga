@@ -98,6 +98,20 @@ always @(posedge clk) begin
     fill_type[1:0] <= {acq_enable1_sync4, acq_enable0_sync4};
 end
      
+// delay the 'adc_acq_out_valid' signal to allow for the memory reading delay
+(* mark_debug = "true" *) reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
+reg delay2, delay1, delay0;
+always @ (posedge adc_clk) begin
+   adc_acq_out_valid <= #1 immed_adc_acq_out_valid | dlyd_adc_acq_out_valid;
+   checksum_update <= #1 delay0;
+   // run the delay pipeline
+   dlyd_adc_acq_out_valid <= #1 delay0;
+   delay2 <= #1 delay1;
+   delay1 <= #1 delay0;
+   delay0 <= #1 start_dlyd_adc_acq_out_valid;
+end
+assign adc_mux_checksum_update = checksum_update;
+
 //  Leave the comments containing "synopsys" in your HDL code.
  
 // Declare the symbolic names for states
@@ -219,6 +233,7 @@ always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr
         end
 
         // We use 2 states to update and test the waveform counter
+        // as well as to latch the final data because of delay from reading from the buffer
         // Stay in WAVEFORM_TST1 state for one period. 
         CS[WAVEFORM_TST1]: begin
                 NS[WAVEFORM_TST2] = 1'b1;
@@ -287,7 +302,7 @@ always @ (posedge clk) begin
         adc_mux_wfm_hdr_sel     <= 1'b0;
         adc_mux_dat_sel         <= 1'b0;
         adc_mux_checksum_select <= 1'b0;
-        adc_mux_checksum_update <= 1'b0;
+//        adc_mux_checksum_update <= 1'b0;
         burst_cntr_init         <= 1'b0;
         burst_cntr_en           <= 1'b0;
         fill_cntr_en            <= 1'b0;
@@ -339,6 +354,7 @@ always @ (posedge clk) begin
         // increment the next fill address
         address_cntr_en          <= 1'b1;
         // increment the circular buffer address
+        // don't latch yet because data will not be ready
         inc_circ_buf_rd_addr    <= #1 1'b1;
     end
 
@@ -361,10 +377,6 @@ always @ (posedge clk) begin
     if (NS[RUN3]) begin
         // save the current 32-bit data word from the circular buffer
         latch_circ_buf_dat      <= #1 1'b1;
-        // signal the mux to output the ADC burst
-        adc_mux_dat_sel         <= 1'b1;
-        // update the checksum
-        adc_mux_checksum_update    <= 1'b1;
        // increment the circular buffer address
        inc_circ_buf_rd_addr    <= #1 1'b1;
     end
@@ -373,11 +385,25 @@ always @ (posedge clk) begin
         // save the current 32-bit data word from the circular buffer
         latch_circ_buf_dat      <= #1 1'b1;
         // write the ADC burst to the FIFO
-        adc_acq_out_valid       <= 1'b1;
+        immed_adc_acq_out_valid       <= 1'b1;
         // increment the next fill address
         address_cntr_en          <= 1'b1;
         // increment the circular buffer address
         inc_circ_buf_rd_addr    <= #1 1'b1;
+    end
+
+    if (NS[WAVEFORM_TEST1]) begin
+       // save the current 32-bit data word from the circular buffer
+       latch_circ_buf_dat      <= #1 1'b1;
+         // signal the mux to continue to output the ADC data burst
+       select_dat              <= #1 1'b1;
+    end
+    
+    if (NS[WAVEFORM_TEST2]) begin
+       // save the current 32-bit data word from the circular buffer
+       latch_circ_buf_dat      <= #1 1'b1;
+         // signal the mux to continue to output the ADC data burst
+       select_dat              <= #1 1'b1;
     end
 
     if (NS[CHECKSUM1]) begin

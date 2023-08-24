@@ -101,7 +101,7 @@ assign data[131:128] = 4'd3;
 
 /////////////////////////////
 // create a checksum register
-reg [127:0] checksum;
+(* mark_debug = "true" *) reg [127:0] checksum;
 wire [3:0] checksum_tag;
 // tag = '4' for checksum
 assign checksum_tag[3:0] = 4'd4;
