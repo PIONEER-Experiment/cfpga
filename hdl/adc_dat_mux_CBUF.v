@@ -97,7 +97,7 @@ assign data[123:112] = dat3_[25:14];                                 // 7 sample
 assign data[127:124] = {dat3_[25], dat3_[25], dat3_[25], dat3_[25]}; // 7 sample sign extension
 
 // tag = '3' for data
-assign data[131:128] = 4'd3;
+(* mark_debug = "true" *) assign data[131:128] = 4'd3;
 
 /////////////////////////////
 // create a checksum register

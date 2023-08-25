@@ -306,7 +306,7 @@ always @ (posedge clk) begin
         burst_cntr_en           <= 1'b0;
         fill_cntr_en            <= 1'b0;
         immed_adc_acq_out_valid <= 1'b0;
-        acq_done                <= 1'b0;
+        start_dlyd_adc_acq_out_valid <= 1'b0; // prepare for current output from the MUX should be stored in the FIFO        acq_done                <= 1'b0;
         sm_idle                 <= 1'b0;
         init_circ_buf_rd_addr   <= 1'b0;
         inc_circ_buf_rd_addr    <= 1'b0;
@@ -384,7 +384,7 @@ always @ (posedge clk) begin
         // save the current 32-bit data word from the circular buffer
         latch_circ_buf_dat      <= #1 1'b1;
         // write the ADC burst to the FIFO
-        immed_adc_acq_out_valid       <= 1'b1;
+        start_adc_acq_out_valid       <= 1'b1;
         // increment the next fill address
         address_cntr_en          <= 1'b1;
         // increment the circular buffer address
