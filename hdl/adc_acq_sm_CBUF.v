@@ -106,9 +106,9 @@ always @ (posedge clk) begin
    adc_mux_checksum_update <= #1 start_dlyd_adc_acq_out_valid;
    // run the delay pipeline
    dlyd_adc_acq_out_valid <= #1 start_dlyd_adc_acq_out_valid;
-   delay2 <= #1 delay1;
-   delay1 <= #1 delay0;
-   delay0 <= #1 start_dlyd_adc_acq_out_valid;
+//   delay2 <= #1 delay1;
+//   delay1 <= #1 delay0;
+//   delay0 <= #1 start_dlyd_adc_acq_out_valid;
 end
 
 //  Leave the comments containing "synopsys" in your HDL code.
@@ -391,11 +391,15 @@ always @ (posedge clk) begin
         address_cntr_en          <= 1'b1;
         // increment the circular buffer address
         inc_circ_buf_rd_addr    <= #1 1'b1;
+        // signal the mux to continue to output the ADC data burst
+        adc_mux_dat_sel         <= #1 1'b1;
     end
 
     if (NS[WAVEFORM_TST1]) begin
        // save the current 32-bit data word from the circular buffer
        latch_circ_buf_dat      <= #1 1'b1;
+       // signal the mux to continue to output the ADC data burst
+       adc_mux_dat_sel         <= #1 1'b1;
     end
     
     if (NS[WAVEFORM_TST2]) begin
