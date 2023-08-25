@@ -384,7 +384,7 @@ always @ (posedge clk) begin
         // save the current 32-bit data word from the circular buffer
         latch_circ_buf_dat      <= #1 1'b1;
         // write the ADC burst to the FIFO
-        start_adc_acq_out_valid       <= 1'b1;
+        start_dlyd_adc_acq_out_valid       <= 1'b1;
         // increment the next fill address
         address_cntr_en          <= 1'b1;
         // increment the circular buffer address
