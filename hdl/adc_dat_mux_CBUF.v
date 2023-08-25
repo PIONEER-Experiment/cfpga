@@ -10,10 +10,10 @@
 
 module adc_dat_mux_CBUF (
     // inputs
-    (* mark_debug = "true" *) input [25:0] dat3_,                // a pair of ADC samples and a pair of over-range bits
-    (* mark_debug = "true" *) input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
-    (* mark_debug = "true" *) input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
-    (* mark_debug = "true" *) input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
+    input [25:0] dat3_,                // a pair of ADC samples and a pair of over-range bits
+    input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
+    input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
+    input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
     input [11:0] channel_tag,          // stuff about the channel to put in the header
     input [1:0] fill_type,             // to determine how much data to collect
     input [22:0] burst_start_adr,      // first DDR3 memory location for this fill
@@ -69,7 +69,7 @@ assign waveform_header[131:128] = 4'd2;                             //  4-bit bu
 
 ////////////////////
 // assemble the data
-wire [131:0] data;
+(* mark_debug = "true" *) wire [131:0] data;
 // put 8 ADC samples into 8 16-bit words.
 // omit the overrange bit and sign extend into the upper 4 bits of each word
 assign data[ 11:  0] = dat0_[12:1];                                  // 0 oldest sample data
