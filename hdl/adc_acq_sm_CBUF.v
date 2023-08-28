@@ -341,6 +341,8 @@ always @ (posedge clk) begin
     end
 
     if (NS[WAVEFORM_INIT2]) begin
+        // write the waveform header to the FIFO -- this will incur 1 cycle of delay going to adc_acq_out_valid
+        immed_adc_acq_out_valid        <= 1'b1;
         // initialize the burst counter with the current fill size
         burst_cntr_init         <= 1'b1;
         // signal the mux to output the waveform header info
@@ -348,8 +350,6 @@ always @ (posedge clk) begin
     end
 
     if (NS[WAVEFORM_INIT3]) begin
-        // write the waveform header to the FIFO
-        immed_adc_acq_out_valid        <= 1'b1;
         // increment the next fill address
         address_cntr_en          <= 1'b1;
         // increment the circular buffer address
@@ -364,6 +364,8 @@ always @ (posedge clk) begin
         inc_circ_buf_rd_addr    <= #1 1'b1;
         // decrement the burst counter
         burst_cntr_en           <= 1'b1;
+        // signal the mux to output the ADC data burst
+        adc_mux_dat_sel         <= #1 1'b1;
      end
 
     if (NS[RUN2]) begin
@@ -371,6 +373,8 @@ always @ (posedge clk) begin
        latch_circ_buf_dat      <= #1 1'b1;
        // increment the circular buffer address
        inc_circ_buf_rd_addr    <= #1 1'b1;
+       // signal the mux to output the ADC data burst
+       adc_mux_dat_sel         <= #1 1'b1;
     end
 
     if (NS[RUN3]) begin
