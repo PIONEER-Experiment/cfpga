@@ -10,7 +10,7 @@
 	// Define 8-bit constants to hold info about code version and functionality
 	`define	MAJOR_REV		8'h06	// major revision
 	`define	MINOR_REV		8'h06	// minor revision
-	`define PATCH_REV		   8'h0d	// patch revision
+	`define PATCH_REV		   8'h0e	// patch revision
 	
 	// Define 5-bit constants for commands from the Master FPGA
 	`define	CC_NO_CMD		5'd0	// may be useful for synchronizing or testing?
