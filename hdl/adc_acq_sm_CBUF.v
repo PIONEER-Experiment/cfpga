@@ -108,7 +108,7 @@ always @ (posedge clk) begin
    dlyd_adc_acq_out_valid <= #1 delay0;
 //   delay2 <= #1 delay1;
 //   delay1 <= #1 delay0;
-//   delay0 <= #1 start_dlyd_adc_acq_out_valid;
+   delay0 <= #1 start_dlyd_adc_acq_out_valid;
 end
 
 //  Leave the comments containing "synopsys" in your HDL code.
