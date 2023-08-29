@@ -118,15 +118,18 @@ module command_top (
 			serial_num_reg[31:0] <= serial_num_reg[31:0];
 	end
 	always @ (posedge clk) begin
-		if (reset)
+		if (reset) begin
 			command_reg <= 32'b0;
          command_type <= 5'b0;
-		else if (command_le)
+      end
+		else if (command_le) begin
 			command_reg[31:0] <= rx_data[31:0];
          command_type[4:0] <= rx_data[ 4:0];
-		else
+      end
+		else begin
 			command_reg[31:0] <= command_reg[31:0];
          command_type[4:0] <= command_type[ 4:0];
+      end
 	end
 
 	////////////////////////////////////////////////////////////////////////////////
