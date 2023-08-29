@@ -138,7 +138,7 @@ module command_top (
 	// Use the actual command from the command register to activate 1 particular sm.
    (* mark_debug = "true" *) wire run_cmd_sm;
    wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
-   (* mark_debug = "true" *) run_cc_rd_fill;
+   (* mark_debug = "true" *) wire run_cc_rd_fill;
 
 	assign run_cc_loopback  = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
 	assign run_cc_rd_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_RD_REG));
