@@ -105,7 +105,7 @@ module command_top (
 	
 	///////////////////////////////////////////////////////////////////
 	// connect registers to hold the incoming serial number and command
-	reg [31:0] command_reg;
+   (* mark_debug = "true" *) reg [31:0] command_reg;
 	reg [31:0] serial_num_reg;
 	always @ (posedge clk) begin
 		if (reset) 
@@ -128,7 +128,7 @@ module command_top (
 	// generate 'run' signals for the state machines that handle individual commands
 	// start with 'run_cmd_sm' which is a 'run someone' from the command sm.
 	// Use the actual command from the command register to activate 1 particular sm.
-	wire run_cmd_sm;    
+   (* mark_debug = "true" *) wire run_cmd_sm;    
 	wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_rd_fill, run_cc_map_delay;
 	
 	assign run_cc_loopback  = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));

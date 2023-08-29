@@ -25,7 +25,7 @@ module cc_rd_fill_sm (
     input clk,                                // local clock
     input reset,                            // active-high
 
-    input run_sm,                               // run this state machine
+    (* mark_debug = "true" *) input run_sm,                               // run this state machine
     (* mark_debug = "true" *) output reg sm_running,                    // we are running
     output reg sm_done,                        // we are finished
 
