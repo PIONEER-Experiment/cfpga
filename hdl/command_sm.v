@@ -48,8 +48,8 @@ module command_sm (
         ILLEGAL_CC    = 4'd10;
 
     // Declare current state and next state variables
-    reg [10:0] /* synopsys enum STATE_TYPE */ CS;
-    reg [10:0] /* synopsys enum STATE_TYPE */ NS;
+    (* mark_debug = "true" *) reg [10:0] /* synopsys enum STATE_TYPE */ CS;
+    (* mark_debug = "true" *) reg [10:0] /* synopsys enum STATE_TYPE */ NS;
     //synopsys state_vector CS
 
 

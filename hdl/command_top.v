@@ -19,7 +19,7 @@ module command_top (
     // RX Interface to master side of receive FIFO for receiving from the Master FPGA
     input  [31:0] rx_data,                    // note index order
     input  [ 0:3] rx_tkeep,                   // note index order
-    input  rx_tvalid,
+    (* mark_debug = "true" *) input  rx_tvalid,
     input  rx_tlast,
     output rx_tready,                         // input wire m_axis_tready
     // TX interface to slave side of transmit FIFO for sending to the Master FPGA 
@@ -106,7 +106,9 @@ module command_top (
 	///////////////////////////////////////////////////////////////////
 	// connect registers to hold the incoming serial number and command
    (* mark_debug = "true" *) reg [31:0] command_reg;
+   (* mark_debug = "true" *) reg [4:0] command_type;
 	reg [31:0] serial_num_reg;
+   reg [4:0] command_type;
 	always @ (posedge clk) begin
 		if (reset) 
 			serial_num_reg <= 32'b0;
@@ -118,19 +120,23 @@ module command_top (
 	always @ (posedge clk) begin
 		if (reset)
 			command_reg <= 32'b0;
+         command_type <= 5'b0;
 		else if (command_le)
 			command_reg[31:0] <= rx_data[31:0];
+         command_type[4:0] <= rx_data[ 4:0];
 		else
 			command_reg[31:0] <= command_reg[31:0];
+         command_type[4:0] <= command_type[ 4:0];
 	end
 
 	////////////////////////////////////////////////////////////////////////////////
 	// generate 'run' signals for the state machines that handle individual commands
 	// start with 'run_cmd_sm' which is a 'run someone' from the command sm.
 	// Use the actual command from the command register to activate 1 particular sm.
-   (* mark_debug = "true" *) wire run_cmd_sm;    
-	wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_rd_fill, run_cc_map_delay;
-	
+   (* mark_debug = "true" *) wire run_cmd_sm;
+   wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
+   (* mark_debug = "true" *) run_cc_rd_fill;
+
 	assign run_cc_loopback  = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
 	assign run_cc_rd_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_RD_REG));
 	assign run_cc_wr_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_WR_REG));
