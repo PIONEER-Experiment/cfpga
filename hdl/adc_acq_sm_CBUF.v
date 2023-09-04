@@ -30,7 +30,7 @@ module adc_acq_sm_cbuf (
     (* mark_debug = "true" *) output reg trig_pulse,
     output reg acq_enabled,             // writing triggered data to DDR3 in progress
     output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
-    output reg acq_done,                // acquisition is done
+    (* mark_debug = "true" *) output reg acq_done,                // acquisition is done
     output reg init_circ_buf_rd_addr,   // initialize the counter with the start of the buffer area to be saved
     output reg inc_circ_buf_rd_addr,    // increment the circular buffer address
     output reg trig_addr_rd_en,         // read a trigger address from the FIFO
@@ -306,7 +306,8 @@ always @ (posedge clk) begin
         burst_cntr_en           <= 1'b0;
         fill_cntr_en            <= 1'b0;
         immed_adc_acq_out_valid <= 1'b0;
-        start_dlyd_adc_acq_out_valid <= 1'b0; // prepare for current output from the MUX should be stored in the FIFO        acq_done                <= 1'b0;
+        start_dlyd_adc_acq_out_valid <= 1'b0; // prepare for current output from the MUX should be stored in the FIFO
+        acq_done                <= 1'b0;
         sm_idle                 <= 1'b0;
         init_circ_buf_rd_addr   <= 1'b0;
         inc_circ_buf_rd_addr    <= 1'b0;
