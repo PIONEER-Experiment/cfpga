@@ -27,7 +27,7 @@ module ddr3_intf_cbuf(
     output reading_done,                        // output, reading is complete
     // ports to the 'read' fifo
     output ddr3_rd_fifo_wr_en,                  // data is valid, so put it in the READ FIFO    
-    output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
+    (* mark_debug = "true" *) output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
     input ddr3_rd_fifo_almost_full,             // there is not much room left    
     output ddr3_rd_fifo_input_tlast,            // the last burst for this fill 
     // connections to the DDR3 chips
