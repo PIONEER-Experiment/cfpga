@@ -103,7 +103,7 @@ end
 reg delay2, delay1, delay0;
 always @ (posedge clk) begin
    adc_acq_out_valid <= #1 immed_adc_acq_out_valid | dlyd_adc_acq_out_valid;
-   adc_mux_checksum_update <= #1 dlyd_adc_acq_out_valid;
+   adc_mux_checksum_update <= #1 delay0;
    // run the delay pipeline
    dlyd_adc_acq_out_valid <= #1 delay0;
 //   delay2 <= #1 delay1;
