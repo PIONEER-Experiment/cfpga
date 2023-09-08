@@ -10,42 +10,42 @@ module adc_acq_sm_cbuf (
     input acq_enable1,                  // indicates enabled for triggers, and fill type
     input acq_trig,                     // trigger the logic to start collecting data
     input reset_clk50,                  // reset from internal logic, synched to CLK50
-    (* mark_debug = "true" *) input trig_fifo_empty,              // no trigger address is available for reading yet
-    (* mark_debug = "true" *) input burst_cntr_zero,              // all sample bursts have been saved
+    input trig_fifo_empty,              // no trigger address is available for reading yet
+    input burst_cntr_zero,              // all sample bursts have been saved
     input ddr3_wr_done,                 // asserted when the 'ddr3_wr_control' is in the DONE state
     input dummy_dat_reset_mode,         // channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
     // outputs
     output reg [1:0] fill_type,         // determine which burst count to use (not in cbuf mode)
     output reg address_cntr_en,         // increment the next starting address
     output reg dummy_dat_reset,         // reset the dummy data counter
-    (* mark_debug = "true" *) output reg adc_mux_fill_hdr_sel,    // selects fill header
-    (* mark_debug = "true" *) output reg adc_mux_wfm_hdr_sel,     // selects waveform header
-    (* mark_debug = "true" *) output reg adc_mux_dat_sel,         // selects data
-    (* mark_debug = "true" *) output reg adc_mux_checksum_select, // selects checksum
-    (* mark_debug = "true" *) output reg adc_mux_checksum_update, // update the checksum
+    output reg adc_mux_fill_hdr_sel,    // selects fill header
+    output reg adc_mux_wfm_hdr_sel,     // selects waveform header
+    output reg adc_mux_dat_sel,         // selects data
+    output reg adc_mux_checksum_select, // selects checksum
+    output reg adc_mux_checksum_update, // update the checksum
     output reg burst_cntr_init,         // initialize when triggered
     output reg burst_cntr_en,           // will be enabled once per burst
-    (* mark_debug = "true" *) output reg fill_cntr_en,            // will be enabled once per fill
-    (* mark_debug = "true" *) output reg adc_acq_out_valid,       // current data should be stored in the FIFO
-    (* mark_debug = "true" *) output reg trig_pulse,
+    output reg fill_cntr_en,            // will be enabled once per fill
+    output reg adc_acq_out_valid,       // current data should be stored in the FIFO
+    output reg trig_pulse,
     output reg acq_enabled,             // writing triggered data to DDR3 in progress
     output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
-    (* mark_debug = "true" *) output reg acq_done,                // acquisition is done
+    output reg acq_done,                // acquisition is done
     output reg init_circ_buf_rd_addr,   // initialize the counter with the start of the buffer area to be saved
     output reg inc_circ_buf_rd_addr,    // increment the circular buffer address
     output reg trig_addr_rd_en,         // read a trigger address from the FIFO
-    (* mark_debug = "true" *) output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
+    output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
 );
 
 
 // synchronize ENABLE and TRIGGER inputs to this clock domain
 reg acq_enable0_sync1, acq_enable0_sync2, acq_enable0_sync3;
-(* mark_debug = "true" *) reg acq_enable0_sync4;
+reg acq_enable0_sync4;
 reg acq_enable1_sync1, acq_enable1_sync2, acq_enable1_sync3;
-(* mark_debug = "true" *) reg acq_enable1_sync4;
+reg acq_enable1_sync4;
 reg acq_trig_sync1, acq_trig_sync2, acq_trig_sync3, acq_trig_sync5;
-(* mark_debug = "true" *) reg acq_trig_sync4;
+reg acq_trig_sync4;
 always @(posedge clk) begin
     acq_enable0_sync1 <= acq_enable0;
     acq_enable0_sync2 <= acq_enable0_sync1;
@@ -77,7 +77,7 @@ end
 
 // synchronize 'ddr3_wr_done'
 reg ddr3_wr_done_sync1;
-(* mark_debug = "true" *) reg ddr3_wr_done_sync2;
+reg ddr3_wr_done_sync2;
 always @ (posedge clk) begin
     ddr3_wr_done_sync1 <= ddr3_wr_done;
     ddr3_wr_done_sync2 <= ddr3_wr_done_sync1;
@@ -85,7 +85,7 @@ end
 
 // We are in acquisition mode whenever the ENABLE inputs are not both zero.
 // When they are both zero, we are not running.
-(* mark_debug = "true" *) reg adc_acq_mode_enabled; // we are enabled to accept triggers and store data
+reg adc_acq_mode_enabled; // we are enabled to accept triggers and store data
 always @(posedge clk) begin
     if (acq_enable0_sync4 | acq_enable1_sync4)
         adc_acq_mode_enabled <= 1'b1;
@@ -99,7 +99,7 @@ always @(posedge clk) begin
 end
      
 // delay the 'adc_acq_out_valid' signal to allow for the memory reading delay
-(* mark_debug = "true" *) reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
+reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
 reg delay2, delay1, delay0;
 always @ (posedge clk) begin
    adc_acq_out_valid <= #1 immed_adc_acq_out_valid | dlyd_adc_acq_out_valid;
@@ -135,8 +135,8 @@ parameter [4:0]
     DONE            = 5'd16;
     
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [16:0] /* synopsys enum STATE_TYPE */ CS;
-(* mark_debug = "true" *) reg [16:0] /* synopsys enum STATE_TYPE */ NS;
+reg [16:0] /* synopsys enum STATE_TYPE */ CS;
+reg [16:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

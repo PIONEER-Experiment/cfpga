@@ -9,17 +9,17 @@ module ddr3_wr_control_cbuf (
     input reset,
     input acq_enabled,                    // input, writing is enabled
     // Connections to the FIFO from the ADC
-    (* mark_debug = "true" *) input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
-    (* mark_debug = "true" *) input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
-    (* mark_debug = "true" *) output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
+    input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
+    input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
+    output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
     // 'write' ports to memory
-    (* mark_debug = "true" *) output  app_wdf_wren,                 // output, request to perform a 'write'
-    (* mark_debug = "true" *) input app_wdf_rdy,                    // input, memory can accept data
+    output  app_wdf_wren,                 // output, request to perform a 'write'
+    input app_wdf_rdy,                    // input, memory can accept data
     output  app_wdf_end,                  // output, last data cycle
     // 'write' ports to address controller
     output [25:0] ddr3_wr_addr,           // output, next 'write' address
-    (* mark_debug = "true" *) output  wr_app_en,                    // output, request to perform a 'write'
-    (* mark_debug = "true" *) input wr_app_rdy,                     // input, increment the 'write' address
+    output  wr_app_en,                    // output, request to perform a 'write'
+    input wr_app_rdy,                     // input, increment the 'write' address
     input [22:0] fixed_ddr3_start_addr,
     input en_fixed_ddr3_start_addr,
     // 'write' ports to the fill_header_fifo
@@ -65,7 +65,7 @@ wire address_allow; // allow attempts to write an address
 // Create a counter to hold the total burst count for a fill. It will include the
 // fill header, all waveform headers and data, and the checksum. Clear it at the 
 // start of a fill. Increment it every time an address is accepted by the DDR3 memory.
-(* mark_debug = "true" *) reg [23:0] total_burst_count;
+reg [23:0] total_burst_count;
 reg init_total_burst_count;
 always @ (posedge clk) begin
 	if (reset)
@@ -93,8 +93,8 @@ assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];
 // Create an address generator
 // Initialize it from the 'start_address' in the fill_header
 // Increment it whenever the address is accepted ( we get a 'wr_app_rdy' while asserting 'wr_app_en') 
-(* mark_debug = "true" *) reg [22:0] address_gen;
-(* mark_debug = "true" *) reg init_address_gen;   // will be asserted by the state machine
+reg [22:0] address_gen;
+reg init_address_gen;   // will be asserted by the state machine
 always @ (posedge clk) begin
     if (reset) address_gen[22:0] <= 23'b0;
     else if (init_address_gen && en_fixed_ddr3_start_addr) address_gen[22:0] <= fixed_ddr3_start_addr[22:0];
@@ -108,10 +108,10 @@ assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 // For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever an address is accepted. This happens when
 // we are asserting 'wr_app_en' and receiving 'wr_app_rdy'.
-(* mark_debug = "true" *) reg [23:0] address_cntr;
+reg [23:0] address_cntr;
 reg init_address_cntr;   // will be asserted by the state machine
 reg init_address_cntr_to_1;   // will be asserted by the state machine
-(* mark_debug = "true" *) wire address_cntr_zero;  // the counter is at zero
+wire address_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) address_cntr[23:0] <= 24'b0;
     else if (init_address_cntr_to_1) address_cntr[23:0] <= 1;
@@ -127,10 +127,10 @@ assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 // For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever we get a successful write. This happens when
 // we are asserting 'wdf_wren' and receiving 'wdf_rdy'.
-(* mark_debug = "true" *) reg [23:0] burst_cntr;
-(* mark_debug = "true" *) reg init_burst_cntr;   // will be asserted by the state machine
-(* mark_debug = "true" *) reg init_burst_cntr_to_1;   // will be asserted by the state machine
-(* mark_debug = "true" *) wire burst_cntr_zero;  // the counter is at zero
+reg [23:0] burst_cntr;
+reg init_burst_cntr;   // will be asserted by the state machine
+reg init_burst_cntr_to_1;   // will be asserted by the state machine
+wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) burst_cntr[23:0] <= 24'b0;
     else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 1;
@@ -161,7 +161,7 @@ end
 assign address_allow = ~(address_control == 0);
     
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  

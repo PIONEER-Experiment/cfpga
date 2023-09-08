@@ -22,13 +22,13 @@ module adc_dat_mux_CBUF (
     input clk,
     input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    (* mark_debug = "true" *) input select_fill_hdr,                 // selects fill header
-    (* mark_debug = "true" *) input select_waveform_hdr,         // selects waveform header
-    (* mark_debug = "true" *) input select_dat,                  // selects data
-    (* mark_debug = "true" *) input select_checksum,             // selects checksum
+    input select_fill_hdr,                 // selects fill header
+    input select_waveform_hdr,         // selects waveform header
+    input select_dat,                  // selects data
+    input select_checksum,             // selects checksum
     input checksum_update,               // update the checksum
     // outputs
-    (* mark_debug = "true" *) output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
+    output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
 );
 
 //////////////////////////////////////
@@ -69,7 +69,7 @@ assign waveform_header[131:128] = 4'd2;                             //  4-bit bu
 
 ////////////////////
 // assemble the data
-(* mark_debug = "true" *) wire [131:0] data;
+wire [131:0] data;
 // put 8 ADC samples into 8 16-bit words.
 // omit the overrange bit and sign extend into the upper 4 bits of each word
 assign data[ 11:  0] = dat0_[12:1];                                  // 0 oldest sample data
@@ -97,11 +97,11 @@ assign data[123:112] = dat3_[25:14];                                 // 7 sample
 assign data[127:124] = {dat3_[25], dat3_[25], dat3_[25], dat3_[25]}; // 7 sample sign extension
 
 // tag = '3' for data
-(* mark_debug = "true" *) assign data[131:128] = 4'd3;
+assign data[131:128] = 4'd3;
 
 /////////////////////////////
 // create a checksum register
-(* mark_debug = "true" *) reg [127:0] checksum;
+reg [127:0] checksum;
 wire [3:0] checksum_tag;
 // tag = '4' for checksum
 assign checksum_tag[3:0] = 4'd4;

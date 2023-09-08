@@ -12,8 +12,8 @@ create_clock -period 8.000 -name user_clk_chan0 [get_pins channels/chan0/clock_m
 
 # 400 MHz ADC clock
 # This cones from the ADC
-#create_clock -period 2.500 -name adc_clk [get_ports adc_clk_p]
-create_clock -period 10.000 -name adc_clk [get_ports adc_clk_p]
+create_clock -period 2.500 -name adc_clk [get_ports adc_clk_p]
+#create_clock -period 10.000 -name adc_clk [get_ports adc_clk_p] // a 100 MHz version for debugging (200 MHz adc)
 
 # Asynchronous clock groups
 # Each group should be generally be isolated from the others with FIFOs or 2-stage synchronizers.

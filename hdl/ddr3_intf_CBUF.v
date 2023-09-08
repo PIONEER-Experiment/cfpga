@@ -18,7 +18,7 @@ module ddr3_intf_cbuf(
     input en_fixed_ddr3_start_addr,
     // reading connections
     input local_domain_clk,                     // input, the local interface synchronous clock
-    (* mark_debug = "true" *) output fill_header_fifo_empty,              // output, a header is available when not asserted
+    output fill_header_fifo_empty,              // output, a header is available when not asserted
     input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
     output [151:0] fill_header_fifo_out,        // output, data at the head of the FIFO
     input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
@@ -27,7 +27,7 @@ module ddr3_intf_cbuf(
     output reading_done,                        // output, reading is complete
     // ports to the 'read' fifo
     output ddr3_rd_fifo_wr_en,                  // data is valid, so put it in the READ FIFO    
-    (* mark_debug = "true" *) output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
+    output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
     input ddr3_rd_fifo_almost_full,             // there is not much room left    
     output ddr3_rd_fifo_input_tlast,            // the last burst for this fill 
     // connections to the DDR3 chips
