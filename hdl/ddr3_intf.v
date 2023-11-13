@@ -215,7 +215,8 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     .app_zq_req(1'b0),                              // input, request a ZQ calibration
     .app_zq_ack(),                                  // output, a ZQ calibration has been requested
     .init_calib_complete(init_calib_complete),      // output, PHY calibration is done
-    .device_temp_i(xadc_temp[11:0])                 // input, temperature measured by XADC
+    .device_temp_i(xadc_temp[11:0]),                // input, temperature measured by XADC
+    .device_temp()                                  // output, 
     // Debug Ports
     // .ddr3_ila_basic(ddr3_ila_basic),
     // .ddr3_ila_wrpath(ddr3_ila_wrpath),

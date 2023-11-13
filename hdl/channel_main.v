@@ -138,15 +138,17 @@ wire command_sm_idle;
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
 // Connect an input buffer and a global clock buffer to the 50 MHz clock
-wire clk50, clk200, clk250;
+wire clk50, clk200, clk250, clk8;
 
 g2_chan_clks clk_dcm_50_200 (
     // Clock in ports
     .clk_in1(clkin),        // input, unbuffered 50 MHz from pin 
     // Clock out ports
-    .clk_50M(clk50),        // output, 50 MHz
+    .clk_50M(clk50),        // output,  50 MHz
     .clk_200M(clk200),      // output, 200 MHz
-    .clk_250M(clk250)       // output, 250 MHz
+    .clk_250M(clk250),      // output, 250 MHz
+    .clk_8M(clk8),          // output,   8 MHz
+    .adc_sdclk(adc_sdclk)   // output,   8 MHz 180 deg phase shift
     // Status and control signals
     //.reset(1'b0),         // input, unused reset
     //.locked()             // output, unused locked
@@ -373,7 +375,10 @@ ddr3_read_fifo ddr3_read_fifo(
     .m_axis_tready(ddr3_rd_fifo_output_tready),
     .m_axis_tdata(ddr3_rd_fifo_output_dat[127:0]),
     .m_axis_tlast(ddr3_rd_fifo_output_tlast),
-    .axis_prog_full(ddr3_rd_fifo_almost_full)
+    .axis_prog_full(ddr3_rd_fifo_almost_full),
+    .wr_rst_busy(),        // output wire wr_rst_busy
+    .rd_rst_busy()         // output wire rd_rst_busy
+
 );
 
 // Create a width converter to change the 128-bit data to 32-bit data
@@ -608,6 +613,7 @@ adc_intf adc_intf(
     .reset(reset_clk50),
     .data_in(adc_intf_wr_data[31:0]),
     .data_out(adc_intf_rd_data[31:0]),
+    .slow_clk(clk8),
     .sclk(adc_sdclk),
     .sdio(adc_sdio),
     .sdi(adc_sdo),

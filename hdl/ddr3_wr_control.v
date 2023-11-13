@@ -50,6 +50,10 @@ parameter [3:0]
     WRITE_HDR   = 4'd8,
     DONE        = 4'd9;
 
+// Declare current state and next state variables
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ NS;
+
 // synchronize 'acq_done'
 reg acq_done_sync1, acq_done_sync2;
 always @ (posedge clk) begin
@@ -77,6 +81,8 @@ always @ (posedge clk) begin
 end
 
 // Create a register to hold the header for future writing to the fill-header FIFO
+wire burst_cntr_zero;  // the burst counter is at zero
+wire address_cntr_zero;  // the address counter is at zero
 reg [151:0] fill_header_wr_dat_reg;
 reg latch_header;   // will be asserted by the state machine
 always @ (posedge clk) begin
@@ -111,7 +117,6 @@ assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 reg [23:0] address_cntr;
 reg init_address_cntr;   // will be asserted by the state machine
 reg init_address_cntr_to_1;   // will be asserted by the state machine
-wire address_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) address_cntr[23:0] <= 24'b0;
     else if (init_address_cntr_to_1) address_cntr[23:0] <= 1;
@@ -130,7 +135,6 @@ assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 reg [23:0] burst_cntr;
 reg init_burst_cntr;   // will be asserted by the state machine
 reg init_burst_cntr_to_1;   // will be asserted by the state machine
-wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) burst_cntr[23:0] <= 24'b0;
     else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 1;
@@ -160,9 +164,6 @@ end
 // attempts to write addresses are only allowed when the counter is not zero
 assign address_allow = ~(address_control == 0);
     
-// Declare current state and next state variables
-reg [9:0] /* synopsys enum STATE_TYPE */ CS;
-reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

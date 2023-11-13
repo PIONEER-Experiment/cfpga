@@ -107,8 +107,7 @@ module command_top (
 	// connect registers to hold the incoming serial number and command
    reg [31:0] command_reg;
    reg [4:0] command_type;
-	reg [31:0] serial_num_reg;
-   reg [4:0] command_type;
+   reg [31:0] serial_num_reg;
 	always @ (posedge clk) begin
 		if (reset) 
 			serial_num_reg <= 32'b0;

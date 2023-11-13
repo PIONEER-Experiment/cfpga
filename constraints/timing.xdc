@@ -7,8 +7,12 @@
 create_clock -period 8.000 -name xcvr_clk [get_ports xcvr_clk]
 
 # Aurora USER_CLK Constraint : Value is selected based on the line rate (5.0 Gbps) and lane width (4-Byte)
-# crs - I think this is for RECV, and is extracted from the incoming signal 
-create_clock -period 8.000 -name user_clk_chan0 [get_pins channels/chan0/clock_module/user_clk_buf_i/O]
+# -- lkg 03/04/24 In Viv2023.2, this now gets defined in aurora_8b10b_0.xdc
+# crs - I think this is for RECV, and is extracted from the incoming signal
+#create_clock -period 8.000 -name user_clk_chan0 [get_pins channels/chan0/clock_module/user_clk_buf_i/O]
+#create_clock -period 8.000 -name user_clk_chan0 [get_pins channels/chan0/clock_module/user_clk_buf_i/I]
+#create_clock -period 8.000 -name TXOUTCLK [get_pins channels/chan0/aurora/inst/gt_wrapper_i/aurora_8b10b_0_multi_gt_i/gt0_aurora_8b10b_0_i/gtxe2_i/TXOUTCLK]
+
 
 # 400 MHz ADC clock
 # This cones from the ADC
@@ -20,7 +24,7 @@ create_clock -period 2.500 -name adc_clk [get_ports adc_clk_p]
 # There are quasi-DC signals, like configuration registers, that span clock domains without synchronizers.
 # The use of the registers is synchronized by way of how the logic operates.
 set_clock_groups -asynchronous -group [get_clocks xcvr_clk]
-set_clock_groups -asynchronous -group [get_clocks user_clk_chan0]
+#set_clock_groups -asynchronous -group [get_clocks user_clk_chan0]
 set_clock_groups -asynchronous -group [get_clocks adc_clk]
 set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks clkin]
 
