@@ -319,6 +319,10 @@ always @ (posedge clk) begin
         sm_idle                 <= 1'b1;
     end
     
+    if (NS[WATCH_FOR_TRIG]) begin
+        sm_idle                 <= 1'b1;
+    end
+
     if (NS[FILL_INIT1]) begin
         // signal the mux to output the fill header info
         adc_mux_fill_hdr_sel         <= 1'b1;
