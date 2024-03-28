@@ -56,7 +56,7 @@ module cc_rd_fill_sm (
 );
 
 // Synchronize  'reading_done'.
-reg reading_done_sync1, reading_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg reading_done_sync1, reading_done_sync2;
 always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;

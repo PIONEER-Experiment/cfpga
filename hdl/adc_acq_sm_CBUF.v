@@ -10,6 +10,7 @@ module adc_acq_sm_cbuf (
     input acq_enable1,                  // indicates enabled for triggers, and fill type
     input acq_trig,                     // trigger the logic to start collecting data
     input reset_clk50,                  // reset from internal logic, synched to CLK50
+    input adc_acq_full_reset,           // reset everything related to ADC acquisition and storage -- now just reset_clk50 synced to adc_clk
     input trig_fifo_empty,              // no trigger address is available for reading yet
     input burst_cntr_zero,              // all sample bursts have been saved
     input ddr3_wr_done,                 // asserted when the 'ddr3_wr_control' is in the DONE state
@@ -20,24 +21,24 @@ module adc_acq_sm_cbuf (
     output reg dummy_dat_reset,         // reset the dummy data counter
     output reg adc_mux_fill_hdr_sel,    // selects fill header
     output reg adc_mux_wfm_hdr_sel,     // selects waveform header
-    output reg adc_mux_dat_sel,         // selects data
+    (*     mark_debug = "true" *) output reg adc_mux_dat_sel,         // selects data
     output reg adc_mux_checksum_select, // selects checksum
     output reg adc_mux_checksum_update, // update the checksum
     output reg burst_cntr_init,         // initialize when triggered
     output reg burst_cntr_en,           // will be enabled once per burst
     output reg fill_cntr_en,            // will be enabled once per fill
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
-    output reg trig_pulse,
+    (*     mark_debug = "true" *) output reg trig_pulse,
     output reg acq_enabled,             // writing triggered data to DDR3 in progress
-    output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
     output reg acq_done,                // acquisition is done
     output reg init_circ_buf_rd_addr,   // initialize the counter with the start of the buffer area to be saved
     output reg inc_circ_buf_rd_addr,    // increment the circular buffer address
-    output reg trig_addr_rd_en,         // read a trigger address from the FIFO
-    output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
+    (*     mark_debug = "true" *) output reg trig_addr_rd_en,         // read a trigger address from the FIFO
+    (*     mark_debug = "true" *) output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
 );
 
+reg adc_acq_mode_enabled; // we are enabled to accept triggers and store data
 
 // synchronize ENABLE and TRIGGER inputs to this clock domain
 reg acq_enable0_sync1, acq_enable0_sync2, acq_enable0_sync3;
@@ -67,30 +68,30 @@ always @(posedge clk) begin
     trig_pulse <= #1 ((acq_trig_sync4 & ~acq_trig_sync5) && adc_acq_mode_enabled);
 end
 
-// sync and combine the external ACQ_RESET and the internal RESET_CLK50
-reg reset_clk50_sync1, reset_clk50_sync2; 
-always @(posedge clk) begin
-    reset_clk50_sync1 <= reset_clk50;
-    reset_clk50_sync2 <= reset_clk50_sync1;
-    adc_acq_full_reset <= reset_clk50_sync2;
-end
-
-// synchronize 'ddr3_wr_done'
-reg ddr3_wr_done_sync1;
-reg ddr3_wr_done_sync2;
-always @ (posedge clk) begin
-    ddr3_wr_done_sync1 <= ddr3_wr_done;
-    ddr3_wr_done_sync2 <= ddr3_wr_done_sync1;
-end
-
 // We are in acquisition mode whenever the ENABLE inputs are not both zero.
 // When they are both zero, we are not running.
-reg adc_acq_mode_enabled; // we are enabled to accept triggers and store data
 always @(posedge clk) begin
     if (acq_enable0_sync4 | acq_enable1_sync4)
         adc_acq_mode_enabled <= 1'b1;
     else
         adc_acq_mode_enabled <= 1'b0;
+end
+
+
+// sync and combine the external ACQ_RESET and the internal RESET_CLK50
+//reg reset_clk50_sync1, reset_clk50_sync2;
+//always @(posedge clk) begin
+//    reset_clk50_sync1 <= reset_clk50;
+//    reset_clk50_sync2 <= reset_clk50_sync1;
+//    adc_acq_full_reset <= reset_clk50_sync2;
+//end
+//assign adc_acq_full_reset = reset_clk50_sync2;
+
+// synchronize 'ddr3_wr_done'
+(* ASYNC_REG = "TRUE" *) reg ddr3_wr_done_sync1, ddr3_wr_done_sync2;
+always @ (posedge clk) begin
+    ddr3_wr_done_sync1 <= ddr3_wr_done;
+    ddr3_wr_done_sync2 <= ddr3_wr_done_sync1;
 end
 
 // The fill type is determined by combining the ENABLE inputs
@@ -151,7 +152,7 @@ end
 
 // lkg -- will need to update the sensitivity list
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr3_wr_done_sync2 )    begin
+always @ (CS or adc_acq_mode_enabled or acq_trig_sync4 or burst_cntr_zero or ddr3_wr_done_sync2 or trig_fifo_empty )    begin
     NS = 17'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case

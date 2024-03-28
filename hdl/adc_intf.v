@@ -5,7 +5,7 @@ module adc_intf(
     input clk,
     input reset,
     input [31:0] data_in,
-    output reg [31:0] data_out,
+    output [31:0] data_out,
     input slow_clk,
     input sclk,
     output sdio,
@@ -320,13 +320,21 @@ end
 //*************************************************************************
 // latch to offload the shift register
 //*************************************************************************
-always @ (posedge clk)
+reg [31:0] data_out_slow;
+always @ (posedge slow_clk)
 begin
 	if (sreg_ready)
-		data_out[31:0] <= {8'b00000000,sreg_in[23:0]};
+		data_out_slow[31:0] <= {8'b00000000,sreg_in[23:0]};
 	else
-		data_out[31:0] <= data_out[31:0];
+		data_out_slow[31:0] <= data_out_slow[31:0];
 end
+sync_2stage #(
+     .WIDTH(32)
+) data_out_sync (
+    .clk(clk),
+    .in(data_out_slow),
+    .out(data_out)
+);
 
 
 //*************************************************************************

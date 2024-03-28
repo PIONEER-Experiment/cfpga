@@ -97,8 +97,8 @@ wire [11:0] laser_num_waveforms;        // number of waveforms to store per trig
 wire [21:0] laser_waveform_gap;            // idle time between waveforms
 wire [11:0] ped_num_waveforms;            // number of waveforms to store per trigger
 wire [21:0] ped_waveform_gap;            // idle time between waveforms
-wire [13:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform
-wire [15:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+wire [13:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform, sync'ed to adc_clk
+wire [15:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform, sync'ed to adc_clk
 
 wire adc_acq_out_valid;
 wire [131:0] ddr3_wr_fifo_dat;          // 132-bit 4-bit tag plus header or ADC data from 'ddr3_write_fifo'
@@ -140,7 +140,7 @@ wire command_sm_idle;
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
 // Connect an input buffer and a global clock buffer to the 50 MHz clock
-wire clk50, clk200, clk250;
+wire clk50, clk200, clk250, clk8;
 
 g2_chan_clks clk_dcm_50_200 (
     // Clock in ports
@@ -148,7 +148,9 @@ g2_chan_clks clk_dcm_50_200 (
     // Clock out ports
     .clk_50M(clk50),        // output, 50 MHz
     .clk_200M(clk200),      // output, 200 MHz
-    .clk_250M(clk250)       // output, 250 MHz
+    .clk_250M(clk250),       // output, 250 MHz
+    .clk_8M(clk8),          // output,   8 MHz
+    .adc_sdclk(adc_sdclk)   // output,   8 MHz 180 deg phase shift
     // Status and control signals
     //.reset(1'b0),         // input, unused reset
     //.locked()             // output, unused locked
@@ -160,7 +162,16 @@ wire gt_clk125, clk125;
 IBUFDS_GTE2 clk125_IBUFDS_GTE2 (.I(xcvr_clk), .IB(xcvr_clk_N), .O(gt_clk125), .CEB(1'b0), .ODIV2());
 BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
 
-wire reset_clk50, reset_clk125;
+// differential clock buffer for the adc clock
+//wire adc_clk;
+IBUFDS adc_clk_IBUFDS_inst (
+   .O(adc_clk),     // 1-bit output: Buffer output
+   .I(adc_clk_p),   // 1-bit input: Diff_p buffer input (connect directly to top-level port)
+   .IB(adc_clk_n)   // 1-bit input: Diff_n buffer input (connect directly to top-level port)
+);
+
+
+wire reset_clk50, reset_clk125, adc_acq_full_reset;
 
 // synchronous reset logic
 startup_reset startup_reset (
@@ -168,9 +179,11 @@ startup_reset startup_reset (
     .rst_from_master(full_reset), // external reset of all acquisition logic
     .clk50(clk50),                // 50 MHz buffered clock 
     .clk125(clk125),              // buffered clock, 125 MHz
+    .adc_clk(adc_clk),            // clock from the ADC
     // outputs
     .reset_clk50(reset_clk50),    // active-high reset output, goes low after startup
-    .reset_clk125(reset_clk125)   // active-high reset output, goes low after startup
+    .reset_clk125(reset_clk125),  // active-high reset output, goes low after startup
+    .adc_acq_full_reset(adc_acq_full_reset) // active-high reset output, goes low after startup
 );
 
 
@@ -249,9 +262,10 @@ adc_acq_top_cbuf adc_acq_top_cbuf (
     .adc_in_n(adc_in_n[11:0]),                           // [11:0] array of ADC 'n' data pins
     .adc_ovr_p(adc_dovrp),                               // ADC 'p' over-range pin
     .adc_ovr_n(adc_dovrn),                               // ADC 'n' over-range pin
-    .adc_clk_p(adc_clk_p),                               // ADC 'p' clk pin
-    .adc_clk_n(adc_clk_n),                               // ADC 'n' clk pin
-    .reset_clk50(reset_clk50),                           // synchronously negated  
+    .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
+//    .adc_clk_p(adc_clk_p),                               // ADC 'p' clk pin
+//    .adc_clk_n(adc_clk_n),                               // ADC 'n' clk pin
+    .reset_clk50(reset_clk50),                           // synchronously negated
     .clk200(clk200),                                     // for input pin timing delay settings
     .channel_tag(channel_tag[11:0]),                     // stuff about the channel to put in the header
     .initial_fill_num(initial_fill_num[23:0]),           // event number to assign to the first fill
@@ -272,7 +286,6 @@ adc_acq_top_cbuf adc_acq_top_cbuf (
     .fill_num(fill_num[23:0]),                           // fill number for this fill
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
-    .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
     .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .acq_done(acq_done),                                 // acquisition is done
     .packed_adc_dat(packed_adc_dat[25:0]),               // 
@@ -368,7 +381,10 @@ ddr3_read_fifo ddr3_read_fifo(
     .m_axis_tready(ddr3_rd_fifo_output_tready),
     .m_axis_tdata(ddr3_rd_fifo_output_dat[127:0]),
     .m_axis_tlast(ddr3_rd_fifo_output_tlast),
-    .axis_prog_full(ddr3_rd_fifo_almost_full)
+    .axis_prog_full(ddr3_rd_fifo_almost_full),
+    .wr_rst_busy(),        // output wire wr_rst_busy
+    .rd_rst_busy()         // output wire rd_rst_busy
+
 );
 
 // Create a width converter to change the 128-bit data to 32-bit data
@@ -516,6 +532,7 @@ command_top command_top (
     .resetN(reset_clk125N),    // active-lo reset for the interconnect side of the FIFOs
     .cnt_reset(evt_cnt_reset), // reset, for fill number count
     .adc_clk(adc_clk),         // ADC clock
+    .tap_clk(clk200),          // tap delay clock used by selectio
 
     // channel 0 connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
@@ -603,6 +620,7 @@ adc_intf adc_intf(
     .reset(reset_clk50),
     .data_in(adc_intf_wr_data[31:0]),
     .data_out(adc_intf_rd_data[31:0]),
+    .slow_clk(clk8),
     .sclk(adc_sdclk),
     .sdio(adc_sdio),
     .sdi(adc_sdo),

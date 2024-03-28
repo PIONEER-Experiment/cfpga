@@ -240,11 +240,18 @@ module one_channel(
 
   // connect a reset module
   // the names of I/O ports are confusing
+  wire reset_sync_user_clk;
+  sync_2stage reset_sync_user_clk_inst (
+      .clk(aurora_user_clk),
+      .in(clk50_reset),
+      .out(reset_sync_user_clk)
+  );
+
   aurora_8b10b_0_SUPPORT_RESET_LOGIC reset_logic (
     // inputs
     .INIT_CLK_IN(clk50),              // 50 MHz utility clock, always running
     .GT_RESET_IN(clk50_reset),        // incoming reset signal, negated synchronously to 'clk50'
-    .RESET(clk50_reset),               // direct input to 'user_clk' domain, activates 'system_reset'
+    .RESET(reset_sync_user_clk),      // direct input to 'user_clk' domain, activates 'system_reset'
     .USER_CLK(aurora_user_clk),       // Aurora interface clock, 250 MHz, goes away at times
    // outputs
     .SYSTEM_RESET(system_reset),      // local reset signal in 'aurora_user_clk' domain

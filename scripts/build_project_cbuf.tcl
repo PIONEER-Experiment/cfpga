@@ -60,21 +60,45 @@ if {[string equal [get_filesets -quiet constrs_1] ""]} {
   create_fileset -constrset constrs_1
 }
 
+# Create 'constrs_impl_1' fileset (if not found)
+if {[string equal [get_filesets -quiet constrs_impl_1] ""]} {
+  create_fileset -constrset constrs_impl_1
+}
+
 # Set 'constrs_1' fileset object
 set obj [get_filesets constrs_1]
 
-# Add/Import constrs file and set constrs file properties
+# Add/Import constrs file and set constrs file properties that will be used in synthesis
 foreach file_temp [glob $origin_dir/constraints/*.xdc] {
-	set file "[file normalize "$file_temp"]"
-	set file_added [add_files -norecurse -fileset $obj $file]
-	set file "$file_temp"
-	set file [file normalize $file]
-	set file_obj [get_files -of_objects [get_filesets constrs_1] [list "*$file"]]
-	set_property "file_type" "XDC" $file_obj
+  if {[string first impl $file_temp 0] == -1} {
+    set file "[file normalize "$file_temp"]"
+    set file_added [add_files -norecurse -fileset $obj $file]
+    set file "$file_temp"
+    set file [file normalize $file]
+    set file_obj [get_files -of_objects [get_filesets constrs_1] [list "*$file"]]
+    set_property "file_type" "XDC" $file_obj
+  }
 }
 
 # Set 'constrs_1' fileset properties
-set obj [get_filesets constrs_1]
+#set obj [get_filesets constrs_1]
+
+# Set 'constrs_impl_1' fileset object
+set obj [get_filesets constrs_impl_1]
+
+# Add/Import constrs file and set constrs file properties that will be used in implementation
+foreach file_temp [glob $origin_dir/constraints/*.xdc] {
+  set file "[file normalize "$file_temp"]"
+  set file_added [add_files -norecurse -fileset $obj $file]
+  set file "$file_temp"
+  set file [file normalize $file]
+  set file_obj [get_files -of_objects [get_filesets constrs_impl_1] [list "*$file"]]
+  set_property "file_type" "XDC" $file_obj
+}
+
+# Set 'constrs_impl_1' fileset properties
+set obj [get_filesets constrs_impl_1]
+
 
 # Create 'sim_1' fileset (if not found)
 if {[string equal [get_filesets -quiet sim_1] ""]} {
@@ -99,10 +123,10 @@ set_property "top" "channel_main_cbuf_tb1" $obj
 
 # Create 'synth_1' run (if not found)
 if {[string equal [get_runs -quiet synth_1] ""]} {
-  create_run -name synth_1 -part xc7k70tfbg484-2 -flow {Vivado Synthesis 2014} -strategy "Vivado Synthesis Defaults" -constrset constrs_1
+  create_run -name synth_1 -part xc7k70tfbg484-2 -flow {Vivado Synthesis 2023} -strategy "Vivado Synthesis Defaults" -constrset constrs_1
 } else {
   set_property strategy "Vivado Synthesis Defaults" [get_runs synth_1]
-  set_property flow "Vivado Synthesis 2014" [get_runs synth_1]
+  set_property flow "Vivado Synthesis 2023" [get_runs synth_1]
 }
 set obj [get_runs synth_1]
 set_property "part" "xc7k70tfbg484-2" $obj
@@ -114,10 +138,13 @@ current_run -synthesis [get_runs synth_1]
 
 # Create 'impl_1' run (if not found)
 if {[string equal [get_runs -quiet impl_1] ""]} {
-  create_run -name impl_1 -part xc7k70tfbg484-2 -flow {Vivado Implementation 2014} -strategy "Vivado Implementation Defaults" -constrset constrs_1 -parent_run synth_1
+  create_run -name impl_1 -part xc7k70tfbg484-2 -flow {Vivado Implementation 2023} -strategy "Vivado Implementation Defaults" -constrset constrs_impl_1 -parent_run synth_1
+  # create_run -name impl_1 -part xc7k70tfbg484-2 -flow {Vivado Implementation 2023} -strategy "Performance_Explore" -constrset constrs_impl_1 -parent_run synth_1
 } else {
+                                   set_property strategy "Performance_Explore" [get_runs impl_1]
   set_property strategy "Vivado Implementation Defaults" [get_runs impl_1]
-  set_property flow "Vivado Implementation 2014" [get_runs impl_1]
+  # set_property flow "Vivado Implementation 2023" [get_runs impl_1]
+  set_property constrset "constrs_impl_1" [get_runs impl_1]
 }
 set obj [get_runs impl_1]
 set_property "part" "xc7k70tfbg484-2" $obj
@@ -127,4 +154,4 @@ set_property "steps.write_bitstream.tcl.post" "[file normalize "$origin_dir/scri
 # set the current impl run
 current_run -implementation [get_runs impl_1]
 
-puts "INFO: Project created: WFD_Channel_ASYNC"
+puts "INFO: Project created: WFD_Channel_CBUF"

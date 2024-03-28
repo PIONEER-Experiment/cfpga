@@ -7,8 +7,9 @@ module adc_acq_top_cbuf(
     input [11:0] adc_in_n,  // [11:0] array of ADC 'n' data pins
     input adc_ovr_p,// ADC 'p' over-range pin
     input adc_ovr_n,// ADC 'n' over-range pin
-    input adc_clk_p,// ADC 'p' clk pin
-    input adc_clk_n,// ADC 'n' clk pin
+    input adc_clk,  // ADC clock used by the FIFO
+    //input adc_clk_p,// ADC 'p' clk pin
+    //input adc_clk_n,// ADC 'n' clk pin
     input reset_clk50,  // synchronously negated
     input clk200,   // for input pin timing delay settings
     input [11:0] channel_tag,   // stuff about the channel to put in the header
@@ -18,6 +19,7 @@ module adc_acq_top_cbuf(
     input acq_enable1,  // indicates enabled for triggers, and fill type
     input acq_trig, // trigger the logic to start collecting data
     input adc_buf_delay_data_reset, // use the new delay settings
+    input adc_acq_full_reset,  // reset all aspects of data collection/storage/readout
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
     input ddr3_wr_done, // asserted when the 'ddr3_wr_control' is in the DONE state
     input [13:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform
@@ -29,8 +31,6 @@ module adc_acq_top_cbuf(
     output [23:0] fill_num, // fill number for this fill
     output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,   // current data should be stored in the FIFO
-    output adc_clk, // ADC clock used by the FIFO
-    output adc_acq_full_reset,  // reset all aspects of data collection/storage/readout
     output acq_done,// acquisition is done
     output [25:0] packed_adc_dat,   // two samples, with over-range bits, packed in one wide-word
     //   bit[0]  = first overrange
@@ -44,8 +44,8 @@ wire [1:0] fill_type;           // to determine how much data to collect
 wire [22:0] burst_start_adr;// first DDR3 burst memory location for this fill (3 LSBs = 0)
 wire [25:0] circ_buf_wr_dat;   // data to write to the circular buffer
 wire [15:0] circ_buf_wr_addr;    // address to write to the circular buffer
-wire [25:0] circ_buf_rd_dat;     // data read from the circular buffer
-reg [15:0] circ_buf_rd_addr;   // address to read from the circular buffer
+(*     mark_debug = "true" *) wire [25:0] circ_buf_rd_dat;     // data read from the circular buffer
+(*     mark_debug = "true" *) reg [15:0] circ_buf_rd_addr;   // address to read from the circular buffer
 wire [15:0] circ_buf_trig_addr;   // circular buffer address corresponding to a trigger, FIFO output
 wire [11:0] current_waveform_num;// the current waveform number, to be used in header
 
@@ -86,14 +86,14 @@ end
 //end
 wire trig_pulse;
 
-// synchronize the 'reset_clk50' signal to the 'adc_clk'
-reg reset_sync1, reset_sync2;
-wire reset_clk_adc;
-always @ (posedge adc_clk) begin
-    reset_sync1 <= #1 reset_clk50;
-    reset_sync2 <= #1 reset_sync1;
-end
-assign reset_clk_adc = reset_sync2;
+//// synchronize the 'reset_clk50' signal to the 'adc_clk'
+//reg reset_sync1, reset_sync2;
+//wire reset_clk_adc;
+//always @ (posedge adc_clk) begin
+//    reset_sync1 <= #1 reset_clk50;
+//    reset_sync2 <= #1 reset_sync1;
+//end
+//assign reset_clk_adc = reset_sync2;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Use channel_tag[3] to select either real ADC data or dummy data from a counter
@@ -128,9 +128,10 @@ adc_to_circ_buf_ASYNC adc_to_circ_buf_ASYNC (
     .adc_in_n(adc_in_n[11:0]), // [11:0] array of ADC 'n' data pins
     .adc_ovr_p(adc_ovr_p),  // ADC 'p' over-range pin
     .adc_ovr_n(adc_ovr_n),  // ADC 'n' over-range pin
-    .adc_clk_p(adc_clk_p),  // ADC 'p' clk pin
-    .adc_clk_n(adc_clk_n),  // ADC 'n' clk pin
-    .reset_clk_adc(reset_clk_adc),// synched to adc_clk
+    .adc_clk(adc_clk),  // 400 MHz ADC clock
+    //.adc_clk_p(adc_clk_p),  // ADC 'p' clk pin
+    //.adc_clk_n(adc_clk_n),  // ADC 'n' clk pin
+    .reset_clk_adc(adc_acq_full_reset),// synched to adc_clk
     .clk200(clk200),// for input pin timing delay settings
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]), // 5 delay-tap-bits per line, all lines always all the same
@@ -140,41 +141,57 @@ adc_to_circ_buf_ASYNC adc_to_circ_buf_ASYNC (
     .use_dummy_data(use_dummy_data), // if true, use counter instead of ADC
     .trig_pulse(trig_pulse),   // single-period pulse from 'acq_trig' input
     // outputs
-    .adc_clk(adc_clk),  // 400 MHz ADC clock
     .packed_adc_dat(packed_adc_dat[25:0]),
     .adc_buf_current_data_delay(adc_buf_current_data_delay), // 13 lines *5 bits/line, current tap settings
     .circ_buf_wr_addr(circ_buf_wr_addr[15:0]),   // address to store data in circular buffer
     .circ_buf_wr_dat(circ_buf_wr_dat[25:0])  // data to store in the circular buffer
 );
 
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// connect a dual-port circular buffer. It is 26-bits wide and 64k deep. Both sides are clocked
-// by the 'adc_clk'.
-circular_buffer circular_buffer (
-    .clka(adc_clk),               // 400 MHz ADC DDR clock
-    .wea(cbuf_wr_en),            // enable writing
-    .addra(circ_buf_wr_addr[15:0]),   // write address
-    // for debug, apply the address to the data port as well
-    .dina(circ_buf_wr_dat[25:0]),      // 26-bit wide input data
-    //.dina({9'b0,circ_buf_wr_addr[15:0],1'b0}),      // address used to create the 26-bit wide input data
-    .clkb(adc_clk),               // 400 MHz ADC DDR clock
-    .addrb(circ_buf_rd_addr[15:0]),   // read address
-    .doutb(circ_buf_rd_dat[25:0])      // 26-bit wide output data
-);
+// connect 13 dual-port circular buffers, each 2-bits wide and 64k deep. Both sides are clocked
+// by the 'adc_clk'.  The write information is pipelined
+genvar i;
+generate
+    for (i = 0; i < 13; i = i + 1 ) begin : loop
+        pipelined_circular_buffer pipelined_circular_buffer_inst (
+           .adc_clk(adc_clk),                            // 400 MHz ADC DDR clock
+           .cbuf_wr_en(cbuf_wr_en),                      // enable writing
+           .circ_buf_wr_addr(circ_buf_wr_addr[15:0]),    // write address
+           .circ_buf_wr_dat(circ_buf_wr_dat[2*i+1:2*i]), // 2-bit wide input data
+           .circ_buf_rd_addr(circ_buf_rd_addr[15:0]),    // read address
+           .circ_buf_rd_dat(circ_buf_rd_dat[2*i+1:2*i])  // 2-bit wide output data
+        );
+    end
+endgenerate
+
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////
+// // connect a dual-port circular buffer. It is 26-bits wide and 64k deep. Both sides are clocked
+// // by the 'adc_clk'.
+// circular_buffer circular_buffer (
+//     .clka(adc_clk),               // 400 MHz ADC DDR clock
+//     .wea(cbuf_wr_en),            // enable writing
+//     .addra(circ_buf_wr_addr[15:0]),   // write address
+//     // for debug, apply the address to the data port as well
+//     .dina(circ_buf_wr_dat[25:0]),      // 26-bit wide input data
+//     //.dina({9'b0,circ_buf_wr_addr[15:0],1'b0}),      // address used to create the 26-bit wide input data
+//     .clkb(adc_clk),               // 400 MHz ADC DDR clock
+//     .addrb(circ_buf_rd_addr[15:0]),   // read address
+//     .doutb(circ_buf_rd_dat[25:0])      // 26-bit wide output data
+// );
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a FIFO that will hold the value of the 'write' address for each trigger point.
 circ_buf_fifo circ_buf_fifo (
-    .clk(adc_clk),               // 400 MHz ADC DDR clock
-    .rst(reset_clk_adc),             // reset from the Master FPGA
-    .din(circ_buf_wr_addr[15:0]),      // current 'write' address
-    .wr_en(trig_pulse),             // single-period pulse from 'acq_trig' input
+    .clk(adc_clk),                   // 400 MHz ADC DDR clock
+    .rst(adc_acq_full_reset),        // reset from the Master FPGA
+    .din(circ_buf_wr_addr[15:0]),    // current 'write' address
+    .wr_en(trig_pulse),              // single-period pulse from 'acq_trig' input
     .rd_en(trig_addr_rd_en),         // read a trigger address from the FIFO
-    .dout(circ_buf_trig_addr[15:0]),   // circular bufferr address corresponding to a trigger
-    .full(),                     // 'full' is not used
-    .empty(trig_fifo_empty)         // no triggers available when asserted
+    .dout(circ_buf_trig_addr[15:0]), // circular bufferr address corresponding to a trigger
+    .full(),                         // 'full' is not used
+    .empty(trig_fifo_empty)          // no triggers available when asserted
 );
 
 wire initial_fill_num_wr_sync;
@@ -297,6 +314,7 @@ adc_acq_sm_cbuf adc_acq_sm_cbuf (
     .acq_enable1(acq_enable1),  // enable the logic to accept triggers
     .acq_trig(acq_trig),// trigger the logic to start collecting data
     .reset_clk50(reset_clk50),  // synchronously negated
+    .adc_acq_full_reset(adc_acq_full_reset),// synchronously negated
     .trig_fifo_empty(trig_fifo_empty),  // a trigger address is available
     .burst_cntr_zero(burst_cntr_zero),  // all sample bursts have been saved
     .ddr3_wr_done(ddr3_wr_done),// asserted when the 'ddr3_wr_control' is in the DONE state
@@ -316,7 +334,6 @@ adc_acq_sm_cbuf adc_acq_sm_cbuf (
     .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
     .trig_pulse(trig_pulse), // pulsified acq_trig signal
     .acq_enabled(acq_enabled),  // writing triggered data to DDR3 in progress
-    .adc_acq_full_reset(adc_acq_full_reset),// synchronously negated
     .acq_done(acq_done),// acquisition is done
     .init_circ_buf_rd_addr(init_circ_buf_rd_addr), // initialize the counter with the start of the buffer area to be saved
     .inc_circ_buf_rd_addr(inc_circ_buf_rd_addr),   // increment the circular buffer address

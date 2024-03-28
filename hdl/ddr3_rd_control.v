@@ -33,7 +33,7 @@ module ddr3_rd_control (
 
 // synchronize the 'enable_reading' request to the DDR3 clock domain.
 // Also, make a single period pulse for initialization
-reg enable_reading_sync1, enable_reading_sync2, enable_reading_sync3;
+(* ASYNC_REG = "TRUE" *) reg enable_reading_sync1, enable_reading_sync2, enable_reading_sync3;
 reg enable_reading_pulse;
 always @(posedge clk) begin
 	enable_reading_sync1 <= enable_reading;

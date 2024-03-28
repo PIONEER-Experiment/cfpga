@@ -50,14 +50,14 @@ module ddr3_intf_cbuf(
 );
 
 //synchronize the 'reset' signal
-reg reset_sync1, reset_sync2;
+(* ASYNC_REG = "TRUE" *) reg reset_sync1, reset_sync2;
 always @(posedge sysclk) begin
     reset_sync1 <= reset;
     reset_sync2 <= reset_sync1;
 end
 
 //synchronize the 'acq_enabled' signal
-reg acq_enabled_sync1, acq_enabled_sync2;
+(* ASYNC_REG = "TRUE" *) reg acq_enabled_sync1, acq_enabled_sync2;
 always @(posedge ddr3_domain_clk) begin
     acq_enabled_sync1 <= acq_enabled;
     acq_enabled_sync2 <= acq_enabled_sync1;
@@ -215,8 +215,9 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     .app_zq_req(1'b0),                              // input, request a ZQ calibration
     .app_zq_ack(),                                  // output, a ZQ calibration has been requested
     .init_calib_complete(init_calib_complete),      // output, PHY calibration is done
-    .device_temp_i(xadc_temp[11:0])                 // input, temperature measured by XADC
-    // Debug Ports
+    .device_temp_i(xadc_temp[11:0]),                // input, temperature measured by XADC
+    .device_temp()                                  // output,
+   // Debug Ports
     // .ddr3_ila_basic(ddr3_ila_basic),
     // .ddr3_ila_wrpath(ddr3_ila_wrpath),
     // .ddr3_ila_rdpath(ddr3_ila_rdpath),
