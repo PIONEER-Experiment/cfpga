@@ -25,8 +25,8 @@ module adc_to_circ_buf_ASYNC (
                                     // bit[12]     = second overrange
                                     // bits[25:13] = second ADC sample
     output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
-    (*     mark_debug = "true" *) output reg [15:0] circ_buf_wr_addr,	      // address to store data in circular buffer
-    (*     mark_debug = "true" *) output reg [25:0] circ_buf_wr_dat	      // data to store in the circular buffer
+    (* mark_debug = "true" *) output reg [15:0] circ_buf_wr_addr,	      // address to store data in circular buffer
+    (* mark_debug = "true" *) output reg [25:0] circ_buf_wr_dat	      // data to store in the circular buffer
 );
                                  
 // We need a node called 'adc_acq_full_reset' in order to use the same timin constraint file for

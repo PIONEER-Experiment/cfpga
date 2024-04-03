@@ -226,7 +226,7 @@ module one_channel(
     .PLL_NOT_LOCKED(pll_not_locked)
   );
 
-// lkg (02/2023) -- the clock compensation now kept within core.
+// lkg (02/2024) -- the clock compensation now kept within core.
 //  // connect a clock-compensation module for this channel
 //  aurora_8b10b_0_STANDARD_CC_MODULE standard_cc_module (
 //    .RESET(rst_cc_module_i),
@@ -258,7 +258,7 @@ module one_channel(
     .GT_RESET_OUT(local_gt_reset)     // local reset signal in 'clk50' domain 
   );
 
-// lkg (02/2023) -- the clock compensation now kept within core.
+// lkg (02/2024) -- the clock compensation now kept within core.
 //  //SLACK Registers
 //  // This is from the example code. I don't know what it does.
 //  reg lane_up_r, lane_up_r2;

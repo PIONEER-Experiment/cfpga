@@ -97,8 +97,8 @@ wire [11:0] laser_num_waveforms;        // number of waveforms to store per trig
 wire [21:0] laser_waveform_gap;            // idle time between waveforms
 wire [11:0] ped_num_waveforms;            // number of waveforms to store per trigger
 wire [21:0] ped_waveform_gap;            // idle time between waveforms
-wire [13:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform, sync'ed to adc_clk
-wire [15:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform, sync'ed to adc_clk
+wire [13:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform
+wire [15:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
 wire adc_acq_out_valid;
 wire [131:0] ddr3_wr_fifo_dat;          // 132-bit 4-bit tag plus header or ADC data from 'ddr3_write_fifo'
@@ -274,6 +274,7 @@ adc_acq_top_cbuf adc_acq_top_cbuf (
     .acq_enable1(acq_enable1),                           // indicates enabled for triggers, and fill type
     .acq_trig(acq_trig),                                 // trigger the logic to start collecting data
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
+    .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
     .async_num_bursts(async_num_bursts[13:0]),           // number of 8-sample bursts in an ASYNC waveform
@@ -286,7 +287,6 @@ adc_acq_top_cbuf adc_acq_top_cbuf (
     .fill_num(fill_num[23:0]),                           // fill number for this fill
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
-    .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .acq_done(acq_done),                                 // acquisition is done
     .packed_adc_dat(packed_adc_dat[25:0]),               // 
     .adc_acq_sm_idle(adc_acq_sm_idle)                    // ADC acquisition state machine is idle (used for front panel LED status)

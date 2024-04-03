@@ -7,9 +7,10 @@ module adc_acq_top(
     input [11:0] adc_in_n,          // [11:0] array of ADC 'n' data pins
     input adc_ovr_p,                // ADC 'p' over-range pin
     input adc_ovr_n,                // ADC 'n' over-range pin
-    input adc_clk_p,                // ADC 'p' clk pin
-    input adc_clk_n,                // ADC 'n' clk pin
-    input reset_clk50,              // synchronously negated  
+    input adc_clk,  // ADC clock used by the FIFO
+    // input adc_clk_p,                // ADC 'p' clk pin
+    // input adc_clk_n,                // ADC 'n' clk pin
+    input reset_clk50,              // synchronously negated
     input clk200,                   // for input pin timing delay settings
     input [11:0] channel_tag,       // stuff about the channel to put in the header
     input [22:0] muon_num_bursts,   // number of sample bursts in a MUON fill
@@ -20,6 +21,7 @@ module adc_acq_top(
     input acq_enable0,              // indicates enabled for triggers, and fill type
     input acq_enable1,              // indicates enabled for triggers, and fill type
     input acq_trig,                 // trigger the logic to start collecting data
+    input adc_acq_full_reset,       // reset all aspects of data collection/storage/readout
     input adc_buf_delay_data_reset, // use the new delay settings
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
     input ddr3_wr_done,             // asserted when the 'ddr3_wr_control' is in the DONE state
@@ -36,8 +38,6 @@ module adc_acq_top(
     output [23:0] fill_num,         // fill number for this fill
     output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,       // current data should be stored in the FIFO
-    output adc_clk,                 // ADC clock used by the FIFO
-    output adc_acq_full_reset,      // reset all aspects of data collection/storage/readout
     output acq_done,                // acquisition is done
     output [25:0] packed_adc_dat,   // two samples, with over-range bits, packed in one wide-word
                                     //   bit[0]      = first overrange
@@ -67,9 +67,10 @@ assign acq_enabled = acq_enable0 | acq_enable1;
 selectio_wiz_0 adc_dat_buf (
     .data_in_from_pins_p({adc_in_p[11:0],adc_ovr_p}),    // [12:0] array of ADC 'p' data pins and over-range
     .data_in_from_pins_n({adc_in_n[11:0],adc_ovr_n}),    // [12:0] array of ADC 'n' data pins and over-range
-    .clk_in_p(adc_clk_p),                                // ADC 'p' clk pin
-    .clk_in_n(adc_clk_n),                                // ADC 'n' clk pin
-    .io_reset(adc_acq_full_reset),                       // synchronously negated 
+    .clk_in(adc_clk),                                    // 400 MHz clock from adc
+    //.clk_in_p(adc_clk_p),                                // ADC 'p' clk pin
+    //.clk_in_n(adc_clk_n),                                // ADC 'n' clk pin
+    .io_reset(adc_acq_full_reset),                       // synchronously negated
     .in_delay_reset(adc_buf_delay_data_reset),           // input wire in_delay_reset
     .in_delay_tap_in({13{adc_buf_data_delay[4:0]}}),     // 13 input lines, 5 delay-tap-bits per line, always all the same
     .in_delay_tap_out(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings 
@@ -77,7 +78,6 @@ selectio_wiz_0 adc_dat_buf (
     .in_delay_data_inc({13{1'b0}}),                      // 'inc' is unused
     .delay_clk(clk200),
     .ref_clock(clk200),                                  // 200 MHz clock required to ensure tap value settings
-    .clk_out(adc_clk),                                   // normal rising-edge clock
     .data_in_to_device(packed_adc_dat),                  // twice-as-wide SDR data
     .delay_locked()                                      // not used
 );
@@ -190,7 +190,7 @@ adc_dat_mux adc_dat_mux (
     .num_fill_bursts(num_fill_bursts[22:0]),    // number of 8(or 10) sample bursts
     .burst_start_adr(burst_start_adr[22:0]),    // first DDR3 burst memory location (3 LSBs=0) for this fill
     .num_waveforms(num_waveforms[11:0]),	    // number of waveforms to store per trigger
-	.current_waveform_num(current_waveform_num[11:0]),// the current waveform number, to be used in header
+    .current_waveform_num(current_waveform_num[11:0]),// the current waveform number, to be used in header
     .waveform_gap(waveform_gap[21:0]),	    	// idle time between waveforms
     .fill_num(fill_num[23:0]),                  // fill number for this fill
     .xadc_alarms(xadc_alarms[3:0]),
@@ -290,11 +290,12 @@ adc_acq_sm adc_acq_sm (
     .acq_enable1(acq_enable1),              // enable the logic to accept triggers
     .acq_trig(acq_trig),                    // trigger the logic to start collecting data
     .reset_clk50(reset_clk50),              // synchronously negated
+    .adc_acq_full_reset(adc_acq_full_reset),// synchronously negated
     .burst_cntr_zero(burst_cntr_zero),      // all sample bursts have been saved
     .waveform_gap_zero(waveform_gap_zero),  // the idle time has elapsed
     .last_waveform(last_waveform),  		// all waveforms have been saved
     .ddr3_wr_done(ddr3_wr_done),            // asserted when the 'ddr3_wr_control' is in the DONE state
-	.dummy_dat_reset_mode(dummy_dat_reset_mode),// channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
+    .dummy_dat_reset_mode(dummy_dat_reset_mode),// channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
     // outputs
     .fill_type(fill_type[1:0]),             // determine which burst count to use
     .fill_type_mux_en(fill_type_mux_en),    // enable choosing one of the burst counts
@@ -315,7 +316,6 @@ adc_acq_sm adc_acq_sm (
     .waveform_gap_cntr_init(waveform_gap_cntr_init),          // initialize after previous waveform stored
     .waveform_gap_cntr_en(waveform_gap_cntr_en),          // enable after each initialization
 
-    .adc_acq_full_reset(adc_acq_full_reset),// synchronously negated 
     .acq_done(acq_done),                    // acquisition is done
     .sm_idle(adc_acq_sm_idle)               // state machine is idle
 );      

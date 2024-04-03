@@ -160,7 +160,15 @@ wire gt_clk125, clk125;
 IBUFDS_GTE2 clk125_IBUFDS_GTE2 (.I(xcvr_clk), .IB(xcvr_clk_N), .O(gt_clk125), .CEB(1'b0), .ODIV2());
 BUFG BUFG_clk125 (.I(gt_clk125), .O(clk125));
 
-wire reset_clk50, reset_clk125;
+// differential clock buffer for the adc clock
+//wire adc_clk;
+IBUFDS adc_clk_IBUFDS_inst (
+   .O(adc_clk),     // 1-bit output: Buffer output
+   .I(adc_clk_p),   // 1-bit input: Diff_p buffer input (connect directly to top-level port)
+   .IB(adc_clk_n)   // 1-bit input: Diff_n buffer input (connect directly to top-level port)
+);
+
+wire reset_clk50, reset_clk125, adc_acq_full_reset;
 
 // synchronous reset logic
 startup_reset startup_reset (
@@ -168,9 +176,11 @@ startup_reset startup_reset (
     .rst_from_master(full_reset), // external reset of all acquisition logic
     .clk50(clk50),                // 50 MHz buffered clock 
     .clk125(clk125),              // buffered clock, 125 MHz
+    .adc_clk(adc_clk),            // clock from the ADC
     // outputs
     .reset_clk50(reset_clk50),    // active-high reset output, goes low after startup
-    .reset_clk125(reset_clk125)   // active-high reset output, goes low after startup
+    .reset_clk125(reset_clk125),  // active-high reset output, goes low after startup
+    .adc_acq_full_reset(adc_acq_full_reset) // active-high reset output, goes low after startup
 );
 
 
@@ -249,10 +259,12 @@ adc_acq_top adc_acq_top (
     .adc_in_n(adc_in_n[11:0]),                           // [11:0] array of ADC 'n' data pins
     .adc_ovr_p(adc_dovrp),                               // ADC 'p' over-range pin
     .adc_ovr_n(adc_dovrn),                               // ADC 'n' over-range pin
-    .adc_clk_p(adc_clk_p),                               // ADC 'p' clk pin
-    .adc_clk_n(adc_clk_n),                               // ADC 'n' clk pin
-    .reset_clk50(reset_clk50),                           // synchronously negated  
+    .adc_clk(adc_clk),                                       // ADC clock used by the FIFO
+    //.adc_clk_p(adc_clk_p),                               // ADC 'p' clk pin
+    //.adc_clk_n(adc_clk_n),                               // ADC 'n' clk pin
+    .reset_clk50(reset_clk50),                           // synchronously negated
     .clk200(clk200),                                     // for input pin timing delay settings
+    .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .channel_tag(channel_tag[11:0]),                     // stuff about the channel to put in the header
     .muon_num_bursts(muon_num_bursts[22:0]),             // number of sample bursts in a MUON fill
     .laser_num_bursts(laser_num_bursts[22:0]),           // number of sample bursts in a LASER fill
@@ -279,8 +291,6 @@ adc_acq_top adc_acq_top (
     .fill_num(fill_num[23:0]),                           // fill number for this fill
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
-    .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
-    .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .acq_done(acq_done),                                 // acquisition is done
     .packed_adc_dat(packed_adc_dat[25:0]),               // 
     .adc_acq_sm_idle(adc_acq_sm_idle)                    // ADC acquisition state machine is idle (used for front panel LED status)
@@ -526,6 +536,7 @@ command_top command_top (
     .resetN(reset_clk125N),    // active-lo reset for the interconnect side of the FIFOs
     .cnt_reset(evt_cnt_reset), // reset, for fill number count
     .adc_clk(adc_clk),         // ADC clock
+    .tap_clk(clk200),          // tap delay clock used by selectio
 
     // channel 0 connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs

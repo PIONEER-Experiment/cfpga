@@ -92,12 +92,12 @@ wire [22:0] laser_num_bursts;           // number of sample bursts in a LASER fi
 wire [22:0] ped_num_bursts;             // number of sample bursts in a PEDESTAL fill
 wire [23:0] initial_fill_num;           // event number to assign to the first fill
 wire [131:0] adc_acq_out_dat;           // 132-bit 4-bit tag plus header or ADC data to 'ddr3_write_fifo'
-wire [11:0] muon_num_waveforms;			// number of waveforms to store per trigger
-wire [21:0] muon_waveform_gap;			// idle time between waveforms 
-wire [11:0] laser_num_waveforms;		// number of waveforms to store per trigger
-wire [21:0] laser_waveform_gap;			// idle time between waveforms 
-wire [11:0] ped_num_waveforms;			// number of waveforms to store per trigger
-wire [21:0] ped_waveform_gap;			// idle time between waveforms 
+wire [11:0] muon_num_waveforms;         // number of waveforms to store per trigger
+wire [21:0] muon_waveform_gap;          // idle time between waveforms
+wire [11:0] laser_num_waveforms;        // number of waveforms to store per trigger
+wire [21:0] laser_waveform_gap;         // idle time between waveforms
+wire [11:0] ped_num_waveforms;          // number of waveforms to store per trigger
+wire [21:0] ped_waveform_gap;           // idle time between waveforms
 wire [13:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform
 wire [15:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
@@ -149,7 +149,7 @@ g2_chan_clks clk_dcm_50_200 (
     // Clock out ports
     .clk_50M(clk50),        // output, 50 MHz
     .clk_200M(clk200),      // output, 200 MHz
-    .clk_250M(clk250)       // output, 250 MHz
+    .clk_250M(clk250),      // output, 250 MHz
     .clk_8M(clk8),          // output,   8 MHz
     .adc_sdclk(adc_sdclk)   // output,   8 MHz 180 deg phase shift
     // Status and control signals
@@ -182,7 +182,6 @@ startup_reset startup_reset(
     .adc_clk(adc_clk),            // clock from the ADC
     // outputs
     .reset_clk50(reset_clk50),    // active-high reset output, goes low after startup
-    .reset_clk125(reset_clk125)   // active-high reset output, goes low after startup
     .reset_clk125(reset_clk125),  // active-high reset output, goes low after startup
     .adc_acq_full_reset(adc_acq_full_reset) // active-high reset output, goes low after startup
 );
@@ -274,15 +273,16 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .ext_enable0(acq_enable0),                           // external 'enable' for triggers, and fill type
     .ext_enable1(acq_enable1),                           // external 'enable' for triggers, and fill type
     .ext_trig(acq_trig),                                 // external trigger to start collecting data
+    .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
-	  .async_num_bursts(async_num_bursts[13:0]),           // number of 8-sample bursts in an ASYNC waveform
+     .async_num_bursts(async_num_bursts[13:0]),           // number of 8-sample bursts in an ASYNC waveform
     .async_pre_trig(async_pre_trig[15:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
-    .ddr3_wr_en(ddr3_wr_en),							// writing of triggered events to memory is enabled
+    .ddr3_wr_en(ddr3_wr_en),                     // writing of triggered events to memory is enabled
     .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
     .fill_num(fill_num[23:0]),                           // fill number for this fill
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -299,7 +299,7 @@ wire ddr3_write_fifo_full;
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
-    .rst(reset_clk50),       		// reset at startup or when requested
+    .rst(reset_clk50),             // reset at startup or when requested
     .wr_clk(adc_clk),               // clock extracted from ADC DDR clock
     .rd_clk(ddr3_domain_clk),       // clock extracted from DDR3 block
     .din(adc_acq_out_dat[131:0]),   // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -322,12 +322,12 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
     .sysclk(clk200),                    // input, drives the Xilinx DDR3 IP
-    .reset_clk50(reset_clk50),         	// input, reset at startup or when requested by master FPGA 
+    .reset_clk50(reset_clk50),            // input, reset at startup or when requested by master FPGA 
     .ddr3_domain_clk(ddr3_domain_clk),  // output, the DDR3 user-interface synchronous clock
-    .reset_ddr3_clk(reset_ddr3_clk),	// output, synched to ddr3_clk
+    .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to ddr3_clk
 
     // writing connections
-    .ddr3_wr_en(ddr3_wr_en),					// writing of triggered events to memory is enabled
+    .ddr3_wr_en(ddr3_wr_en),               // writing of triggered events to memory is enabled
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),     // input, data is available when this is not asserted
     .ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),     // output, use and remove the data on the FIFO head
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),  // input, 132-bit 4-bit tag plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
@@ -404,7 +404,7 @@ ddr3_read_data_width_converter ddr3_read_data_width_converter(
 );
 
 // Synchronize  'readout_pause' to 'clk125'.
-reg readout_pause_sync1, readout_pause_sync2;
+(* ASYNC_REG = "TRUE" *) reg readout_pause_sync1, readout_pause_sync2;
 always @(posedge clk125) begin
     readout_pause_sync1 <= readout_pause;
     readout_pause_sync2 <= readout_pause_sync1;
@@ -466,7 +466,7 @@ all_channels channels(
     // connections to 2-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
     // TX interface to slave side of transmit FIFO 
     .c0_s_axi_tx_tdata(c0_tx_axi_tdata[0:31]),       // note index order
-    .c0_s_axi_tx_tkeep(4'b1111),			         // always 1's
+    .c0_s_axi_tx_tkeep(4'b1111),                  // always 1's
     .c0_s_axi_tx_tvalid(c0_tx_axi_tvalid),
     .c0_s_axi_tx_tlast(c0_tx_axi_tlast),
 
@@ -539,14 +539,14 @@ command_top command_top (
     .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
     .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
     .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
-	  .muon_num_waveforms(muon_num_waveforms[11:0]),		// number of waveforms to store per trigger
-    .muon_waveform_gap(muon_waveform_gap[21:0]),		// idle time between waveforms 
-    .laser_num_waveforms(laser_num_waveforms[11:0]),	// number of waveforms to store per trigger
-    .laser_waveform_gap(laser_waveform_gap[21:0]),		// idle time between waveforms 
-    .ped_num_waveforms(ped_num_waveforms[11:0]),		// number of waveforms to store per trigger
-    .ped_waveform_gap(ped_waveform_gap[21:0]),			// idle time between waveforms 
-	  .async_num_bursts(async_num_bursts[13:0]),       	// number of 8-sample bursts in an ASYNC waveform
-	  .async_pre_trig(async_pre_trig[15:0]),           	// number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+     .muon_num_waveforms(muon_num_waveforms[11:0]),      // number of waveforms to store per trigger
+    .muon_waveform_gap(muon_waveform_gap[21:0]),      // idle time between waveforms 
+    .laser_num_waveforms(laser_num_waveforms[11:0]),   // number of waveforms to store per trigger
+    .laser_waveform_gap(laser_waveform_gap[21:0]),      // idle time between waveforms 
+    .ped_num_waveforms(ped_num_waveforms[11:0]),      // number of waveforms to store per trigger
+    .ped_waveform_gap(ped_waveform_gap[21:0]),         // idle time between waveforms 
+     .async_num_bursts(async_num_bursts[13:0]),          // number of 8-sample bursts in an ASYNC waveform
+     .async_pre_trig(async_pre_trig[15:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
 
@@ -587,7 +587,7 @@ adc_intf adc_intf(
     .reset(reset_clk50),
     .data_in(adc_intf_wr_data[31:0]),
     .data_out(adc_intf_rd_data[31:0]),
-    /.slow_clk(clk8),
+    .slow_clk(clk8),
     .sclk(adc_sdclk),
     .sdio(adc_sdio),
     .sdi(adc_sdo),

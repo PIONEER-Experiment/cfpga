@@ -50,14 +50,14 @@ module ddr3_intf(
 );
 
 //synchronize the 'reset' signal
-reg reset_sync1, reset_sync2;
+(* ASYNC_REG = "TRUE" *) reg reset_sync1, reset_sync2;
 always @(posedge sysclk) begin
     reset_sync1 <= reset;
     reset_sync2 <= reset_sync1;
 end
 
 //synchronize the 'acq_enabled' signal
-reg acq_enabled_sync1, acq_enabled_sync2;
+(* ASYNC_REG = "TRUE" *) reg acq_enabled_sync1, acq_enabled_sync2;
 always @(posedge ddr3_domain_clk) begin
     acq_enabled_sync1 <= acq_enabled;
     acq_enabled_sync2 <= acq_enabled_sync1;

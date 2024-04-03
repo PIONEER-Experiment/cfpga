@@ -82,7 +82,7 @@ module register_block(
     reg [31:0] reg2_  = 32'd70000;    // muon fill burst count of 70,000
     reg [31:0] reg3_  = 32'd100;      // laser fill burst count of 100
     reg [31:0] reg4_  = 32'd100;      // pedestal fill burst count of 100
-    reg [31:0] reg8_  = 32'd14;       // data bus delay tap value of 14
+    reg [31:0] reg8_  = 32'd11;       // data bus delay tap value of 11
     reg [31:0] reg13_ = 32'hf0000000; // use normal DDR3 start addresses
     reg [31:0] reg14_ = 32'd1;        // 1 muon waveform per trigger
     reg [31:0] reg16_ = 32'd4;        // 4 laser waveform per trigger

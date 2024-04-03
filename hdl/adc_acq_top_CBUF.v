@@ -11,6 +11,7 @@ module adc_acq_top_cbuf(
     //input adc_clk_p,// ADC 'p' clk pin
     //input adc_clk_n,// ADC 'n' clk pin
     input reset_clk50,  // synchronously negated
+    input adc_acq_full_reset,  // reset all aspects of data collection/storage/readout
     input clk200,   // for input pin timing delay settings
     input [11:0] channel_tag,   // stuff about the channel to put in the header
     input [23:0] initial_fill_num,  // event number to assign to the first fill
@@ -19,7 +20,6 @@ module adc_acq_top_cbuf(
     input acq_enable1,  // indicates enabled for triggers, and fill type
     input acq_trig, // trigger the logic to start collecting data
     input adc_buf_delay_data_reset, // use the new delay settings
-    input adc_acq_full_reset,  // reset all aspects of data collection/storage/readout
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
     input ddr3_wr_done, // asserted when the 'ddr3_wr_control' is in the DONE state
     input [13:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform

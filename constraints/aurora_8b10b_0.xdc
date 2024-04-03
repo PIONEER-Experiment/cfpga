@@ -68,3 +68,4 @@ set_false_path -to [get_cells -hierarchical -filter {NAME =~ *ack_sync_reg1}]
 #set_property LOC GTXE2_CHANNEL_X0Y3 [get_cells aurora_module_i/aurora_8b10b_0_i/inst/gt_wrapper_i/aurora_8b10b_0_multi_gt_i/gt0_aurora_8b10b_0_i/gtxe2_i]
 
 
+
