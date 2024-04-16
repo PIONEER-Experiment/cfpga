@@ -1182,7 +1182,7 @@
         "OUTPUTDIR": [ { "value": "../../project/WFD_Channel.gen/sources_1/ip/wfd5_ddr3_r1" } ],
         "SELECTEDSIMMODEL": [ { "value": "" } ],
         "SHAREDDIR": [ { "value": "." } ],
-        "SWVERSION": [ { "value": "2023.2" } ],
+        "SWVERSION": [ { "value": "2023.2.2" } ],
         "SYNTHESISFLOW": [ { "value": "OUT_OF_CONTEXT" } ]
       }
     },

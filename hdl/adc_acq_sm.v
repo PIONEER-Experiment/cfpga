@@ -36,7 +36,7 @@ module adc_acq_sm (
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
     output reg acq_done,                // acquisition is done
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
-);      
+);
 
 
 // synchronize ENABLE and TRIGGER inputs to this clock domain
@@ -126,8 +126,9 @@ always @ (posedge clk) begin
         CS <= 19'b0;      // set all state bits to 0
         CS[IDLE] <= 1'b1; // set IDLE state bit to 1
     end
-    else
+    else begin
         CS <= NS;         // set state bits to next state
+    end
 end
 
 

@@ -52,7 +52,7 @@ module cc_rd_fill_sm (
     
     // interface to the AXIS 2:1 MUX
     output reg use_ddr3_data,                // the data source is the DDR3 memory
-    input aurora_ddr3_accept                // DDR3 data has been accepted by the Aurora
+    input aurora_ddr3_accept               // DDR3 data has been accepted by the Aurora
 );
 
 // Synchronize  'reading_done'.
@@ -82,16 +82,16 @@ end
 // Declare the symbolic names for states for the state machine
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
-    IDLE                = 4'd0,
-    CHK_FIFO_EMPTY        = 4'd1,
-    ERROR1                = 4'd2,
-    GET_FIFO_HDR        = 4'd3,
-    ECHO_CSN1            = 4'd4,
-    ECHO_CSN2            = 4'd5,
-    ECHO_CC1            = 4'd6,
-    ECHO_CC2            = 4'd7,
-    GET_DDR3_DATA        = 4'd8,
-    DONE                = 4'd9;
+    IDLE                = 4'd0,   // 1
+    CHK_FIFO_EMPTY        = 4'd1, // 2
+    ERROR1                = 4'd2, // 4
+    GET_FIFO_HDR        = 4'd3,   // 8
+    ECHO_CSN1            = 4'd4,  // 10
+    ECHO_CSN2            = 4'd5,  // 20
+    ECHO_CC1            = 4'd6,   // 40
+    ECHO_CC2            = 4'd7,   // 80
+    GET_DDR3_DATA        = 4'd8,  // 100
+    DONE                = 4'd9;   // 200
                 
 // Declare current state and next state variables
 reg [9:0] /* synopsys enum STATE_TYPE */ CS;
@@ -105,7 +105,9 @@ always @ (posedge clk) begin
         CS <= 10'b0;      // set all state bits to 0
         CS[IDLE] <= 1'b1; // set IDLE state bit to 1
     end
-    else CS <= NS;          // set state bits to next state
+    else begin
+       CS <= NS;          // set state bits to next state
+    end
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 

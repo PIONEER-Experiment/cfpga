@@ -8,3 +8,4 @@ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {clk
 set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {clk_8M_g2_chan_clks adc_sdclk_g2_chan_clks}]
 
 
+

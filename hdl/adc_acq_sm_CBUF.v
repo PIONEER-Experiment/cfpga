@@ -21,20 +21,20 @@ module adc_acq_sm_cbuf (
     output reg dummy_dat_reset,         // reset the dummy data counter
     output reg adc_mux_fill_hdr_sel,    // selects fill header
     output reg adc_mux_wfm_hdr_sel,     // selects waveform header
-    (*     mark_debug = "true" *) output reg adc_mux_dat_sel,         // selects data
+    output reg adc_mux_dat_sel,         // selects data
     output reg adc_mux_checksum_select, // selects checksum
     output reg adc_mux_checksum_update, // update the checksum
     output reg burst_cntr_init,         // initialize when triggered
     output reg burst_cntr_en,           // will be enabled once per burst
     output reg fill_cntr_en,            // will be enabled once per fill
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
-    (*     mark_debug = "true" *) output reg trig_pulse,
+    output reg trig_pulse,
     output reg acq_enabled,             // writing triggered data to DDR3 in progress
     output reg acq_done,                // acquisition is done
     output reg init_circ_buf_rd_addr,   // initialize the counter with the start of the buffer area to be saved
     output reg inc_circ_buf_rd_addr,    // increment the circular buffer address
-    (*     mark_debug = "true" *) output reg trig_addr_rd_en,         // read a trigger address from the FIFO
-    (*     mark_debug = "true" *) output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
+    output reg trig_addr_rd_en,         // read a trigger address from the FIFO
+    output reg latch_circ_buf_dat,      // save the current 32-bit data word from the circular buffer
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
 );
 
@@ -146,8 +146,9 @@ always @ (posedge clk) begin
         CS <= 17'b0;      // set all state bits to 0
         CS[IDLE] <= 1'b1; // set IDLE state bit to 1
     end
-    else
+    else begin
         CS <= NS;         // set state bits to next state
+    end
 end
 
 // lkg -- will need to update the sensitivity list

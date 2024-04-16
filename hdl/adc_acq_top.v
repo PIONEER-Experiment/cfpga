@@ -318,6 +318,6 @@ adc_acq_sm adc_acq_sm (
 
     .acq_done(acq_done),                    // acquisition is done
     .sm_idle(adc_acq_sm_idle)               // state machine is idle
-);      
+);
 
 endmodule

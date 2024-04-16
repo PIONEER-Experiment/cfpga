@@ -177,7 +177,7 @@
         "OUTPUTDIR": [ { "value": "../../project_cbuf/WFD_Channel_CBUF.gen/sources_1/ip/circular_buffer_small_1" } ],
         "SELECTEDSIMMODEL": [ { "value": "" } ],
         "SHAREDDIR": [ { "value": "." } ],
-        "SWVERSION": [ { "value": "2023.2" } ],
+        "SWVERSION": [ { "value": "2023.2.2" } ],
         "SYNTHESISFLOW": [ { "value": "OUT_OF_CONTEXT" } ]
       }
     },

@@ -94,7 +94,7 @@ enable_sm_ASYNC enable_sm_ASYNC (
     .fill_type(fill_type[1:0]),         // level of the two 'ext_enable' bits
     .trig_pulse(trig_pulse),            // a trigger passed while the system is enabled for new triggers
     .adc_acq_sm_idle(adc_acq_sm_idle),  // ADC acquisition state machine is idle (used for front panel LED status)
-    .ext_done(ext_done)                 // assert external acquisition is done
+    .ext_done(ext_done),                // assert external acquisition is done
 );
 
 

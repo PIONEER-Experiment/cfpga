@@ -35,3 +35,4 @@ set_false_path -from [get_cells -hierarchical -filter {NAME =~ *adc_acq_full_res
 #set_false_path -from [get_cells -hierarchical -filter {NAME =~ *adc_clk_sync2*}]
 
 
+

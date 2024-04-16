@@ -105,8 +105,9 @@ always @ (posedge adc_clk) begin
         CS <= #1 {9{1'b0}}; // set all state bits to 0
         CS[IDLE] <= #1 1'b1; // set IDLE state bit to 1
     end
-    else
+    else begin
         CS <= #1 NS;         // set state bits to next state
+    end
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
