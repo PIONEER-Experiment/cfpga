@@ -44,8 +44,9 @@ assign fill_header[ 87: 76] = 12'd1;                         // 12-bit final wav
 assign fill_header[103: 88] = async_pre_trig[15:0];          // 16-bit number of pre-trigger ADC pairs from register R21
 assign fill_header[109:104] = 5'd0;                          //  5-bit unused
 assign fill_header[121:110] = channel_tag[11:0];             // 12-bit channel tag
-assign fill_header[122:122] = 1'b1;                          //  1-bit sync = async=0, cbuf=1 flag, if needed
-assign fill_header[125:123] = 3'd0;                          //  unused
+assign fill_header[122:122] = 1'b1;                          //  1-bit cbuf=1 flag, all other modes = 0
+assign fill_header[123:123] = 1'd0;                          //  1-bit self triggered = 1, all other modes = 0
+assign fill_header[125:124] = 2'd0;                          //  2-bit unused
 assign fill_header[127:126] = 2'b01;                         //  2-bit header tag; this pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
 assign fill_header[131:128] = 4'd1;                          //  4-bit burst contents tag, tag = '1' for fill header
 

@@ -256,6 +256,8 @@ always @ (posedge clk) begin
             ddr3_rd_start_addr[22:0] <= fixed_ddr3_start_addr[22:0];
         else if ( fill_header_fifo_out[26] ) // if async mode
             ddr3_rd_start_addr[22:0] <= 23'd0;
+        else if ( fill_header_fifo_out[123] ) // if selftrig mode
+            ddr3_rd_start_addr[22:0] <= {fill_header_fifo_out[24],22'd0};
         else // sync or cbuf mode
             ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[75:53];
 

@@ -27,7 +27,7 @@ module register_block(
     output [22:0] laser_num_bursts,          // number of sample bursts in a LASER fill
     output [22:0] ped_num_bursts,             // number of sample bursts in a PEDESTAL fill
     output [23:0] initial_fill_num,          // event number to assign to the first fill
-    output initial_fill_num_wr,              // write-strobe to store the initial_fill_num
+    output reg initial_fill_num_wr,          // write-strobe to store the initial_fill_num
     input [2:0] ch_addr,                     // the channel address jumpers
     output adc_buf_delay_data_reset,         // use the new delay settings
     output [4:0] adc_buf_data_delay,         // 5 delay-tap-bits per line, all lines always all the same
@@ -35,7 +35,7 @@ module register_block(
     output [22:0] fixed_ddr3_start_addr,
     output en_fixed_ddr3_start_addr,
     output [11:0] muon_num_waveforms,         // number of waveforms to store per trigger
-     output [21:0] muon_waveform_gap,         // idle time between waveforms 
+    output [21:0] muon_waveform_gap,         // idle time between waveforms 
     output [11:0] laser_num_waveforms,         // number of waveforms to store per trigger
     output [21:0] laser_waveform_gap,         // idle time between waveforms 
     output [11:0] ped_num_waveforms,         // number of waveforms to store per trigger
@@ -134,7 +134,7 @@ module register_block(
     assign initial_fill_num[23:0] = reg0_[23:0];
     // Send R0 'wr_en' to the ADC acquisition controller
     // fill number will be set back to initial value after a reset
-    assign initial_fill_num_wr = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
+//    assign initial_fill_num_wr = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
 
     // R1 - channel tag
     // bits [2:0] from configuration jumpers
@@ -256,6 +256,12 @@ module register_block(
         if (rd_en && (reg_num[4:0] == 5'h1d)) rdbk_reg[31:0] <= reg29_[31:0];
         if (rd_en && (reg_num[4:0] == 5'h1e)) rdbk_reg[31:0] <= reg30_[31:0];
         if (rd_en && (reg_num[4:0] == 5'h1f)) rdbk_reg[31:0] <= {8'b0, `MAJOR_REV, `MINOR_REV, `PATCH_REV}; // R31 is read only
+        if ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) begin
+           initial_fill_num_wr <= 1'b1;
+        end
+        else begin
+           initial_fill_num_wr <= 1'b0; 
+        end
 
         // else rdbk_reg[31:0] <= rdbk_reg[31:0];
     end

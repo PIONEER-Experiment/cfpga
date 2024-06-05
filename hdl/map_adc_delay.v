@@ -49,7 +49,8 @@ module map_adc_delay (
         adc_dat_reg0[23:0] <= adc_dat_reg1[23:0];
     end
 
-    wire latch_xor_dat_tapclk, latch_xor_dat_adcclk;
+    wire latch_xor_dat_adcclk;
+    reg latch_xor_dat_tapclk;
     sync_2stage latch_xor_inst (
         .clk(clk),
         .in(latch_xor_dat_tapclk),
@@ -157,6 +158,7 @@ module map_adc_delay (
     // combinational always block to determine next state (use blocking [=] assignments) 
     always @ (CS or count or current_delay_int or data_delay or error_found or xor_dat_rdy ) begin
         NS = 12'b0; // default all bits to zero; will overrride one bit
+        latch_xor_dat_tapclk = 1'b0;
 
         case (1'b1) //synopsys full_case parallel_case
 
@@ -186,8 +188,10 @@ module map_adc_delay (
             // Pause here before looking at the data.
             // This ensures that 'adc_dat_xor' is based on new ADC samples.
             CS[PAUSE] : begin
-                if (count[7:0] > 8'd12)
+                if (count[7:0] > 8'd12) begin
                     NS[LATCH_XOR] = 1'b1;
+                    latch_xor_dat_tapclk = 1'b1;
+                end
                 else
                     NS[PAUSE] = 1'b1;
             end
@@ -198,9 +202,11 @@ module map_adc_delay (
                 if ( xor_dat_rdy )
                    // grab the data
                    NS[SAVE_ADC_DATA] = 1'b1;
-                else
+                else begin
                    // keep waiting here
                   NS[LATCH_XOR] = 1'b1;
+                  latch_xor_dat_tapclk = 1'b1;
+                end
             end
 
             // Record the test pattern data.
@@ -292,9 +298,6 @@ module map_adc_delay (
             data_integrity[31:0] <= data_integrity[31:0];
         end
     end
-
-    // let the xpm_cdc_handshake know that input data is ready
-    assign latch_xor_dat_tapclk = NS[LATCH_XOR] == 1'b1;
 
     assign sm_running = !(CS[IDLE] == 1'b1 || CS[DONE] == 1'b1);
 

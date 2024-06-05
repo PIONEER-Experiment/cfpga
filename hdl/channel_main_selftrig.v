@@ -12,13 +12,13 @@
 // as a useful reference, here's the syntax to mark signals for debug:
 // (* mark_debug = "true" *) 
 
-module channel_main_async (
+module channel_main_selftrig (
   // Utility
   output [9:0] debug,           // to 10-pin header
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
+  output acq_trig,              // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
   output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> red + green = orange, [1=0,2=1]-> red, [1=1,2=0]-> green, [1=1,2=1]-> off 
@@ -75,10 +75,10 @@ wire [22:0] current_waveform_num;
 wire readout_pause;
 assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1:2] : 'acq_enable'
-wire acq_enable0;                       // indicates enabled for triggers, and fill type
-wire acq_enable1;                       // indicates enabled for triggers, and fill type
-assign acq_enable0 = io[1];
-assign acq_enable1 = io[2];
+wire enable_triggering;                 // indicates enabled for triggers
+wire ddr3_buffer;                       // indicates writing top vs bottom half of DDR3 should switch
+assign enable_triggering  = io[1];
+assign ddr3_buffer        = io[2];
 //   io[3]   : 'rst_from_master'
 wire rst_from_master;
 assign rst_from_master = io[3];
@@ -256,50 +256,69 @@ assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d
 
 wire [25:0] packed_adc_dat;
 
-adc_acq_top_ASYNC adc_acq_top_ASYNC (
+// -- note, we are co-opting the muon_num_waveforms register to pass the self triggering threshold
+//    see note below for command_top instantiation
+wire [11:0] selftrig_threshold;
+//sync_2stage #(
+//  .WIDTH(12)
+//) selftrig_sync (
+//  .clk(adc_clk),
+//  .in(muon_num_waveforms),
+//  .out(selftrig_threshold)
+//);
+assign selftrig_threshold[11:0] = muon_num_waveforms[11:0];
+wire [11:0] channel_tag_adclk;
+sync_2stage #(
+  .WIDTH(12)
+) chantag_sync (
+  .clk(adc_clk),
+  .in(channel_tag),
+  .out(channel_tag_adclk)
+);
+
+adc_acq_top_selftrig adc_acq_top_selftrig (
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
     .adc_in_n(adc_in_n[11:0]),                           // [11:0] array of ADC 'n' data pins
     .adc_ovr_p(adc_dovrp),                               // ADC 'p' over-range pin
     .adc_ovr_n(adc_dovrn),                               // ADC 'n' over-range pin
     .adc_clk(adc_clk),                                   // ADC clock used by the FIFO
-    //.adc_clk_p(adc_clk_p),                               // ADC 'p' clk pin
-    //.adc_clk_n(adc_clk_n),                               // ADC 'n' clk pin
     .reset_clk50(reset_clk50),                           // synchronously negated
+    .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
     .clk200(clk200),                                     // for input pin timing delay settings
-    .channel_tag(channel_tag[11:0]),                     // stuff about the channel to put in the header
+    .channel_tag(channel_tag_adclk[11:0]),               // stuff about the channel to put in the header
     .initial_fill_num(initial_fill_num[23:0]),           // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr),           // write-strobe to store the initial_fill_num
-    .ext_enable0(acq_enable0),                           // external 'enable' for triggers, and fill type
-    .ext_enable1(acq_enable1),                           // external 'enable' for triggers, and fill type
-    .ext_trig(acq_trig),                                 // external trigger to start collecting data
-    .adc_acq_full_reset(adc_acq_full_reset),             // reset all aspects of data collection/storage/readout
+    .enable_triggering(enable_triggering),               // master FPGA has enabled triggering
+    .ddr3_buffer(ddr3_buffer),                           // ddr3 buffer for writing
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
-    .async_num_bursts(async_num_bursts[13:0]),           // number of 8-sample bursts in an ASYNC waveform
+     .async_num_bursts(async_num_bursts[13:0]),          // number of 8-sample bursts in an ASYNC waveform
     .async_pre_trig(async_pre_trig[15:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .selftrig_threshold(selftrig_threshold[11:0]),             // the amount by which the sample average must exceed the average pedestal to trigger
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
-    .ddr3_wr_en(ddr3_wr_en),                     // writing of triggered events to memory is enabled
+    .self_trig(acq_trig),                                // trigger threshold has been exceeded for this channel
+    .ddr3_wr_en(ddr3_wr_en),                             // writing of triggered events to memory is enabled
     .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
     .fill_num(fill_num[23:0]),                           // fill number for this fill
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
-    .adc_acq_sm_idle(adc_acq_sm_idle),                    // ADC acquisition state machine is idle (used for front panel LED status)
+    .adc_acq_sm_idle(adc_acq_sm_idle),                   // ADC acquisition state machine is idle (used for front panel LED status)
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0])
 );
 
+
 wire ddr3_write_fifo_full;
-        
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
-    .rst(reset_clk50),             // reset at startup or when requested
+    .rst(adc_acq_full_reset),       // reset at startup or when requested
     .wr_clk(adc_clk),               // clock extracted from ADC DDR clock
     .rd_clk(ddr3_domain_clk),       // clock extracted from DDR3 block
     .din(adc_acq_out_dat[131:0]),   // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -318,7 +337,7 @@ wire reading_done;
 
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
-ddr3_intf_ASYNC ddr3_intf_ASYNC(
+ddr3_intf_selftrig ddr3_intf_selftrig(
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
     .sysclk(clk200),                    // input, drives the Xilinx DDR3 IP
@@ -526,6 +545,9 @@ command_top command_top (
     .reading_done(reading_done),                        // output, reading is complete
 
     // registers to/from the ADC acquisition state machine
+    // Note -- in this mode, we are co-opting the register for the number of waveforms / muon fill and
+    // using it to pass the self-triggering threshold.  To avoid having to duplicate even more modules,
+    // we have left command_top and assocuated variable names unchanged
     .fill_num(fill_num[23:0]),                                     // fill number for this fill
     .channel_tag(channel_tag[11:0]),                               // stuff about the channel to put in the header
     .muon_num_bursts(muon_num_bursts[22:0]),                       // number of sample bursts in a MUON fill
@@ -539,14 +561,14 @@ command_top command_top (
     .adc_buf_current_data_delay(adc_buf_current_data_delay[64:0]), // 13 lines *5 bits/line, current tap settings
     .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
     .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
-     .muon_num_waveforms(muon_num_waveforms[11:0]),      // number of waveforms to store per trigger
+    .muon_num_waveforms(muon_num_waveforms[11:0]),      // number of waveforms to store per trigger
     .muon_waveform_gap(muon_waveform_gap[21:0]),      // idle time between waveforms 
     .laser_num_waveforms(laser_num_waveforms[11:0]),   // number of waveforms to store per trigger
     .laser_waveform_gap(laser_waveform_gap[21:0]),      // idle time between waveforms 
     .ped_num_waveforms(ped_num_waveforms[11:0]),      // number of waveforms to store per trigger
     .ped_waveform_gap(ped_waveform_gap[21:0]),         // idle time between waveforms 
-     .async_num_bursts(async_num_bursts[13:0]),          // number of 8-sample bursts in an ASYNC waveform
-     .async_pre_trig(async_pre_trig[15:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .async_num_bursts(async_num_bursts[13:0]),          // number of 8-sample bursts in an ASYNC waveform
+    .async_pre_trig(async_pre_trig[15:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
 
