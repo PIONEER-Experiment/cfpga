@@ -7,6 +7,8 @@
 !*/
 project/
 project_async/
+project_selftrig/
+project_cbuf/
 ip/*/**/
 
 # Constraints

@@ -3,7 +3,7 @@
 module enable_sm_selftrig (
     // inputs
     input adc_clk,
-    input self_trig_ready,      // self triggers enabled and valid.  This is in the adc_clk domain
+    input enable_triggering,    // self triggers enabled and valid.  This is in the adc_clk domain
     input ddr3_buffer,          // master's request for which buffer to write to
     input self_trig,            // self trigger condition has been met
     input reset_clk50,          // synchronously negated reset all of the acquisition logic
@@ -11,29 +11,29 @@ module enable_sm_selftrig (
     input cbuf_rd_trig_wait,    // waiting for another trigger or the negation of 'cbuf_rd_en'
     input ddr3_wr_done,         // asserted when the 'ddr3_wr_control' is in the DONE state
     // outputs
-    output reg cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
-    output reg cbuf_trig_en,    // triggering of new waveforms is enabled
-    output reg cbuf_rd_en,      // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-    output reg ddr3_wr_en,      // writing of triggered events to memory is enabled
+(* mark_debug = "true" *) output reg cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
+(* mark_debug = "true" *) output reg cbuf_trig_en,    // triggering of new waveforms is enabled for the current DDR3 write buffer
+(* mark_debug = "true" *) output reg cbuf_rd_en,      // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+(* mark_debug = "true" *) output reg ddr3_wr_en,      // writing of triggered events to memory is enabled
     output reg [1:0] ddr3_range,// level of the ddr3 range bit.  Two copies because of history of other modes
-    output reg trig_pulse,      // a trigger passed while the system is enabled for new triggers
+(* mark_debug = "true" *) output reg trig_pulse,      // a trigger passed while the system is enabled for new triggers
     output reg adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
     output reg ext_done,        // external output indicating acquisition is done
-    output reg ddr3_mem_range,  // the top vs bottom range bit, this copy is ready to use.
+(* mark_debug = "true" *) output reg ddr3_mem_range,  // the top vs bottom range bit, this copy is ready to use.
     output reg reset_timer      // triggers reset of the 800 MHz counter used to time stamp events
 );
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Sync the self_trig_ready inputs to the ADC clock domain.
+// Sync the enable_triggering inputs to the ADC clock domain.
 (* ASYNC_REG = "TRUE" *) reg trig_ready_sync1, trig_ready_sync2;
 always @(posedge adc_clk) begin
-    trig_ready_sync1 <= #1 self_trig_ready;
+    trig_ready_sync1 <= #1 enable_triggering;
     trig_ready_sync2 <= #1 trig_ready_sync1;
 end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Sync the ddr3_buffer bit
-(* ASYNC_REG = "TRUE" *) reg ddr3_buffer_sync1, ddr3_buffer_sync2;
+(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg ddr3_buffer_sync1, ddr3_buffer_sync2;
 always @(posedge adc_clk) begin
     ddr3_buffer_sync1 <= #1 ddr3_buffer;
     ddr3_buffer_sync2 <= #1 ddr3_buffer_sync1;
@@ -54,7 +54,8 @@ always @ (posedge adc_clk) begin
     trig_sync2 <= #1 trig_sync1;
     trig_sync3 <= #1 trig_sync2;
     // pass triggers only during the TRIG_ENABLED state
-    trig_pulse <= #1 ((trig_sync2 & ~trig_sync3) && cbuf_trig_en);
+    //trig_pulse <= #1 ((trig_sync2 & ~trig_sync3) && cbuf_trig_en);
+    trig_pulse <= #1 (trig_sync2 & ~trig_sync3);
  end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,7 +84,7 @@ always @(posedge adc_clk) begin
 end
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Watch for the ddr3_buffer bit from the master to flip
-reg range_flip, prev_ddr3_buffer;
+(* mark_debug = "true" *) reg range_flip, prev_ddr3_buffer;
 always @ (posedge adc_clk) begin
    if ( reset_clk_adc ) begin
       range_flip <= 1'b0;
@@ -107,7 +108,7 @@ end
 parameter [3:0]
     IDLE            = 4'd0,
     ENABLE_WAIT       = 4'd1,
-    BUFFER_FILL_START      = 4'd2,
+    BUFFER_FILL_START = 4'd2,
     TRIG_ENABLED    = 4'd3,
     CBUF_RD_ENABLED = 4'd4,
     CBUF_RD_DONE    = 4'd5,
@@ -116,7 +117,7 @@ parameter [3:0]
     DONE2           = 4'd8;
    
 // Declare current state and next state variables
-reg [8:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [8:0] /* synopsys enum STATE_TYPE */ CS;
 reg [8:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
@@ -131,7 +132,7 @@ always @ (posedge adc_clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or self_trig_ready or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or pulse_cntr_zero) begin
+always @ (CS or trig_ready_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or pulse_cntr_zero) begin
     NS = {9{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
@@ -144,7 +145,7 @@ always @ (CS or self_trig_ready or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or pu
 
         // Stay in ENABLE_WAIT until the self triggering module is enabled and ready
         CS[ENABLE_WAIT]: begin
-            if (self_trig_ready)
+            if (trig_ready_sync2)
                 // a fill of a new buffer is starting, go latch the ddr3 buffer range bit
                 NS[BUFFER_FILL_START] = 1'b1;
              else
@@ -164,8 +165,8 @@ always @ (CS or self_trig_ready or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or pu
        // for the current buffer. Go to CBUF_RD_ENABLED to finish writing any triggered
        // acquisitions to the DDR3 and write the final fill_header.
         CS[TRIG_ENABLED]: begin
-            if (!self_trig_ready || range_flip )
-                // a fill of this buffer is ending, so disable triggering but leave the DDR3 asserted.
+            if (!trig_ready_sync2 || range_flip )
+                // a fill of this buffer is ending, so swap the write buffer leave the DDR3 asserted.
                 NS[CBUF_RD_ENABLED] = 1'b1;
              else
                 // filling this buffer  is still active, so stay here
@@ -212,7 +213,7 @@ always @ (CS or self_trig_ready or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or pu
         // Stay in DONE2 until the pulse duration counter is zero.
         CS[DONE2]: begin
             if (pulse_cntr_zero) begin
-                if ( self_trig_ready )
+                if ( trig_ready_sync2 )
                     NS[BUFFER_FILL_START] = 1'b1;
                 else
                     NS[IDLE] = 1'b1;
@@ -231,7 +232,7 @@ reg prev_ddr3_mem_range;
 always @ (posedge adc_clk) begin
     // defaults
     cbuf_wr_en             <= #1 1'b1;        // writing into the circ buf by the ADC is enabled, must extend past final trigger
-    cbuf_trig_en           <= #1 1'b0;        // triggering of new waveforms is enabled
+    cbuf_trig_en           <= #1 trig_ready_sync2; // triggering of new waveforms is enabled for most states
     cbuf_rd_en             <= #1 1'b0;        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     ddr3_wr_en             <= #1 1'b0;        // writing of triggered events to memory is enabled
     ext_done               <= #1 1'b0;        // total acquisition is done, data is stored in DDR3
@@ -240,26 +241,30 @@ always @ (posedge adc_clk) begin
     adc_acq_sm_idle        <= #1 1'b0;        // ADC acquisition state machine is idle (used for front panel LED status)
     prev_ddr3_mem_range    <= #1 ddr3_mem_range;       // remeber the ddr3 buffer range from cycle to cycle
     ddr3_mem_range         <= #1 prev_ddr3_mem_range;  // remeber the ddr3 buffer range from cycle to cycle
+    reset_timer            <= #1 1'b0;                 // reset the 400 MHz trigger time counter
     
     // next states
     if (NS[IDLE]) begin
         cbuf_wr_en             <= #1 1'b0;        // writing into the circ buf by the ADC is disabled
         adc_acq_sm_idle        <= #1 1'b1;
         ddr3_mem_range         <= #1 1'b0;
+        cbuf_trig_en           <= #1 1'b0;
     end
     
     if (NS[ENABLE_WAIT]) begin
         adc_acq_sm_idle     <= #1 1'b1;
         ddr3_mem_range      <= #1 1'b0;
+        cbuf_trig_en           <= #1 1'b0;
     end
 
     if (NS[BUFFER_FILL_START]) begin
         latch_ddr3_range        <= #1 1'b1;              // copy the ddr3 buffer range bit into the bits for 'fill_type' in the other modes
         ddr3_mem_range          <= #1 ddr3_buffer_sync2; // grab the new memory range to communicate elsewhere
+        cbuf_trig_en            <= #1 1'b0;
+        reset_timer             <= #1 1'b1;
     end
 
     if (NS[TRIG_ENABLED]) begin
-        cbuf_trig_en         <= #1 1'b1;        // triggering of new waveforms is enabled
         cbuf_rd_en           <= #1 1'b1;        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
         ddr3_wr_en           <= #1 1'b1;        // writing of triggered events to memory is enabled
      end
@@ -267,9 +272,13 @@ always @ (posedge adc_clk) begin
     if (NS[CBUF_RD_ENABLED]) begin
         cbuf_rd_en           <= #1 1'b1;        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
         ddr3_wr_en           <= #1 1'b1;        // writing of triggered events to memory is enabled
+        cbuf_trig_en         <= #1 1'b0;        // we need to communicate to circ_buf_to_ddr3_sm_selftrig to wrap up for this buffer
     end
 
     if (NS[CBUF_RD_DONE]) begin
+        latch_ddr3_range     <= #1 1'b1;              // copy the ddr3 buffer range bit into the bits for 'fill_type' in the other modes
+        ddr3_mem_range       <= #1 ddr3_buffer_sync2; // grab the new memory range to communicate elsewhere
+        prev_ddr3_mem_range  <= #1 ddr3_buffer_sync2; // grab the new memory range to communicate elsewhere
         ddr3_wr_en           <= #1 1'b1;        // writing of triggered events to memory is enabled
     end
 

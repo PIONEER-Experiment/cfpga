@@ -1,6 +1,6 @@
 `timescale 1ns / 10ps
 
-module circ_buf_to_ddr3_sm_ASYNC (
+module circ_buf_to_ddr3_sm_selftrig (
     // inputs
 	input adc_clk,
     input reset_clk_adc,				// synchronously negated reset all of the acquisition logic  
@@ -37,12 +37,12 @@ module circ_buf_to_ddr3_sm_ASYNC (
 
 // delay the 'adc_acq_out_valid' signal to allow for the memory reading delay
 reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
-reg delay2, delay1, delay0;  
+reg delay2, delay1, delay0;
 always @ (posedge adc_clk) begin
 	adc_acq_out_valid <= #1 immed_adc_acq_out_valid | dlyd_adc_acq_out_valid;
-	checksum_update <= #1 delay0;
+	checksum_update <= #1 delay2;
 	// run the delay pipeline
-	dlyd_adc_acq_out_valid <= #1 delay0;
+	dlyd_adc_acq_out_valid <= #1 delay2;
 	delay2 <= #1 delay1;
 	delay1 <= #1 delay0;
 	delay0 <= #1 start_dlyd_adc_acq_out_valid;

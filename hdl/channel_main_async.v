@@ -171,7 +171,7 @@ IBUFDS adc_clk_IBUFDS_inst (
    .IB(adc_clk_n)   // 1-bit input: Diff_n buffer input (connect directly to top-level port)
 );
 
-wire reset_clk50, reset_clk125, adc_acq_full_reset;;
+wire reset_clk50, reset_clk125, adc_acq_full_reset;
 
 // synchronous reset logic
 startup_reset startup_reset(
@@ -491,6 +491,8 @@ assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 ///////////////////////////////////////////////////////////////////////////////////
 // Connect the command processor. This will receive commands from the Aurora serial
 // link and process them
+wire [3:0] image_type;
+assign image_type = `ASYNC_MODE;
 command_top command_top (
     // clocks and reset
     .clk50(clk50),             // 50 MHz buffered clock 
@@ -564,7 +566,8 @@ command_top command_top (
     .aurora_ddr3_accept(aurora_ddr3_accept),    // DDR3 data has been accepted by the Aurora
     
     // status signals
-    .command_sm_idle(command_sm_idle)
+    .command_sm_idle(command_sm_idle),
+    .image_type(image_type)
 );
 
 

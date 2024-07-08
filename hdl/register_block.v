@@ -54,7 +54,8 @@ module register_block(
     output [31:0] genreg_addr_ctrl,             // generic register address and control output
     output [31:0] genreg_wr_data,             // generic register data written from Master FPGA 
     input [31:0] genreg_rd_data,             // generic register data read by Master FPGA
-    input [31:0] map_data_integrity
+    input [31:0] map_data_integrity,
+    input  [3:0] image_type
 );
 
     // make a register to hold the number of the selected register.
@@ -255,7 +256,7 @@ module register_block(
         if (rd_en && (reg_num[4:0] == 5'h1c)) rdbk_reg[31:0] <= reg28_[31:0];
         if (rd_en && (reg_num[4:0] == 5'h1d)) rdbk_reg[31:0] <= reg29_[31:0];
         if (rd_en && (reg_num[4:0] == 5'h1e)) rdbk_reg[31:0] <= reg30_[31:0];
-        if (rd_en && (reg_num[4:0] == 5'h1f)) rdbk_reg[31:0] <= {8'b0, `MAJOR_REV, `MINOR_REV, `PATCH_REV}; // R31 is read only
+        if (rd_en && (reg_num[4:0] == 5'h1f)) rdbk_reg[31:0] <= {4'b0, image_type, `MAJOR_REV, `MINOR_REV, `PATCH_REV}; // R31 is read only
         if ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) begin
            initial_fill_num_wr <= 1'b1;
         end

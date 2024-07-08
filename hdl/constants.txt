@@ -10,8 +10,14 @@
 	// Define 8-bit constants to hold info about code version and functionality
 	`define	MAJOR_REV   8'h06	// major revision
 	`define	MINOR_REV   8'h06	// minor revision
-	`define PATCH_REV   8'h08	// patch revision
+	`define PATCH_REV   8'h1C	// patch revision
 	
+  // Define constants indicating which style of firmware this is
+  `define STANDARD_MODE 4'b0001
+  `define ASYNC_MODE    4'b0010
+  `define CBUF_MODE     4'b0100
+  `define SELFTRIG_MODE 4'b1000
+
 	// Define 5-bit constants for commands from the Master FPGA
 	`define	CC_NO_CMD		5'd0	// may be useful for synchronizing or testing?
 	`define	CC_LOOPBACK		5'd1	// echo back an entire command packet

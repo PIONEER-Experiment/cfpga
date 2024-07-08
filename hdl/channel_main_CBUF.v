@@ -524,6 +524,8 @@ assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 ///////////////////////////////////////////////////////////////////////////////////
 // Connect the command processor. This will receive commands from the Aurora serial
 // link and process them
+wire [3:0] image_type;
+assign image_type = `CBUF_MODE;
 command_top command_top (
     // clocks and reset
     .clk50(clk50),             // 50 MHz buffered clock 
@@ -597,7 +599,8 @@ command_top command_top (
     .aurora_ddr3_accept(aurora_ddr3_accept),    // DDR3 data has been accepted by the Aurora
     
     // status signals
-    .command_sm_idle(command_sm_idle)
+    .command_sm_idle(command_sm_idle),
+    .image_type(image_type)
 );
 
 

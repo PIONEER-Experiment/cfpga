@@ -77,7 +77,8 @@ module command_top (
     input  aurora_ddr3_accept,                  // DDR3 data has been accepted by the Aurora
 
     // status signals
-    output command_sm_idle
+    output command_sm_idle,
+    input [3:0] image_type
 );
 
     wire ser_num_le, command_le;
@@ -391,7 +392,8 @@ module command_top (
         .genreg_addr_ctrl(genreg_addr_ctrl[31:0]),
         .genreg_wr_data(genreg_wr_data[31:0]),
         .genreg_rd_data(genreg_rd_data[31:0]),
-        .map_data_integrity(map_data_integrity[31:0])
+        .map_data_integrity(map_data_integrity[31:0]),
+        .image_type(image_type)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////

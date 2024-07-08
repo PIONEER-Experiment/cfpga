@@ -29,8 +29,8 @@ module circ_buf_to_ddr3_selftrig (
     output [22:0] current_waveform_num
 );
 
-wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
-reg  [22:0] waveform_start_adr; // DDR3 burst memory location (3 LSBs=0) for a waveform
+(* mark_debug = "true" *) wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
+(* mark_debug = "true" *) reg  [22:0] waveform_start_adr; // DDR3 burst memory location (3 LSBs=0) for a waveform
 reg  [22:0] num_fill_bursts;    // total number of bursts in a fill
 
 wire initial_fill_num_wr_sync;
@@ -110,6 +110,7 @@ adc_dat_mux_selftrig adc_dat_mux_selftrig (
 // It will be preset to '0x0001' when 'mem_enabled' is negated.
 // Its content will be put in the waveform headers.
 // It will increment every time data is written to the FIFO
+(* mark_debug = "true" *) wire burst_adr_cntr_en;
 burst_address_cntr_ASYNC burst_address_cntr_ASYNC (
     // inputs
     .clk(adc_clk),
@@ -119,9 +120,12 @@ burst_address_cntr_ASYNC burst_address_cntr_ASYNC (
     .burst_adr(burst_adr[22:0]) // current DDR3 burst memory location
 );
 // latch the start address for a waveform
+(* mark_debug = "true" *) wire save_start_adr;
 always @(posedge adc_clk) begin
-    if (save_start_adr)
-        waveform_start_adr[22:0] <= #1 burst_adr[22:0];
+    if (save_start_adr) begin
+        waveform_start_adr[21: 0] <= #1 burst_adr[21:0];
+        waveform_start_adr[22:22] <= #1 ddr3_range[0];
+    end
 end
 // add '1' to the final address to get the total count
 always @(posedge adc_clk) begin
@@ -172,36 +176,36 @@ adc_fill_cntr adc_fill_cntr (
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // connect a state machine to coordinate everything
-circ_buf_to_ddr3_sm_ASYNC circ_buf_to_ddr3_sm_ASYNC (
+circ_buf_to_ddr3_sm_selftrig circ_buf_to_ddr3_sm_selftrig (
     // inputs
     .adc_clk(adc_clk),
-    .cbuf_rd_en(cbuf_rd_en),        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-    .cbuf_trig_en(cbuf_trig_en),    // triggering of new waveforms is enabled
-    .trig_fifo_empty(trig_fifo_empty),          // if not empty then process a waveform
-    .reset_clk_adc(reset_clk_adc),        // either 'ext_reset' or 'reset_clk50' is asserted
-    .burst_cntr_zero(burst_cntr_zero),          // all sample bursts have been saved
+    .cbuf_rd_en(cbuf_rd_en),                       // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+    .cbuf_trig_en(cbuf_trig_en),                   // triggering of new waveforms is enabled
+    .trig_fifo_empty(trig_fifo_empty),             // if not empty then process a waveform
+    .reset_clk_adc(reset_clk_adc),                 // either 'ext_reset' or 'reset_clk50' is asserted
+    .burst_cntr_zero(burst_cntr_zero),             // all sample bursts have been saved
     // outputs
-    .cbuf_rd_trig_wait(cbuf_rd_trig_wait),    // waiting for another trigger or the negation of 'cbuf_rd_en'    
-    .burst_adr_cntr_init(burst_adr_cntr_init),    // initialize counter to '1'
-    .checksum_init(checksum_init),                // initialize the checksum
-    .trig_addr_rd_en(trig_addr_rd_en),            // read a trigger address from the FIFO
-    .save_start_adr(save_start_adr),            // latch the first DDR3 address for a waveform
-    .save_last_adr(save_last_adr),            // latch the last DDR3 address for a fill, it it the total count
-    .adc_acq_out_valid(adc_acq_out_valid),  // current data should be stored in the FIFO
+    .cbuf_rd_trig_wait(cbuf_rd_trig_wait),         // waiting for another trigger or the negation of 'cbuf_rd_en'
+    .burst_adr_cntr_init(burst_adr_cntr_init),     // initialize counter to '1'
+    .checksum_init(checksum_init),                 // initialize the checksum
+    .trig_addr_rd_en(trig_addr_rd_en),             // read a trigger address from the FIFO
+    .save_start_adr(save_start_adr),               // latch the first DDR3 address for a waveform
+    .save_last_adr(save_last_adr),                 // latch the last DDR3 address for a fill, it it the total count
+    .adc_acq_out_valid(adc_acq_out_valid),         // current data should be stored in the FIFO
     .init_circ_buf_rd_addr(init_circ_buf_rd_addr), // initialize the counter with the start of the buffer area to be saved
     .inc_circ_buf_rd_addr(inc_circ_buf_rd_addr),   // increment the address
-    .latch_circ_buf_dat(latch_circ_buf_dat),    // save the current 32-bit data word from the circular buffer
-    .select_dat(adc_mux_dat_sel),               // selects data
-    .select_fill_hdr(adc_mux_fill_hdr_sel),     // selects fill header
-    .select_waveform_hdr(adc_mux_wfm_hdr_sel),  // selects waveform header
-    .select_checksum(adc_mux_checksum_select),  // selects checksum, send the checksum to the FIFO 
-    .checksum_update(adc_mux_checksum_update),  // update the checksum 
-    .burst_adr_cntr_en(burst_adr_cntr_en),      // increment the next starting address
-    .burst_cntr_init(burst_cntr_init),      // initialize when triggered
-    .burst_cntr_en(burst_cntr_en),          // will be enabled once per burst
-    .fill_cntr_en(fill_cntr_en),            // will be enabled once per fill
-    .waveform_cntr_init(waveform_cntr_init),                  // initialize when triggered
-    .waveform_cntr_en(waveform_cntr_en)                  // will be enabled once after each waveform
-);      
+    .latch_circ_buf_dat(latch_circ_buf_dat),       // save the current 32-bit data word from the circular buffer
+    .select_dat(adc_mux_dat_sel),                  // selects data
+    .select_fill_hdr(adc_mux_fill_hdr_sel),        // selects fill header
+    .select_waveform_hdr(adc_mux_wfm_hdr_sel),     // selects waveform header
+    .select_checksum(adc_mux_checksum_select),     // selects checksum, send the checksum to the FIFO
+    .checksum_update(adc_mux_checksum_update),     // update the checksum
+    .burst_adr_cntr_en(burst_adr_cntr_en),         // increment the next starting address
+    .burst_cntr_init(burst_cntr_init),             // initialize when triggered
+    .burst_cntr_en(burst_cntr_en),                 // will be enabled once per burst
+    .fill_cntr_en(fill_cntr_en),                   // will be enabled once per fill
+    .waveform_cntr_init(waveform_cntr_init),       // initialize when triggered
+    .waveform_cntr_en(waveform_cntr_en)            // will be enabled once after each waveform
+);
 
 endmodule

@@ -18,8 +18,8 @@ module channel_main_selftrig (
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  output acq_trig,              // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
-  output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+(* mark_debug = "true" *) output acq_trig,              // to master, asserted active-hi when a self trigger achieved, C0_TRIG on schematic
+(* mark_debug = "true" *)  output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> red + green = orange, [1=0,2=1]-> red, [1=1,2=0]-> green, [1=1,2=1]-> off 
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
@@ -171,7 +171,7 @@ IBUFDS adc_clk_IBUFDS_inst (
    .IB(adc_clk_n)   // 1-bit input: Diff_n buffer input (connect directly to top-level port)
 );
 
-wire reset_clk50, reset_clk125, adc_acq_full_reset;;
+wire reset_clk50, reset_clk125, adc_acq_full_reset;
 
 // synchronous reset logic
 startup_reset startup_reset(
@@ -510,6 +510,8 @@ assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 ///////////////////////////////////////////////////////////////////////////////////
 // Connect the command processor. This will receive commands from the Aurora serial
 // link and process them
+wire [3:0] image_type;
+assign image_type = `SELFTRIG_MODE;
 command_top command_top (
     // clocks and reset
     .clk50(clk50),             // 50 MHz buffered clock 
@@ -586,7 +588,8 @@ command_top command_top (
     .aurora_ddr3_accept(aurora_ddr3_accept),    // DDR3 data has been accepted by the Aurora
     
     // status signals
-    .command_sm_idle(command_sm_idle)
+    .command_sm_idle(command_sm_idle),
+    .image_type(image_type)
 );
 
 

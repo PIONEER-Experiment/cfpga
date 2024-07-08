@@ -21,8 +21,8 @@ create_clock -period 2.500 -name adc_clk [get_ports adc_clk_p]
 # Each group should be generally be isolated from the others with FIFOs or 2-stage synchronizers.
 # There are quasi-DC signals, like configuration registers, that span clock domains without synchronizers.
 # The use of the registers is synchronized by way of how the logic operates.
-set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {xcvr_clk}]
-set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {adc_clk}]
+set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks xcvr_clk]
+set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks adc_clk]
 
 # This path is in the 'clkin' group, but is crossing from 250 MHz to 200 MHz
 ##set_false_path -from [get_pins ddr3_intf*/reset_sync2_reg/C] -to [all_registers]
@@ -32,5 +32,6 @@ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {adc
 # A wildcard is used in the hierarchy path to support both the normal and the ASYNC project
 #set_false_path -from [get_pins */adc_acq_full_reset*] -to [all_registers]
 set_false_path -from [get_cells -hierarchical -filter {NAME =~ *adc_acq_full_reset*}]
-#set_false_path -from [get_cells -hierarchical -filter {NAME =~ *adc_clk_sync2*}]
+set_false_path -from [get_cells -hierarchical -filter {NAME =~ *register_block/reg14__reg[*]}]
+
 
