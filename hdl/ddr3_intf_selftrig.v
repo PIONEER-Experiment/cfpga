@@ -8,27 +8,28 @@ module ddr3_intf_selftrig(
     output ddr3_domain_clk,                     // output, the DDR3 user-interface synchronous clock
     output reset_ddr3_clk,                      // output, synched to ddr3_clk
     // writing connections
-    (* mark_debug = "true" *) input ddr3_wr_en,                           // writing of triggered events to memory is enabled
+    input ddr3_wr_en,                           // writing of triggered events to memory is enabled
+    input cbuf_rd_en,                           // we have enabled storing of events -- asserted when not switching fill buffers
     input ddr3_wr_fifo_empty,                   // input, data is available when this is not asserted
     output ddr3_wr_fifo_rd_en,                  // output, use and remove the data on the FIFO head
-    (* mark_debug = "true" *) input [131:0] ddr3_wr_fifo_dat,             // input, 132-bit 4-bit header plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
+    input [131:0] ddr3_wr_fifo_dat,             // input, 132-bit 4-bit header plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
     output ddr3_wr_sync_err,                    // synchronization error flag
-    (* mark_debug = "true" *) output ddr3_wr_done,                        // asserted when the 'ddr3_wr_control' is in the DONE state
+    output ddr3_wr_done,                        // asserted when the 'ddr3_wr_control' is in the DONE state
     input acq_done,                             // input from the adc_acq_sm, aquisition is done
     // reading connections
     input local_domain_clk,                     // input, the local interface synchronous clock
     output fill_header_fifo_empty,              // output, a header is available when not asserted
     input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
     output [151:0] fill_header_fifo_out,        // output, data at the head of the FIFO
-    input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
-    input [23:0] ddr3_rd_burst_cnt,             // input, the number of bursts to read
-    input enable_reading,                       // input, initialize the address generator and both counters, go
-    output reading_done,                        // output, reading is complete
+(* mark_debug = "true" *) input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
+(* mark_debug = "true" *) input [23:0] ddr3_rd_burst_cnt,             // input, the number of bursts to read
+(* mark_debug = "true" *) input enable_reading,                       // input, initialize the address generator and both counters, go
+(* mark_debug = "true" *) output reading_done,                        // output, reading is complete
     // ports to the 'read' fifo
-    output ddr3_rd_fifo_wr_en,                  // data is valid, so put it in the READ FIFO    
-    output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
-    input ddr3_rd_fifo_almost_full,             // there is not much room left    
-    output ddr3_rd_fifo_input_tlast,            // the last burst for this fill 
+(* mark_debug = "true" *) output ddr3_rd_fifo_wr_en,                  // data is valid, so put it in the READ FIFO
+(* mark_debug = "true" *) output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
+    input ddr3_rd_fifo_almost_full,             // there is not much room left
+(* mark_debug = "true" *) output ddr3_rd_fifo_input_tlast,            // the last burst for this fill 
     // connections to the DDR3 chips
     output [12:0] ddr3_addr,
     output [2:0] ddr3_ba,
@@ -68,6 +69,13 @@ always @(posedge ddr3_domain_clk) begin
     ddr3_wr_en_sync2 <= ddr3_wr_en_sync1;
 end
 
+//synchronize the 'cbuf_rd_en' signal
+(* ASYNC_REG = "TRUE" *) reg cbuf_rd_en_sync1, cbuf_rd_en_sync2;
+always @(posedge ddr3_domain_clk) begin
+    cbuf_rd_en_sync1 <= cbuf_rd_en;
+    cbuf_rd_en_sync2 <= cbuf_rd_en_sync1;
+end
+
 (* mark_debug = "true" *) wire [25:0] ddr3_wr_addr;
 wire [25:0] ddr3_rd_addr;
 wire [151:0] fill_header_wr_dat;
@@ -105,7 +113,7 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     // User interface clock and reset   
     .clk(ddr3_domain_clk),
     .reset(ddr3_domain_reset),
-    .acq_enabled(ddr3_wr_en_sync2),                 // input, writing is enabled
+    .acq_enabled(cbuf_rd_en_sync2),                 // input, writing from cbuf to ddr3 has been enabled for a fill.
     // Connections to the FIFO from the ADC
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),     // input, next 'write' data from the ADC FIFO
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),        // input, data is available when this is not asserted

@@ -10,6 +10,7 @@ module adc_acq_top_selftrig (
     input adc_clk,                  // ADC clock used by the FIFO
     input reset_clk50,              // synchronously negated
     input adc_acq_full_reset,       // reset all aspects of data collection/storage/readout
+    input reset_timer,              // resets the 400 MHz self trigger timestamping counter
     input clk200,                   // for input pin timing delay settings
     input [11:0] channel_tag,       // stuff about the channel to put in the header
     input [23:0] initial_fill_num,  // event number to assign to the first fill
@@ -26,7 +27,9 @@ module adc_acq_top_selftrig (
 
     // outputs
     (* mark_debug = "true" *) output self_trig,                          // self-triggering conditions have been met
-    (* mark_debug = "true" *) output ddr3_wr_en,                         // writing of triggered events to memory is enabled
+    (* mark_debug = "true" *) output ddr3_wr_en,                         // writing of triggered events to memory is enabled - asserted for triggers
+    (* mark_debug = "true" *) output cbuf_rd_en,                         // we have enabled storing of events -- asserted when not switching fill buffers
+    output ddr3_selftrig_wr_active,            // we are not actively writing to
     output [ 64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
     output [ 23:0] fill_num,                   // fill number for this fill
     output [131:0] adc_acq_out_dat,            // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -34,11 +37,13 @@ module adc_acq_top_selftrig (
     (* mark_debug = "true" *) output ext_done,                           // external output indicating acquisition is done
     output adc_acq_sm_idle,                    // ADC acquisition state machine is idle (used for front panel LED status)
     output [ 22:0] current_waveform_num,       // the current waveform number, to be used in header
-    output [ 25:0] packed_adc_dat              // two samples, with over-range bits, packed in one wide-word
+    output [ 25:0] packed_adc_dat,             // two samples, with over-range bits, packed in one wide-word
                                                // bit[0]      = first overrange
                                                // bits[11:1]  = first ADC sample
                                                // bit[12]     = second overrange
                                                // bits[25:13] = second ADC sample
+    output [1:0] ext_done_buffer               // everything has been written to DDR3 and fill header FIFO
+
 );
 
 wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
@@ -72,7 +77,7 @@ end
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // create a 400 MHz counter that we latch when we get a trigger
-wire reset_timer;
+//wire reset_timer;
 reg  [41:0] timing_counter;
 wire [41:0] trigger_time;
 always @(posedge adc_clk) begin
@@ -128,7 +133,10 @@ enable_sm_selftrig enable_sm_selftrig (
     .trig_pulse(trig_pulse),                 // a trigger passed while the system is enabled for new triggers
     .adc_acq_sm_idle(adc_acq_sm_idle),       // ADC acquisition state machine is idle (used for front panel LED status)
     .ext_done(ext_done),                     // assert external acquisition is done
-    .reset_timer(reset_timer)                // triggers reset of the 800 MHz counter used to time stamp events
+//    .reset_timer(reset_timer),               // triggers reset of the 400 MHz counter used to time stamp events
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), // will be enabled whenever we need active writing to the DDR3
+    .ext_done_buffer(ext_done_buffer)
+
 );
 
 
@@ -142,6 +150,7 @@ adc_to_circ_buf_ASYNC adc_to_circ_buf_ASYNC (
     .adc_ovr_p(adc_ovr_p),                          // ADC 'p' over-range pin
     .adc_ovr_n(adc_ovr_n),                          // ADC 'n' over-range pin
     .adc_clk(adc_clk),                              // 400 MHz ADC clock
+    //.adc_clk_p(adc_clk_p),                        // ADC 'p' clk pin
     //.adc_clk_p(adc_clk_p),                        // ADC 'p' clk pin
     //.adc_clk_n(adc_clk_n),                        // ADC 'n' clk pin
     .reset_clk_adc(adc_acq_full_reset),             // synched to adc_clk
@@ -167,15 +176,18 @@ assign signal_polarity = 1'b0;
 // Self-trigger module
 // A trigger will be established when a pulse exceeds a set threshold above a
 // running-average pedestal
+wire [41:0] timestamp;
 self_trigger self_trigger(
     .clk(adc_clk),
     .rst(adc_acq_full_reset),
     .adcdat(packed_adc_dat),                  // a pair of ADC samples and a pair of over-range bits
+    .timing_counter(timing_counter),          // input the 400 MHz clock counter
     .threshold(selftrig_threshold),           // threshold for average - pedestal to trigger a trigger pulse
     .polarity(signal_polarity),               // 1 => positive going signal, 0 => negative going
     .enable(enable_triggering),               // start looking for triggers
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid
-    .trigger(self_trig)                       // a trigger has been found
+    .trigger(self_trig),                      // a trigger has been found
+    .timestamp(timestamp)                     // latched time_counter value when the trigger fires
 );
 
 
@@ -217,7 +229,7 @@ circ_buf_fifo circ_buf_fifo (
 trigger_time_fifo trigger_time_fifo (
   .clk(adc_clk),                    // 400 MHz ADC DDR clock
   .rst(adc_acq_full_reset),         // reset from the Master FPGA
-  .din(timing_counter[41:0]),       // current 'write' address
+  .din(timestamp),                  // current 'write' address
   .wr_en(trig_pulse),               // single-period pulse from 'acq_trig' input
   .rd_en(trig_addr_rd_en),          // read a trigger address from the FIFO
   .dout(trigger_time[41:0]),        // circular bufferr address corresponding to a trigger
@@ -251,7 +263,8 @@ circ_buf_to_ddr3_selftrig circ_buf_to_ddr3_selftrig(
     .circ_buf_rd_addr(circ_buf_rd_addr[15:0]),     // read address for the circular buffer
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),      // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),         // current data should be stored in the FIFO
-    .current_waveform_num(current_waveform_num[22:0])
+    .current_waveform_num(current_waveform_num[22:0]),
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active)  // will be enabled whenever we do not need active writing to the DDR3
 );
 
 endmodule

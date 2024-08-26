@@ -13,7 +13,7 @@ create_clock -period 8.000 -name xcvr_clk [get_ports xcvr_clk]
 
 
 # 400 MHz ADC clock
-# This cones from the ADC
+# This comes from the ADC
 create_clock -period 2.500 -name adc_clk [get_ports adc_clk_p]
 #create_clock -period 10.000 -name adc_clk [get_ports adc_clk_p] // a 100 MHz version for debugging (200 MHz adc)
 
@@ -33,5 +33,7 @@ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks adc_
 #set_false_path -from [get_pins */adc_acq_full_reset*] -to [all_registers]
 set_false_path -from [get_cells -hierarchical -filter {NAME =~ *adc_acq_full_reset*}]
 set_false_path -from [get_cells -hierarchical -filter {NAME =~ *register_block/reg14__reg[*]}]
+
+
 
 

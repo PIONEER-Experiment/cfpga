@@ -84,15 +84,15 @@ end
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
-    IDLE            = 4'd0,
-    FILL_WAIT       = 4'd1,
-    FILL_START      = 4'd2,
-    TRIG_ENABLED    = 4'd3,
-    CBUF_RD_ENABLED = 4'd4,
-    CBUF_RD_DONE    = 4'd5,
-    DDR3_DONE_WAIT  = 4'd6,
-    DONE1           = 4'd7,
-    DONE2           = 4'd8;
+    IDLE            = 4'd0,  // 001
+    FILL_WAIT       = 4'd1,  // 002
+    FILL_START      = 4'd2,  // 004
+    TRIG_ENABLED    = 4'd3,  // 008
+    CBUF_RD_ENABLED = 4'd4,  // 010
+    CBUF_RD_DONE    = 4'd5,  // 020
+    DDR3_DONE_WAIT  = 4'd6,  // 040
+    DONE1           = 4'd7,  // 080
+    DONE2           = 4'd8;  // 100
    
 // Declare current state and next state variables
 reg [8:0] /* synopsys enum STATE_TYPE */ CS;

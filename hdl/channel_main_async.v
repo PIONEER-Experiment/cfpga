@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+`include "constants.txt"
 
 //////////////////////////////////////////////////////////////
 // Top-level module for g-2 WFD5 Channel FPGA

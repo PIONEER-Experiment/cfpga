@@ -5,30 +5,30 @@
 
 // Only define these constants once.
 `ifndef CONSTANTS_INCLUDED
-  	`define CONSTANTS_INCLUDED
+    `define CONSTANTS_INCLUDED
 
-	// Define 8-bit constants to hold info about code version and functionality
-	`define	MAJOR_REV   8'h06	// major revision
-	`define	MINOR_REV   8'h06	// minor revision
-	`define PATCH_REV   8'h1C	// patch revision
-	
+  // Define 8-bit constants to hold info about code version and functionality
+  `define  MAJOR_REV   8'h06  // major revision
+  `define  MINOR_REV   8'h06  // minor revision
+  `define  PATCH_REV   8'h41  // patch revision
+  
   // Define constants indicating which style of firmware this is
   `define STANDARD_MODE 4'b0001
   `define ASYNC_MODE    4'b0010
   `define CBUF_MODE     4'b0100
   `define SELFTRIG_MODE 4'b1000
 
-	// Define 5-bit constants for commands from the Master FPGA
-	`define	CC_NO_CMD		5'd0	// may be useful for synchronizing or testing?
-	`define	CC_LOOPBACK		5'd1	// echo back an entire command packet
-	`define	CC_RD_REG		5'd2	// read a configuration register
-	`define	CC_WR_REG		5'd3	// write a configuration register
-	`define	CC_RD_PATMEM	5'd4	// read from the test pattern memory
-	`define	CC_WR_PATMEM	5'd5	// write to the test pattern memory?
-	`define	CC_RD_MEM		5'd6	// read from a range of memory locations
-	`define	CC_WR_MEM		5'd7	// write to a range of memory locations
-	`define	CC_RD_FILL		5'd8	// read the next fill
-	`define CC_RD_ADC       5'd9 	// read a block directly from the ADC
-	`define CC_MAP_DELAY    5'd10   // map out ADC tap delay settings
+  // Define 5-bit constants for commands from the Master FPGA
+  `define  CC_NO_CMD     5'd0  // may be useful for synchronizing or testing?
+  `define  CC_LOOPBACK   5'd1  // echo back an entire command packet
+  `define  CC_RD_REG     5'd2  // read a configuration register
+  `define  CC_WR_REG     5'd3  // write a configuration register
+  `define  CC_RD_PATMEM  5'd4  // read from the test pattern memory
+  `define  CC_WR_PATMEM  5'd5  // write to the test pattern memory?
+  `define  CC_RD_MEM     5'd6  // read from a range of memory locations
+  `define  CC_WR_MEM     5'd7  // write to a range of memory locations
+  `define  CC_RD_FILL    5'd8  // read the next fill
+  `define CC_RD_ADC      5'd9   // read a block directly from the ADC
+  `define CC_MAP_DELAY   5'd10   // map out ADC tap delay settings
 
 `endif

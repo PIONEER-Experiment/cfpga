@@ -36,6 +36,7 @@ module command_top (
     output [ 22:0] ddr3_rd_start_addr,          // the address of the first requested 128-bit burst
     output [ 23:0] ddr3_rd_burst_cnt,         // input, the number of bursts to read
     output enable_reading,                    // input, initialize the address generator and both counters, go
+    input  acq_done_latch,                     // input, last self-trigger safely processed (default to 1 in other modes)
     input  reading_done,                      // output, reading is complete
 
     // register to/from the ADC acquisition state machine
@@ -62,6 +63,7 @@ module command_top (
     output [15:0] async_pre_trig,             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
+    output read_fill_done,                    // read fill state machine finished
 
     input  [15:0] xadc_temp,
     input  [15:0] xadc_vccint,
@@ -150,6 +152,29 @@ module command_top (
     assign run_cc_rd_fill   = (run_cmd_sm && (command_reg[4:0] == `CC_RD_FILL));
     assign run_cc_map_delay = (run_cmd_sm && (command_reg[4:0] == `CC_MAP_DELAY));
 
+    reg s1, s2, s3;
+    wire run_cc_rd_fill_pulse;
+    always @(posedge clk) begin
+        s1 <= run_cc_rd_fill;
+        s2 <= s1;
+        s3 <= s2;
+    end
+    assign run_cc_rd_fill_pulse = ~s3 & s2;
+
+(* mark_debug = "true" *) reg [11:0] event_ctr;
+    always @ (posedge clk) begin
+      if ( reset ) begin
+        event_ctr[11:0] = 12'b0;
+      end
+      else if (run_cc_rd_fill_pulse) begin
+        event_ctr[11:0] = event_ctr[11:0] + 1;
+      end
+      else begin
+        event_ctr[11:0] = event_ctr[11:0];
+      end
+    end
+
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     // merge 'running' and 'done' signals from the state machines that handle individual commands.
     // only 1 of each, from the activated sm, should ever be active at the same time
@@ -160,6 +185,7 @@ module command_top (
     wire cmd_sm_done, map_sm_done;
     wire cc_loopback_done, cc_rd_reg_done, cc_wr_reg_done, cc_rd_fill_done, cc_map_delay_done;
     assign cmd_sm_done = cc_loopback_done || cc_rd_reg_done || cc_wr_reg_done || cc_rd_fill_done || cc_map_delay_done;
+    assign read_fill_done = cc_rd_fill_done;
 
     ////////////////////////////////////////////////////////////////////
     // every state machine will need to drive certain FIFO control lines
@@ -423,12 +449,13 @@ module command_top (
         .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
         // interface to the DDR3 memory 
         .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),         // the address of the requested 128-bit burst
-        .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),         // number of bursts to read from the DDR3
-        .enable_reading(enable_reading),                      // start the 'ddr3_rd_control'
-        .reading_done(reading_done),                            // reading is complete
+        .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),           // number of bursts to read from the DDR3
+        .enable_reading(enable_reading),                       // start the 'ddr3_rd_control'
+        .reading_done(reading_done),                           // reading is complete
+        .acq_done_latch(acq_done_latch),                       // input, last self-trigger safely processed (default to 1 in other modes)
         // interface to the AXIS 2:1 MUX
         .use_ddr3_data(use_ddr3_data),                         // the data source is the DDR3 memory
-        .aurora_ddr3_accept(aurora_ddr3_accept)                 // DDR3 data has been accepted by the Aurora
+        .aurora_ddr3_accept(aurora_ddr3_accept)                // DDR3 data has been accepted by the Aurora
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////

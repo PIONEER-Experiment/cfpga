@@ -22,11 +22,12 @@ module circ_buf_to_ddr3_selftrig (
     // outputs
     output cbuf_rd_trig_wait,    // waiting for another trigger or the negation of 'cbuf_rd_en'    
     output trig_addr_rd_en,            // read a trigger address from the FIFO
-    output [23:0] fill_num,         // fill number for this fill
+(* mark_debug = "true" *) output [23:0] fill_num,         // fill number for this fill
     output reg [15:0] circ_buf_rd_addr,    // read address for the circular buffer
     output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,           // current data should be stored in the FIFO
-    output [22:0] current_waveform_num
+    output [22:0] current_waveform_num,
+    output ddr3_selftrig_wr_active      // enabled whenever we are actively writing a trigger to the DDR3
 );
 
 (* mark_debug = "true" *) wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
@@ -205,7 +206,8 @@ circ_buf_to_ddr3_sm_selftrig circ_buf_to_ddr3_sm_selftrig (
     .burst_cntr_en(burst_cntr_en),                 // will be enabled once per burst
     .fill_cntr_en(fill_cntr_en),                   // will be enabled once per fill
     .waveform_cntr_init(waveform_cntr_init),       // initialize when triggered
-    .waveform_cntr_en(waveform_cntr_en)            // will be enabled once after each waveform
+    .waveform_cntr_en(waveform_cntr_en),           // will be enabled once after each waveform
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active)  // will be enabled whenever we need active writing to the DDR3
 );
 
 endmodule

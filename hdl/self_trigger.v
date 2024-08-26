@@ -15,11 +15,13 @@ module self_trigger (
     input clk,                     // the 400 MHz adc/ddr3 clock
     input rst,                     // reset
     input [25:0] adcdat,           // a pair of ADC samples and a pair of over-range bits
+    input [41:0] timing_counter,   // counter of 400 MHz clock ticks
     input signed [11:0] threshold, // threshold for average - pedestal to trigger a trigger pulse.
     input polarity,                // 1 => positive going signal, 0 => negative going
     input enable,                  // start looking for triggers
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
+    output reg [41:0] timestamp,   // timing_counter latched at trigger time
     (* mark_debug = "true" *) output reg trigger
 );
 
@@ -84,7 +86,7 @@ always @(posedge clk) begin
      ped_buffer2 <= ped_buffer1;
      local_trigger_reg <= local_trigger_wire;
      local_trigger     <= local_trigger_reg;
-     trigger <= local_trigger || holding_trigger;
+     trigger <= holding_trigger;
   end
 end
 
@@ -144,7 +146,7 @@ always @ (posedge clk) begin
     CS <=  NS;         // set state bits to next state
 end
 
-always @ (CS or enable_sync2 or delay_cntr_zero ) begin
+always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger ) begin
   NS = {5{1'b0}}; // default all bits to zero; will overrride one bit
   
   case (1'b1) // synopsys full_case parallel_case
@@ -206,25 +208,26 @@ always @ (CS or enable_sync2 or delay_cntr_zero ) begin
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
 always @ (posedge clk) begin
-  init_delay_cntr = 1'b0;
-  self_trig_ready = 1'b0;
-  init_hold_counter = 1'b0;
-  holding_trigger = 1'b0;
+  init_delay_cntr   <= 1'b0;
+  self_trig_ready   <= 1'b0;
+  init_hold_counter <= 1'b0;
+  holding_trigger   <= 1'b0;
   
   if (NS[IDLE]) begin
-    init_delay_cntr = 1'b1;
+    init_delay_cntr <= 1'b1;
   end
 
   if(NS[ACCEPT_TRIGGERS]) begin
-    self_trig_ready = 1'b1;
+    self_trig_ready <= 1'b1;
   end
 
   if(NS[SETUP_HOLD]) begin
-    init_hold_counter = 1'b1;
+    init_hold_counter <= 1'b1;
   end
 
   if(NS[HOLD_TRIGGER]) begin
-    holding_trigger = 1'b1;
+    holding_trigger <= 1'b1;
+    timestamp[41:0] <= timing_counter[41:0];
   end
   
 end

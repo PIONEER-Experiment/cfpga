@@ -25,7 +25,7 @@ module cc_rd_fill_sm (
     input clk,                                // local clock
     input reset,                            // active-high
 
-    input run_sm,                               // run this state machine
+(* mark_debug = "true" *) input run_sm,                               // run this state machine
     output reg sm_running,                    // we are running
     output reg sm_done,                        // we are finished
 
@@ -33,30 +33,31 @@ module cc_rd_fill_sm (
     output reg tx_tlast,                       // this is the final word in the frame
     input tx_tready,                         // signal that the TX fifo has accepted the data
 
-    output reg send_csn,                    // send the CSN
-    output reg send_cmd,                    // send the CC
-    output reg send_inv_cmd,                // send the inverse CC
+(* mark_debug = "true" *) output reg send_csn,                    // send the CSN
+(* mark_debug = "true" *) output reg send_cmd,                    // send the CC
+(* mark_debug = "true" *) output reg send_inv_cmd,                // send the inverse CC
 
     // interface to the header FIFO
-    input fill_header_fifo_empty,            // a header is available when not asserted
-    output reg fill_header_fifo_rd_en,        // remove the current data from the FIFO
-    input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
+(* mark_debug = "true" *) input fill_header_fifo_empty,            // a header is available when not asserted
+(* mark_debug = "true" *) output reg fill_header_fifo_rd_en,        // remove the current data from the FIFO
+(* mark_debug = "true" *)    input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
     input [22:0] fixed_ddr3_start_addr,
     input en_fixed_ddr3_start_addr,
 
     // interface to the DDR3 memory
-    output reg [22:0] ddr3_rd_start_addr,    // the address of the first requested 128-bit burst
-    output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
+(* mark_debug = "true" *) output reg [22:0] ddr3_rd_start_addr,     // the address of the first requested 128-bit burst
+(* mark_debug = "true" *) output reg [23:0] ddr3_rd_burst_cnt,      // number of bursts to read from the DDR3
     output reg enable_reading,                 // start the 'ddr3_rd_control'
-    input reading_done,                       // reading is complete
-    
+(* mark_debug = "true" *) input reading_done,                       // reading is complete
+(* mark_debug = "true" *) input acq_done_latch,                     // input, last self-trigger safely processed (default to 1 in other modes)
+
     // interface to the AXIS 2:1 MUX
     output reg use_ddr3_data,                // the data source is the DDR3 memory
     input aurora_ddr3_accept                // DDR3 data has been accepted by the Aurora
 );
 
 // Synchronize  'reading_done'.
-(* ASYNC_REG = "TRUE" *) reg reading_done_sync1, reading_done_sync2;
+(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg reading_done_sync1, reading_done_sync2;
 always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;
@@ -66,7 +67,7 @@ end
 reg [127:0] saved_header;
     
 // make a register to hold error status
-reg error_found;
+(* mark_debug = "true" *) reg error_found;
 
 // make a counter to keep track of how many 32-bit DDR3 words still need to
 // be accepted by the Aurora interface
@@ -82,19 +83,19 @@ end
 // Declare the symbolic names for states for the state machine
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
-    IDLE                = 4'd0,
-    CHK_FIFO_EMPTY        = 4'd1,
-    ERROR1                = 4'd2,
-    GET_FIFO_HDR        = 4'd3,
-    ECHO_CSN1            = 4'd4,
-    ECHO_CSN2            = 4'd5,
-    ECHO_CC1            = 4'd6,
-    ECHO_CC2            = 4'd7,
-    GET_DDR3_DATA        = 4'd8,
-    DONE                = 4'd9;
+    IDLE                 = 4'd0,  // 001
+    CHK_FIFO_EMPTY       = 4'd1,  // 002
+    ERROR1               = 4'd2,  // 004
+    GET_FIFO_HDR         = 4'd3,  // 008
+    ECHO_CSN1            = 4'd4,  // 010
+    ECHO_CSN2            = 4'd5,  // 020
+    ECHO_CC1             = 4'd6,  // 040
+    ECHO_CC2             = 4'd7,  // 080
+    GET_DDR3_DATA        = 4'd8,  // 100
+    DONE                 = 4'd9;  // 200
                 
 // Declare current state and next state variables
-reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
@@ -108,8 +109,20 @@ always @ (posedge clk) begin
     else CS <= NS;          // set state bits to next state
 end
 
-// combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent) begin
+// to help with debugging, create an event counter
+(* mark_debug = "true" *) reg [11:0] event_ctr;
+reg update_event_ctr;
+always @ (posedge clk) begin
+  if (update_event_ctr) begin
+    event_ctr[11:0] = event_ctr[11:0] + 1;
+  end
+  else begin
+    event_ctr[11:0] = event_ctr[11:0];
+  end
+end
+
+// combinational always block to determine next state  (use blocking [=] assignments)
+always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or acq_done_latch) begin
     NS = 10'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
@@ -124,8 +137,12 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         // We enter the CHK_FIFO_EMPTY state after we have been started.
         // There should be a complete header in the FIFO. If nothing is there, then we flag an error
         CS[CHK_FIFO_EMPTY]: begin
+            if ( !acq_done_latch ) begin
+               // the DDR3 writing and header fifo should be ready for us -- wait here
+               NS[CHK_FIFO_EMPTY] = 1'b1;
+            end
             // See if there is something in the header FIFO
-            if (fill_header_fifo_empty)
+            else if (fill_header_fifo_empty)
                 // We were asked for a fill, but nothing there, so go flag an error.
                 // We need to somehow resync.
                 NS[ERROR1] = 1'b1;
@@ -223,19 +240,23 @@ end // combinational always block to determine next state
 ///////////////////////////////////////////////////////////////////////////
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
+(* mark_debug = "true" *) reg [11:0] header_address;
+(* mark_debug = "true" *) reg ohoh;
 always @ (posedge clk) begin
     // defaults
-    sm_running                <= 1'b1;    // negate this when IDLE
-    sm_done                    <= 1'b0;
-    fill_header_fifo_rd_en    <= 1'b0;
-    enable_reading            <= 1'b0;
-    tx_tvalid                <= 1'b0;
+    sm_running              <= 1'b1;    // negate this when IDLE
+    sm_done                 <= 1'b0;
+    fill_header_fifo_rd_en  <= 1'b0;
+    enable_reading          <= 1'b0;
+    tx_tvalid               <= 1'b0;
     tx_tlast                <= 1'b0;
     send_csn                <= 1'b0;
     send_cmd                <= 1'b0;
     send_inv_cmd            <= 1'b0;
-    use_ddr3_data            <= 1'b0;
-    
+    use_ddr3_data           <= 1'b0;
+    update_event_ctr        <= 1'b0;
+    ohoh                    <= 1'b0;
+
     // next states
     if (NS[IDLE]) begin
         sm_running <= 1'b0;    // negate this when IDLE
@@ -268,9 +289,14 @@ always @ (posedge clk) begin
         ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
         // remove the word from the FIFO head
         fill_header_fifo_rd_en <= 1'b1;
+        update_event_ctr       <= 1'b1;
+        header_address         <= fill_header_fifo_out[11:0];
     end
 
     if (NS[ECHO_CSN1]) begin
+        if ( header_address != event_ctr ) begin
+            ohoh <= 1'b1;
+        end
         send_csn <= 1'b1;
     end
 
