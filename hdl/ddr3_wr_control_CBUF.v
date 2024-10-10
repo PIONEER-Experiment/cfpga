@@ -39,16 +39,16 @@ module ddr3_wr_control_cbuf (
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
-    IDLE        = 4'd0,
-    TST_TAG     = 4'd1,
-    SYNC_ERR    = 4'd2,
-    INIT_FILL   = 4'd3,
-    INIT_WFM    = 4'd4,
-    INIT_CKSM   = 4'd5,
-    WRITE       = 4'd6,
-    WRITE_CKSM  = 4'd7,
-    WRITE_HDR   = 4'd8,
-    DONE        = 4'd9;
+    IDLE        = 4'd0,    // 0001
+    TST_TAG     = 4'd1,    // 0002
+    SYNC_ERR    = 4'd2,    // 0004
+    INIT_FILL   = 4'd3,    // 0008
+    INIT_WFM    = 4'd4,    // 0010
+    INIT_CKSM   = 4'd5,    // 0020
+    WRITE       = 4'd6,    // 0040
+    WRITE_CKSM  = 4'd7,    // 0080
+    WRITE_HDR   = 4'd8,    // 0100
+    DONE        = 4'd9;    // 0200
 
 // Declare current state and next state variables
 reg [9:0] /* synopsys enum STATE_TYPE */ CS;

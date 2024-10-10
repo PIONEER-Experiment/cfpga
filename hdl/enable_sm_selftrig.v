@@ -9,19 +9,21 @@ module enable_sm_selftrig (
     input reset_clk50,          // synchronously negated reset all of the acquisition logic
     input reset_clk_adc,        // reset everything related to ADC acquisition and storage -- now just reset_clk50 synced to adc_clk
     input cbuf_rd_trig_wait,    // waiting for another trigger or the negation of 'cbuf_rd_en'
-(* mark_debug = "true" *) input ddr3_wr_done,         // asserted when the 'ddr3_wr_control' is in the DONE state
+    input ddr3_wr_done,         // asserted when the 'ddr3_wr_control' is in the DONE state
     input ddr3_selftrig_wr_active, // enabled whenever we are actively writing a trigger to the DDR3
+    input initial_fill_num_wr_clkadc, // when we initialize fill number, also initialize the ddr3_buffer-related variables
     // outputs
-(* mark_debug = "true" *) output reg cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
-(* mark_debug = "true" *) output reg cbuf_trig_en,    // triggering of new waveforms is enabled for the current DDR3 write buffer
-(* mark_debug = "true" *) output reg cbuf_rd_en,      // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-(* mark_debug = "true" *) output reg ddr3_wr_en,      // writing of triggered events to memory is enabled
-(* mark_debug = "true" *) output reg [1:0] ddr3_range,// level of the ddr3 range bit.  Two copies because of history of other modes
-(* mark_debug = "true" *) output reg trig_pulse,      // a trigger passed while the system is enabled for new triggers
+    output reg cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
+    output reg cbuf_trig_en,    // triggering of new waveforms is enabled for the current DDR3 write buffer
+    output reg cbuf_rd_en,      // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+    output reg ddr3_wr_en,      // writing of triggered events to memory is enabled
+(* mark_debug = "true" *)     output reg [1:0] ddr3_range,// level of the ddr3 range bit.  Two copies because of history of other modes
+    output reg trig_pulse,      // a trigger passed while the system is enabled for new triggers
     output reg adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
     output reg ext_done,        // external output indicating acquisition is done
 //    output reg reset_timer,     // triggers reset of the 800 MHz counter used to time stamp events
-    output reg [1:0] ext_done_buffer                 // everything has been written to DDR3 and fill header FIFO
+(* mark_debug = "true" *)     output reg [1:0] ext_done_buffer,                // everything has been written to DDR3 and fill header FIFO
+    output reg range_flip
 );
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +36,7 @@ end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Sync the ddr3_buffer bit
-(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg ddr3_buffer_sync1, ddr3_buffer_sync2;
+(* ASYNC_REG = "TRUE" *) reg ddr3_buffer_sync1, ddr3_buffer_sync2;
 always @(posedge adc_clk) begin
     ddr3_buffer_sync1 <= #1 ddr3_buffer;
     ddr3_buffer_sync2 <= #1 ddr3_buffer_sync1;
@@ -85,9 +87,10 @@ always @(posedge adc_clk) begin
 end
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Watch for the ddr3_buffer bit from the master to flip
-(* mark_debug = "true" *) reg range_flip, prev_ddr3_buffer;
+//reg range_flip;
+reg prev_ddr3_buffer;
 always @ (posedge adc_clk) begin
-   if ( reset_clk_adc ) begin
+   if ( reset_clk_adc | initial_fill_num_wr_clkadc ) begin
       range_flip <= 1'b0;
       prev_ddr3_buffer <= 1'b0;
    end
@@ -124,7 +127,8 @@ reg [8:0] /* synopsys enum STATE_TYPE */ NS;
 
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge adc_clk) begin
-    if (reset_clk_adc) begin
+    if (reset_clk_adc | !trig_ready_sync2 ) begin
+//    if (reset_clk_adc ) begin
         CS <= #1 {9{1'b0}}; // set all state bits to 0
         CS[IDLE] <= #1 1'b1; // set IDLE state bit to 1
     end
@@ -270,12 +274,14 @@ always @ (posedge adc_clk) begin
 
     if (NS[CBUF_RD_DONE]) begin
         ddr3_wr_en           <= #1 ddr3_selftrig_wr_active;        // writing of triggered events to memory is enabled
-        cbuf_rd_en           <= #1 1'b1;        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+        cbuf_rd_en           <= #1 trig_ready_sync2;    // moving data from the circ buf to the DDR3 FIFO is enabled,
+                                                        // -- checksum and fill header go when first negated. Disable if running has been disabled
     end
 
     if (NS[DDR3_DONE_WAIT]) begin
         ddr3_wr_en           <= #1 ddr3_selftrig_wr_active;        // writing of triggered events to memory is enabled
-        cbuf_rd_en           <= #1 1'b1;        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+        cbuf_rd_en           <= #1 trig_ready_sync2;        // moving data from the circ buf to the DDR3 FIFO is enabled, chec
+                                                            // -- checksum and fill header go when first negated. Disable if running has been disabled
     end
 
     if (NS[DONE1]) begin

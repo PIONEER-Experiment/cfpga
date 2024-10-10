@@ -135,7 +135,8 @@ module register_block(
     assign initial_fill_num[23:0] = reg0_[23:0];
     // Send R0 'wr_en' to the ADC acquisition controller
     // fill number will be set back to initial value after a reset
-//    assign initial_fill_num_wr = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
+    //wire initial_fill_num_wr_wire;
+    //assign initial_fill_num_wr_wire = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
 
     // R1 - channel tag
     // bits [2:0] from configuration jumpers
@@ -257,12 +258,14 @@ module register_block(
         if (rd_en && (reg_num[4:0] == 5'h1d)) rdbk_reg[31:0] <= reg29_[31:0];
         if (rd_en && (reg_num[4:0] == 5'h1e)) rdbk_reg[31:0] <= reg30_[31:0];
         if (rd_en && (reg_num[4:0] == 5'h1f)) rdbk_reg[31:0] <= {4'b0, image_type, `MAJOR_REV, `MINOR_REV, `PATCH_REV}; // R31 is read only
-        if ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) begin
+        // fill number will be set back to initial value after a reset
+        if ( (wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) begin
            initial_fill_num_wr <= 1'b1;
         end
         else begin
            initial_fill_num_wr <= 1'b0; 
         end
+        //initial_fill_num_wr <= initial_fill_num_wr_wire;
 
         // else rdbk_reg[31:0] <= rdbk_reg[31:0];
     end

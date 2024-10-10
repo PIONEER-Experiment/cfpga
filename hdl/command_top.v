@@ -37,7 +37,7 @@ module command_top (
     output [ 23:0] ddr3_rd_burst_cnt,         // input, the number of bursts to read
     output enable_reading,                    // input, initialize the address generator and both counters, go
     input  acq_done_latch,                     // input, last self-trigger safely processed (default to 1 in other modes)
-    input  reading_done,                      // output, reading is complete
+    input  reading_done,                       // input, reading is complete
 
     // register to/from the ADC acquisition state machine
     input  [23:0] fill_num,                      // fill number for this fill
@@ -142,7 +142,7 @@ module command_top (
     // generate 'run' signals for the state machines that handle individual commands
     // start with 'run_cmd_sm' which is a 'run someone' from the command sm.
     // Use the actual command from the command register to activate 1 particular sm.
-    wire run_cmd_sm;
+    (* mark_debug = "true" *) wire run_cmd_sm;
     wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
     wire run_cc_rd_fill;
 
@@ -161,7 +161,7 @@ module command_top (
     end
     assign run_cc_rd_fill_pulse = ~s3 & s2;
 
-(* mark_debug = "true" *) reg [11:0] event_ctr;
+    reg [11:0] event_ctr;
     always @ (posedge clk) begin
       if ( reset ) begin
         event_ctr[11:0] = 12'b0;
@@ -455,7 +455,10 @@ module command_top (
         .acq_done_latch(acq_done_latch),                       // input, last self-trigger safely processed (default to 1 in other modes)
         // interface to the AXIS 2:1 MUX
         .use_ddr3_data(use_ddr3_data),                         // the data source is the DDR3 memory
-        .aurora_ddr3_accept(aurora_ddr3_accept)                // DDR3 data has been accepted by the Aurora
+        .aurora_ddr3_accept(aurora_ddr3_accept),               // DDR3 data has been accepted by the Aurora
+        // for debugging
+        .initial_fill_num_wr(initial_fill_num_wr)              // tells the debugging event counter to reset to zero
+
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////

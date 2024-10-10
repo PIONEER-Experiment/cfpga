@@ -3,41 +3,44 @@
 module circ_buf_to_ddr3_sm_selftrig (
     // inputs
   input adc_clk,
-    input reset_clk_adc,        // synchronously negated reset all of the acquisition logic  
-  input cbuf_rd_en,          // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-(* mark_debug = "true" *) input cbuf_trig_en,          // triggering of new waveforms is enabled
-(* mark_debug = "true" *) input trig_fifo_empty,        // if not empty then process a waveform
-  input burst_cntr_zero,              // all sample bursts have been saved
-    // outputs
-  output reg cbuf_rd_trig_wait,     // waiting for another trigger or the negation of 'cbuf_rd_en'
-  output reg burst_adr_cntr_init,   // initialize counter to '1'
-  output reg init_circ_buf_rd_addr, // initialize the counter with the start of the buffer area to be saved
-  output reg inc_circ_buf_rd_addr,  // increment the circular buffer address
-  output reg latch_circ_buf_dat,    // save the current 32-bit data word from the circular buffer
-(* mark_debug = "true" *) output reg select_fill_hdr,       // selects fill header from the MUX
-  output reg select_dat,            // selects data from the MUX
-  output reg select_waveform_hdr,   // selects waveform header
-  output reg select_checksum,       // selects checksum, send the checksum to the FIFO
-  output reg checksum_update,       // update the checksum
-  output reg checksum_init,         // initialize the checksum
-(* mark_debug = "true" *) output reg adc_acq_out_valid,     // current output from the MUX should be stored in the FIFO
-  output reg burst_adr_cntr_en,     // increment the next starting address
-  output reg save_start_adr,        // latch the first DDR3 address for a waveform
-  output reg save_last_adr,         // latch the last DDR3 address for a fill, it it the total count
-  output reg trig_addr_rd_en,       // read a trigger address from the FIFO
-  output reg burst_cntr_init,       // initialize when triggered
-  output reg burst_cntr_en,         // will be enabled once per burst
-  output reg waveform_cntr_init,    // initialize when triggered
-  output reg waveform_cntr_en,      // will be enabled once after each waveform
-(* mark_debug = "true" *) output reg ddr3_selftrig_wr_active, // we are in a state where we are actively writing to the ddr3
-(* mark_debug = "true" *) output reg fill_cntr_en           // will be enabled once per fill
+  input reset_clk_adc,        // synchronously negated reset all of the acquisition logic
+ (* mark_debug = "true" *) input cbuf_rd_en,          // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+ (* mark_debug = "true" *) input cbuf_trig_en,          // triggering of new waveforms is enabled
+ (* mark_debug = "true" *) input trig_fifo_empty,        // if not empty then process a waveform
+ (* mark_debug = "true" *) input burst_cntr_zero,              // all sample bursts have been saved
+  // outputs
+ (* mark_debug = "true" *) output reg cbuf_rd_trig_wait,     // waiting for another trigger or the negation of 'cbuf_rd_en'
+ (* mark_debug = "true" *) output reg burst_adr_cntr_init,   // initialize counter to '1'
+ (* mark_debug = "true" *) output reg init_circ_buf_rd_addr, // initialize the counter with the start of the buffer area to be saved
+ (* mark_debug = "true" *) output reg inc_circ_buf_rd_addr,  // increment the circular buffer address
+ (* mark_debug = "true" *) output reg latch_circ_buf_dat,    // save the current 32-bit data word from the circular buffer
+ (* mark_debug = "true" *) output reg select_fill_hdr,       // selects fill header from the MUX
+ (* mark_debug = "true" *) output reg select_dat,            // selects data from the MUX
+ (* mark_debug = "true" *) output reg select_waveform_hdr,   // selects waveform header
+ (* mark_debug = "true" *) output reg select_checksum,       // selects checksum, send the checksum to the FIFO
+ (* mark_debug = "true" *) output reg checksum_update,       // update the checksum
+ (* mark_debug = "true" *) output reg checksum_init,         // initialize the checksum
+ (* mark_debug = "true" *) output reg adc_acq_out_valid,     // current output from the MUX should be stored in the FIFO
+ (* mark_debug = "true" *) output reg burst_adr_cntr_en,     // increment the next starting address
+ (* mark_debug = "true" *) output reg save_start_adr,        // latch the first DDR3 address for a waveform
+ (* mark_debug = "true" *) output reg save_last_adr,         // latch the last DDR3 address for a fill, it it the total count
+ (* mark_debug = "true" *) output reg trig_addr_rd_en,       // read a trigger address from the FIFO
+ (* mark_debug = "true" *) output reg burst_cntr_init,       // initialize when triggered
+ (* mark_debug = "true" *) output reg burst_cntr_en,         // will be enabled once per burst
+ (* mark_debug = "true" *) output reg waveform_cntr_init,    // initialize when triggered
+ (* mark_debug = "true" *) output reg waveform_cntr_en,      // will be enabled once after each waveform
+ (* mark_debug = "true" *) output reg ddr3_selftrig_wr_active, // we are in a state where we are actively writing to the ddr3
+ (* mark_debug = "true" *) output reg fill_cntr_en,          // will be enabled once per fill
+    // debugging
+(* mark_debug = "true" *) input enable_triggering,
+(* mark_debug = "true" *) input range_flip
 );
 
 
 // Leave the comments containing "synopsys" in your HDL code.
 
 // delay the 'adc_acq_out_valid' signal to allow for the memory reading delay
-(* mark_debug = "true" *) reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
+reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
 reg delay2, delay1, delay0;
 always @ (posedge adc_clk) begin
   adc_acq_out_valid <= #1 immed_adc_acq_out_valid | dlyd_adc_acq_out_valid;
@@ -50,7 +53,7 @@ always @ (posedge adc_clk) begin
 end
 
 // create a flag to indicate whether or not a trigger was seen
-(* mark_debug = "true" *) reg got_trig;
+reg got_trig;
 
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
@@ -91,7 +94,7 @@ always @ (posedge adc_clk) begin
 end
 
 // combinational always block to determine next state (use blocking [=] assignments) 
-always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero) begin
+always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero or enable_triggering ) begin
     NS = {18{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case

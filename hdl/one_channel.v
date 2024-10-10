@@ -40,7 +40,8 @@ module one_channel(
 
   wire local_axis_resetn;                 // a local reset synched to the Aurora 'user_clk'
   wire aurora_user_clk;                      // used to connect to the parallel side of the Aurora
-  wire [31:0] local_axis_tx_tdata, local_axis_rx_tdata;
+  (* mark_debug = "true" *) wire [31:0] local_axis_tx_tdata;
+  wire [31:0] local_axis_rx_tdata;
   wire [3:0] local_axis_tx_tkeep, local_axis_rx_tkeep;
   wire drdy_out_unused;
   wire [15:0] drpdo_out_unused;
@@ -62,6 +63,7 @@ module one_channel(
     assign local_axis_resetn = ~sys_reset_out;
    
   // Connect the transmit FIFO that buffer data destined for the channel FPGA and crosses clock domains
+  (* mark_debug = "true" *) wire local_axis_tx_tvalid, local_axis_tx_tready;
   chan_link_axis_data_fifo tx_fifo (
     .s_axis_aresetn(s_axis_aresetn),           // input wire s_axis_aresetn
     .s_axis_aclk(s_axis_aclk),                 // input wire s_axis_aclk

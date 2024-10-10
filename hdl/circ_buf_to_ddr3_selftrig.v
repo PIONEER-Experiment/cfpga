@@ -5,33 +5,37 @@ module circ_buf_to_ddr3_selftrig (
     // inputs
     input adc_clk,                    // ADC clock used by the FIFO
     input reset_clk_adc,              // either 'ext_reset' or 'reset_clk50' is asserted
-    input cbuf_rd_en,                 // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-    input cbuf_trig_en,               // triggering of new waveforms is enabled
+(* mark_debug = "true" *) input cbuf_rd_en,                 // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+(* mark_debug = "true" *) input cbuf_trig_en,               // triggering of new waveforms is enabled
     input [11:0] channel_tag,         // stuff about the channel to put in the header
-    input [23:0] initial_fill_num,    // event number to assign to the first fill
-    input initial_fill_num_wr,        // write-strobe to store the initial_fill_num
+(* mark_debug = "true" *) input [23:0] initial_fill_num,    // event number to assign to the first fill
+(* mark_debug = "true" *) input initial_fill_num_wr,        // write-strobe to store the initial_fill_num
     input [13:0] async_num_bursts,    // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,      // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     input [25:0] circ_buf_rd_dat,     // 26-bit wide data from the circular buffer
     input [15:0] circ_buf_trig_addr,  // circular buffer address corresponding to a trigger, FIFO output
     input trig_fifo_empty,            // no triggers available when asserted
-    input [1:0] ddr3_range,           // level of the ddr3 range bit.  Two copies because of history of other modes
+    (* mark_debug = "true" *) input [1:0] ddr3_range,           // level of the ddr3 range bit.  Two copies because of history of other modes
     input [41:0] trigger_time,        // the time of the most recent data trigger
     input [3:0] xadc_alarms,
 
     // outputs
     output cbuf_rd_trig_wait,    // waiting for another trigger or the negation of 'cbuf_rd_en'    
     output trig_addr_rd_en,            // read a trigger address from the FIFO
-(* mark_debug = "true" *) output [23:0] fill_num,         // fill number for this fill
+    (* mark_debug = "true" *) output [23:0] fill_num,         // fill number for this fill
     output reg [15:0] circ_buf_rd_addr,    // read address for the circular buffer
-    output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
+    output [131:0] adc_acq_out_dat,     // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,           // current data should be stored in the FIFO
     output [22:0] current_waveform_num,
-    output ddr3_selftrig_wr_active      // enabled whenever we are actively writing a trigger to the DDR3
+    output ddr3_selftrig_wr_active,     // enabled whenever we are actively writing a trigger to the DDR3
+    (* mark_debug = "true" *) output checksum_memory_range,       // latch the memory buffer for writing the checksum
+    // debugging
+    input enable_triggering,
+    input range_flip
 );
 
-(* mark_debug = "true" *) wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
-(* mark_debug = "true" *) reg  [22:0] waveform_start_adr; // DDR3 burst memory location (3 LSBs=0) for a waveform
+wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
+reg  [22:0] waveform_start_adr; // DDR3 burst memory location (3 LSBs=0) for a waveform
 reg  [22:0] num_fill_bursts;    // total number of bursts in a fill
 
 wire initial_fill_num_wr_sync;
@@ -103,7 +107,8 @@ adc_dat_mux_selftrig adc_dat_mux_selftrig (
     .checksum_update(adc_mux_checksum_update),     // update the checksum
     .trigger_time(trigger_time[41:0]),             // triggers reset of the 800 MHz counter used to time stamp events
     // outputs
-    .adc_acq_out_dat(adc_acq_out_dat[131:0])       // 132-bit: 4-bit tag plus 128-bit header or ADC data
+    .adc_acq_out_dat(adc_acq_out_dat[131:0]),      // 132-bit: 4-bit tag plus 128-bit header or ADC data
+    .checksum_memory_range(checksum_memory_range)  // latch the memory buffer for writing the checksum
 );
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,7 +116,7 @@ adc_dat_mux_selftrig adc_dat_mux_selftrig (
 // It will be preset to '0x0001' when 'mem_enabled' is negated.
 // Its content will be put in the waveform headers.
 // It will increment every time data is written to the FIFO
-(* mark_debug = "true" *) wire burst_adr_cntr_en;
+wire burst_adr_cntr_en;
 burst_address_cntr_ASYNC burst_address_cntr_ASYNC (
     // inputs
     .clk(adc_clk),
@@ -121,7 +126,7 @@ burst_address_cntr_ASYNC burst_address_cntr_ASYNC (
     .burst_adr(burst_adr[22:0]) // current DDR3 burst memory location
 );
 // latch the start address for a waveform
-(* mark_debug = "true" *) wire save_start_adr;
+wire save_start_adr;
 always @(posedge adc_clk) begin
     if (save_start_adr) begin
         waveform_start_adr[21: 0] <= #1 burst_adr[21:0];
@@ -207,7 +212,10 @@ circ_buf_to_ddr3_sm_selftrig circ_buf_to_ddr3_sm_selftrig (
     .fill_cntr_en(fill_cntr_en),                   // will be enabled once per fill
     .waveform_cntr_init(waveform_cntr_init),       // initialize when triggered
     .waveform_cntr_en(waveform_cntr_en),           // will be enabled once after each waveform
-    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active)  // will be enabled whenever we need active writing to the DDR3
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), // will be enabled whenever we need active writing to the DDR3
+    // debugging
+    .enable_triggering(enable_triggering),
+    .range_flip(range_flip)
 );
 
 endmodule

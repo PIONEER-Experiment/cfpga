@@ -22,7 +22,7 @@ module self_trigger (
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
-    (* mark_debug = "true" *) output reg trigger
+    output reg trigger
 );
 
 // add two stages of pipelining
@@ -59,12 +59,12 @@ wire signed [11:0] signal_average;
 assign signal_average[11:0] = updating_sum[13:2];
 
 // the running average and delayed average
-(* mark_debug = "true" *) reg holding_trigger, init_hold_counter;
+reg holding_trigger, init_hold_counter;
 wire local_trigger_wire;
 assign local_trigger_wire = self_trig_ready ? polarity ? signal_average > (threshold + ped_buffer2) : ped_buffer2 > (threshold + signal_average) : 0;
 reg local_trigger_reg;
 reg local_trigger;
-always @(posedge clk) begin
+always @(posedge clk ) begin
   if (rst) begin
      input_sum        <= 14'sd0;
      updating_sum     <= 14'sd0;
@@ -125,7 +125,7 @@ parameter [2:0]
   PIPE_ADJUST     = 3'd5;
 
 // Declare current state and next state variables
-reg [5:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [5:0] /* synopsys enum STATE_TYPE */ CS;
 reg [5:0] /* synopsys enum STATE_TYPE */ NS;
 
 // sync the enable signal into the adc clk domain

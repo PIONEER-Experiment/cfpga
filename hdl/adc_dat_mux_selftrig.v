@@ -15,29 +15,30 @@ module adc_dat_mux_selftrig (
     input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
     input [11:0] channel_tag,          // stuff about the channel to put in the header
-(* mark_debug = "true" *)     input [1:0]  ddr3_range,           // level of the ddr3 range bit.  Two copies because of history of other modes
+    input [1:0]  ddr3_range,           // level of the ddr3 range bit.  Two copies because of history of other modes
     input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
-(* mark_debug = "true" *) input [22:0] waveform_start_adr,   // first DDR3 memory location for this waveform
+    input [22:0] waveform_start_adr,   // first DDR3 memory location for this waveform
     input [23:0] fill_num,             // fill number for this fill
     input [22:0] current_waveform_num, // the current waveform number, to be used in header
     input [3:0] xadc_alarms,
     input clk,
     input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    input select_fill_hdr,             // selects fill header
-(* mark_debug = "true" *)input select_waveform_hdr,         // selects waveform header
-(* mark_debug = "true" *)input select_dat,                  // selects data
+(* mark_debug = "true" *) input select_fill_hdr,             // selects fill header
+(* mark_debug = "true" *) input select_waveform_hdr,         // selects waveform header
+(* mark_debug = "true" *) input select_dat,                  // selects data
 (* mark_debug = "true" *) input select_checksum,             // selects checksum
 (* mark_debug = "true" *) input checksum_init,               // initialize the checksum
 (* mark_debug = "true" *) input checksum_update,             // update the checksum
     input [41:0] trigger_time,         // the time of the most recent data trigger
     // outputs
-(* mark_debug = "true" *) output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
+    (* mark_debug = "true" *) output reg [131:0] adc_acq_out_dat, // 132-bit: 4-bit tag plus 128-bit header or ADC data
+    output reg checksum_memory_range    // latch the memory buffer for writing the checksum
 );
 
 //////////////////////////////////////
 // assemble the selftrig mode fill header
-(* mark_debug = "true" *) wire [131:0] fill_header;
+wire [131:0] fill_header;
 assign fill_header[ 23:  0] = fill_num[23:0];             // 24-bit fill number from register R0, incremented each fill
 assign fill_header[ 25: 24] = ddr3_range[1:0];            //  2-bit fill type from pins "ACQ_ENABLE[1:0]"
 assign fill_header[     26] = 1'b0;                       //  1-bit fill header format: sync/cbuf/selftrig=0, async=1
@@ -56,7 +57,7 @@ assign fill_header[131:128] = 4'd1;                       //  4-bit burst conten
 
 //////////////////////////////////////////
 // assemble the selftrig mode waveform header
-(* mark_debug = "true" *) wire [131:0] waveform_header;
+wire [131:0] waveform_header;
 assign waveform_header[ 13:  0] = async_num_bursts[13:0];           // 14-bit value for number of bursts per trigger from register R20
 assign waveform_header[ 25: 14] = async_pre_trig[13:2];             // 12-bit LSB value for number of pre-trigger bursts register R21 (which has pairs)
 assign waveform_header[ 48: 26] = waveform_start_adr[22:0];         // 23-bit waveform starting address: add 3 "0" bits for physical byte address
@@ -69,7 +70,7 @@ assign waveform_header[131:128] = 4'd2;                             //  4-bit bu
 
 ////////////////////
 // assemble the data
-(* mark_debug = "true" *) wire [131:0] data;
+wire [131:0] data;
 // put 8 ADC samples into 8 16-bit words.
 // omit the overrange bit and sign extend into the upper 4 bits of each word
 assign data[ 11:  0] = dat0_[12:1];                                  // 0 oldest sample data
@@ -101,47 +102,49 @@ assign data[131:128] = 4'd3;
 
 /////////////////////////////
 // create a checksum register
-(* mark_debug = "true" *) reg [127:0] checksum;
+reg [127:0] checksum;
 wire [3:0] checksum_tag;
 // tag = '4' for checksum
 assign checksum_tag[3:0] = 4'd4;
 
 always @(posedge clk) begin
-	if (checksum_init)
-		// set checksum to zero
-		checksum[127:0] <= #1 {128{1'b0}};
-	else if (select_fill_hdr && !select_waveform_hdr && !select_dat)
-		// XOR the current fill header with the checksum, exclude the 4-bit tag
-		checksum[127:0] <= #1 checksum[127:0] ^ fill_header[127:0];
-	else if (!select_fill_hdr && select_waveform_hdr &&  !select_dat)
-		// XOR the current waveform header with the checksum, exclude the 4-bit tag
-		checksum[127:0] <= #1 checksum[127:0] ^ waveform_header[127:0];
-	else if (checksum_update) begin
-		// XOR the data with the checksum, exclude the 4-bit tag
-		checksum[127:0] <= #1 checksum[127:0] ^ data[127:0];
-		// checksum[127:0] <= #1 checksum[127:0] ^ adc_acq_out_dat[127:0];
-	end
+  if (checksum_init) begin
+    // set checksum to zero
+    checksum[127:0] <= #1 {128{1'b0}};
+    checksum_memory_range <= ddr3_range[0];
+  end
+  else if (select_fill_hdr && !select_waveform_hdr && !select_dat)
+    // XOR the current fill header with the checksum, exclude the 4-bit tag
+    checksum[127:0] <= #1 checksum[127:0] ^ fill_header[127:0];
+  else if (!select_fill_hdr && select_waveform_hdr &&  !select_dat)
+    // XOR the current waveform header with the checksum, exclude the 4-bit tag
+    checksum[127:0] <= #1 checksum[127:0] ^ waveform_header[127:0];
+  else if (checksum_update) begin
+    // XOR the data with the checksum, exclude the 4-bit tag
+    checksum[127:0] <= #1 checksum[127:0] ^ data[127:0];
+    // checksum[127:0] <= #1 checksum[127:0] ^ adc_acq_out_dat[127:0];
+  end
 end
 
 ///////////////////////////////////////////////////////////////////////
-// make a mux to select fill header, waveform header, data, or checksum		
+// make a mux to select fill header, waveform header, data, or checksum    
 always @(posedge clk) begin
-	if (select_fill_hdr) begin
-		// connect fill header bits
-		adc_acq_out_dat[131:0] <= #1 fill_header[131:0];
-	end
-	if (select_waveform_hdr) begin
-		// connect waveform header bits
-		adc_acq_out_dat[131:0] <= #1 waveform_header[131:0];
-	end
-	if (select_dat) begin
-		// connect the data to the output
-		adc_acq_out_dat[131:0] <= #1 data[131:0];
-	end
-	if (select_checksum) begin
-		// connect the checksum to the output
-		adc_acq_out_dat[131:0] <= #1 {checksum_tag[3:0], checksum[127:0]};
-	end
+  if (select_fill_hdr) begin
+    // connect fill header bits
+    adc_acq_out_dat[131:0] <= #1 fill_header[131:0];
+  end
+  if (select_waveform_hdr) begin
+    // connect waveform header bits
+    adc_acq_out_dat[131:0] <= #1 waveform_header[131:0];
+  end
+  if (select_dat) begin
+    // connect the data to the output
+    adc_acq_out_dat[131:0] <= #1 data[131:0];
+  end
+  if (select_checksum) begin
+    // connect the checksum to the output
+    adc_acq_out_dat[131:0] <= #1 {checksum_tag[3:0], checksum[127:0]};
+  end
 end
 
 endmodule

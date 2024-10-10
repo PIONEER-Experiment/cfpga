@@ -19,8 +19,8 @@ module channel_main_selftrig (
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-(* mark_debug = "true" *) output acq_trig,              // to master, asserted active-hi when a self trigger achieved, C0_TRIG on schematic
-(* mark_debug = "true" *) output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+  output acq_trig,              // to master, asserted active-hi when a self trigger achieved, C0_TRIG on schematic
+  output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> red + green = orange, [1=0,2=1]-> red, [1=1,2=0]-> green, [1=1,2=1]-> off 
   input bbus_scl,               // I2C bus clock, from I2C master, connected to Atmel Chip, Master FPGA, and to other Channel FPGAs
@@ -107,7 +107,9 @@ wire [131:0] ddr3_wr_fifo_dat;          // 132-bit 4-bit tag plus header or ADC 
 wire [127:0] ddr3_rd_dat;               // 128-bit header or ADC data from DDR3 memory
 wire [23:0] fill_num;                   // fill number for this fill
 wire [127:0] ddr3_rd_fifo_input_dat;    // memory burst headed toward 'ddr3_read_fifo'
-wire [127:0] ddr3_rd_fifo_output_dat;   // memory burst headed toward 'ddr3_read_data_width_converter'
+(* mark_debug = "TRUE" *) wire         ddr3_rd_fifo_output_tready;
+(* mark_debug = "TRUE" *) wire         ddr3_rd_fifo_output_tvalid;
+(* mark_debug = "TRUE" *) wire [127:0] ddr3_rd_fifo_output_dat;   // memory burst headed toward 'ddr3_read_data_width_converter'
 wire [31:0] ddr3_32bit_tx_tdata;        // 32-bit chunks of memory burst headed toward 'axis_interconnect'
 wire [22:0] ddr3_rd_start_addr;         // the address of the first requested 128-bit burst
 wire [23:0] ddr3_rd_burst_cnt;          // number of bursts to read from the DDR3
@@ -115,7 +117,8 @@ wire [31:0] command_tx_tdata;           // data to Aurora from 'command_top'
 wire [31:0] rx_tdata_swap;              // bit-reversed data from Aurora
 
 // Define the AXIS FIFO inputs and outputs for chan 0
-wire [0:31] c0_rx_axi_tdata, c0_tx_axi_tdata;
+wire [0:31] c0_rx_axi_tdata;
+(* mark_debug = "TRUE" *) wire [0:31] c0_tx_axi_tdata;
 wire [0:3] c0_rx_axi_tkeep;
 wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
 wire c0_rx_axi_tlast, c0_tx_axi_tlast;
@@ -136,7 +139,7 @@ wire [64:0] adc_buf_current_data_delay;
 
 // status signals for front panel LED
 wire aurora_channel_up;
-(* mark_debug = "true" *) wire adc_acq_sm_idle; // also used to tell master that no data transfer to DDR3 is in process
+wire adc_acq_sm_idle; // also used to tell master that no data transfer to DDR3 is in process
 wire command_sm_idle;
 
 ////////////////////////////////////////////////////////////////////////////
@@ -208,6 +211,12 @@ master_reset master_reset (
   .long_reset(full_reset)
 );
 
+wire evt_cnt_reset_125;
+sync_2stage ecr125_sync (
+  .clk(clk125),
+  .in(evt_cnt_reset),
+  .out(evt_cnt_reset_125)
+);
 
 // ======== communicate with FPGA XADC ========
 
@@ -319,16 +328,22 @@ adc_acq_top_selftrig adc_acq_top_selftrig (
     .adc_acq_sm_idle(adc_acq_sm_idle),                   // ADC acquisition state machine is idle (used for front panel LED status)
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0]),
-    .ext_done_buffer(ext_done_buffer)
+    .ext_done_buffer(ext_done_buffer),
+    .checksum_memory_range(checksum_memory_range)        // latch the memory buffer for writing the checksum
+
 );
 
 
 wire ddr3_write_fifo_full;
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
+// Reset it when there is a full reset or when we are starting over -- flagged
+// be the event count reset
+wire dwf_reset;
+assign dwf_reset = adc_acq_full_reset | evt_cnt_reset;
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
-    .rst(adc_acq_full_reset),       // reset at startup or when requested
+    .rst(dwf_reset),                // reset at startup or when requested
     .wr_clk(adc_clk),               // clock extracted from ADC DDR clock
     .rd_clk(ddr3_domain_clk),       // clock extracted from DDR3 block
     .din(adc_acq_out_dat[131:0]),   // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -345,8 +360,21 @@ wire en_fixed_ddr3_start_addr;
 wire enable_reading;
 wire reading_done;
 
+wire [3:0] event_cnt_short;
+(* mark_debug = "true" *) wire [3:0] event_cnt_short_125;
+assign event_cnt_short[3:0] = fill_num[3:0];
+sync_2stage #(
+  .WIDTH(4)
+) evc_sync (
+  .clk(clk125),
+  .in(event_cnt_short),
+  .out(event_cnt_short_125)
+);
+
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
+wire fill_header_fifo_reset;
+assign fill_header_fifo_reset = adc_acq_full_reset | evt_cnt_reset;
 ddr3_intf_selftrig ddr3_intf_selftrig(
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
@@ -356,17 +384,19 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to ddr3_clk
 
     // writing connections
-    .ddr3_wr_en(ddr3_wr_en),                     // writing of triggered events to memory is enabled -- asserted when storing a triggered waveform
-    .cbuf_rd_en(cbuf_rd_en),                     // we have enabled storing of events -- asserted when not switching fill buffers
-    .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),     // input, data is available when this is not asserted
-    .ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),     // output, use and remove the data on the FIFO head
-    .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),  // input, 132-bit 4-bit tag plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
-    .ddr3_wr_sync_err(),                         // synchronization error flag
-    .ddr3_wr_done(ddr3_wr_done),                 // asserted when the 'ddr3_wr_control' is in the DONE state
-    .acq_done(acq_done),                         // input, acquisition is done
+    .ddr3_wr_en(ddr3_wr_en),                      // writing of triggered events to memory is enabled -- asserted when storing a triggered waveform
+    .cbuf_rd_en(cbuf_rd_en),                      // we have enabled storing of events -- asserted when not switching fill buffers
+    .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),      // input, data is available when this is not asserted
+    .ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),      // output, use and remove the data on the FIFO head
+    .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),   // input, 132-bit 4-bit tag plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
+    .ddr3_wr_sync_err(),                          // synchronization error flag
+    .ddr3_wr_done(ddr3_wr_done),                  // asserted when the 'ddr3_wr_control' is in the DONE state
+    .checksum_memory_range(checksum_memory_range),// latch the memory buffer for writing the checksum
+    .acq_done(acq_done),                          // input, acquisition is done
 
     // reading connections
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
+    .fill_header_fifo_reset(fill_header_fifo_reset),     // input, clear out the fifo for a new run
     .fill_header_fifo_empty(fill_header_fifo_empty),     // output, a header is available when not asserted
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // input, remove the current data from the FIFO
     .fill_header_fifo_out(fill_header_fifo_out[151:0]),  // output, data at the head of the FIFO
@@ -397,7 +427,17 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
-    .xadc_temp(xadc_temp[11:0])
+    .xadc_temp(xadc_temp[11:0]),
+    .event_cnt_short(event_cnt_short),
+
+    // for temporary debugging
+    .enable_triggering(enable_triggering),
+    .readout_pause(readout_pause),
+    .fill_num(fill_num),
+    .initial_fill_num_wr(initial_fill_num_wr),
+    .evt_cnt_reset(evt_cnt_reset),
+    .rst_from_master(rst_from_master)
+
 );
 
 ////////////////////////////////////////////////////////////////////////////
@@ -518,52 +558,8 @@ all_channels channels(
 // We need to swap the bit order for the RX data
 assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 
-
-// // stretch the acq_done signal (ext_done from the adc_acq machine) and sync with the 125 MHz clock
-// reg acq_done_stretch;
-// reg [4:0] delay;
-// always @(posedge adc_clk) begin
-//    if ( acq_done ) begin
-//       delay            <= 5'b10000;
-//       acq_done_stretch <= 1'b1;
-//    end
-//    else if ( !delay[0] ) begin
-//       delay            <= {delay[0],delay[4:1]};
-//       acq_done_stretch <= 1'b1;
-//    end
-//    else begin
-//       acq_done_stretch <= 1'b0;
-//    end
-// end
-// wire acq_done_sync;
-// sync_2stage acq_done_sync_inst (
-//    .clk(clk125),
-//    .in(acq_done_stretch),
-//    .out(acq_done_sync)
-// );
-//
-// hold_acq_done hold_acq_done (
-//     .clk125(clk125),
-//     .reset(reset_clk125),
-//     .acq_done(acq_done_sync),
-//     .ddr3_buffer(ddr3_buffer),
-//     .read_fill_done(read_fill_done),
-//     .acq_done_latch(acq_done_latch)
-// );
-//
-// // a gated latch to hold acq_done_sync until command_top reports that the last readout command is done
-// (* mark_debug = "true" *) reg acq_done_latch;
-// wire read_fill_done;
-// always @(posedge clk125)
-// begin
-//   if ( reset_clk125 || read_fill_done )
-//     acq_done_latch = 0;
-//   else if ( acq_done_sync )
-//     acq_done_latch = 1;
-// end
-
 // synchronize the DDR3 writing status registers
-(* mark_debug = "true" *) wire [1:0] ext_done_buffer_sync;
+wire [1:0] ext_done_buffer_sync;
 sync_2stage #(
   .WIDTH(2)
 ) pretrig_sync (
@@ -575,17 +571,18 @@ sync_2stage #(
 // It can take up to 7 clk125 cycles before the information appears on the FIFO read side, ie, for
 // buffer empty to deassert.  We are interested in flagging that the FIFO should be ready to read,
 // so want to delay want to make sure that ext_done_buffer_sync gets delayed 5 more clock ticks
-reg [1:0] delay0, delay1, delay2, delay3;
-(* mark_debug = "true" *) reg [1:0] ext_done_buffer_delay;
+reg [1:0] delay0, delay1, delay2, delay3, delay4;
+reg [1:0] ext_done_buffer_delay;
 always @(posedge clk125) begin
   delay0                <= ext_done_buffer_sync;
   delay1                <= delay0;
   delay2                <= delay1;
   delay3                <= delay2;
+  delay4                <= delay3;
   ext_done_buffer_delay <= delay3;
 end
 
-(* mark_debug = "true" *) wire ddr3_buffer_sync;
+wire ddr3_buffer_sync;
 sync_2stage ddr3_buffer_sync_inst (
    .clk(clk125),
    .in(ddr3_buffer),
@@ -628,7 +625,7 @@ command_top command_top (
     .fill_header_fifo_out(fill_header_fifo_out[151:0]), // output, data at the head of the FIFO
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),      // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
-    .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go
+    .enable_reading(enable_reading),                    // output, initialize the address generator and both counters, go
     .acq_done_latch(ext_done_buffer_delay[~ddr3_buffer_sync]), // input, last self-trigger safely processed (default to 1 in other modes)
     .reading_done(reading_done),                        // output, reading is complete
 
