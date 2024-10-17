@@ -43,7 +43,8 @@ module adc_acq_top_selftrig (
                                                // bit[12]     = second overrange
                                                // bits[25:13] = second ADC sample
     output [1:0] ext_done_buffer,              // everything has been written to DDR3 and fill header FIFO
-    output checksum_memory_range               // latch the memory buffer for writing the checksum
+    output checksum_memory_range,              // latch the memory buffer for writing the checksum
+    output [8:0] enable_sm_cs
 
 );
 
@@ -144,7 +145,8 @@ enable_sm_selftrig enable_sm_selftrig (
 //    .reset_timer(reset_timer),               // triggers reset of the 400 MHz counter used to time stamp events
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), // will be enabled whenever we need active writing to the DDR3
     .ext_done_buffer(ext_done_buffer),
-    .range_flip(range_flip)
+    .range_flip(range_flip),
+    .enable_sm_cs(enable_sm_cs)
 );
 
 

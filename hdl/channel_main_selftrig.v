@@ -329,7 +329,8 @@ adc_acq_top_selftrig adc_acq_top_selftrig (
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0]),
     .ext_done_buffer(ext_done_buffer),
-    .checksum_memory_range(checksum_memory_range)        // latch the memory buffer for writing the checksum
+    .checksum_memory_range(checksum_memory_range),       // latch the memory buffer for writing the checksum
+    .enable_sm_cs(enable_sm_cs)
 
 );
 
@@ -375,6 +376,7 @@ sync_2stage #(
 // Connect the DDR3 interface
 wire fill_header_fifo_reset;
 assign fill_header_fifo_reset = adc_acq_full_reset | evt_cnt_reset;
+wire [8:0] enable_sm_cs;
 ddr3_intf_selftrig ddr3_intf_selftrig(
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
@@ -436,7 +438,8 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .fill_num(fill_num),
     .initial_fill_num_wr(initial_fill_num_wr),
     .evt_cnt_reset(evt_cnt_reset),
-    .rst_from_master(rst_from_master)
+    .rst_from_master(rst_from_master),
+    .enable_sm_cs(enable_sm_cs)
 
 );
 

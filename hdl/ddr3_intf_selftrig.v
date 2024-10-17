@@ -56,7 +56,8 @@ module ddr3_intf_selftrig(
     input [23:0] fill_num,
     input initial_fill_num_wr,
     input evt_cnt_reset,
-    input rst_from_master
+    input rst_from_master,
+    input [8:0] enable_sm_cs
     // end of debugging
 
 );
@@ -95,7 +96,7 @@ sync_2stage rp_125 (
 // sync event_cnt_short into this domain
 wire [3:0] event_cnt_short_ddr3;
 sync_2stage  #(
-.WIDTH(4)
+  .WIDTH(4)
 ) event_cnt_ddr3_sync (
    .clk(ddr3_domain_clk),
    .in(event_cnt_short),
@@ -145,6 +146,7 @@ wire [127:0] ddr3_wr_dat;
 assign ddr3_rd_fifo_input_dat[127:0] = ddr3_rd_dat[127:0];
 
 ////////////////////////////////////////////////////////////////
+assign addressing_acq_enabled = writing_last_fill | ddr3_wr_en_sync2;
 // Connect the module that manages the address and command ports
 ddr3_addr_control ddr3_addr_control (
     // 'write' ports
@@ -199,8 +201,12 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     .initial_fill_num_wr(initial_fill_num_wr),
     .evt_cnt_reset(evt_cnt_reset),
     .rst_from_master(rst_from_master),
+    .ddr3_wr_en_sync2(ddr3_wr_en_sync2),
+    .app_rdy(app_rdy),
+    .enable_sm_cs(enable_sm_cs),
     // done debugging
-    .acq_done(acq_done)                             // input, asserted when the 'adc_acq_sm' is in the DONE state
+    .acq_done(acq_done),                            // input, asserted when the 'adc_acq_sm' is in the DONE state
+    .writing_last_fill(writing_last_fill)
  );
 
 ///////////////////////////////////////////////////////////////

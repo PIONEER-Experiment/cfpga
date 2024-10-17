@@ -26,19 +26,23 @@ module ddr3_wr_control_selftrig (
     // synchronization error flag
     output reg ddr3_wr_sync_err,
     // status flag back to the ADC acquisition machine
-    output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
+    output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state (once per waveform, header or checksum)
     input checksum_memory_range,                // latch the memory buffer for writing the checksum
+    input enable_triggering_ddr3,
     // the next batch for debugging and should get eliminated afterwards
     input fill_header_fifo_empty,
     input fill_header_fifo_rd_en,
     input readout_pause_ddr3,
-    input enable_triggering_ddr3,
     input initial_fill_num_wr,
     input [23:0] fill_num,
     input evt_cnt_reset,
     input rst_from_master,
+    input app_rdy,
+    input [8:0] enable_sm_cs,
+    input ddr3_wr_en_sync2,
     //
-    input acq_done                       // asserted when the 'adc_acq_sm' is in the DONE state
+    input acq_done,                      // asserted when the 'adc_acq_sm' is in the DONE state
+    output writing_last_fill             // asserted when enable_triggering deasserts but we haven't finished writing the info from this fill
 );
 
 // Leave the comments containing "synopsys" in your HDL code.
@@ -182,9 +186,21 @@ end
 // attempts to write addresses are only allowed when the counter is not zero
 assign address_allow = ~(address_control == 0);
     
+// we want to keep writing the last fill's information out, where last is flagged by enable_triggering deasserting
+assign writing_last_fill = ~enable_triggering_ddr3 & ddr3_wr_fill_in_progress;
+
 // Declare current state and next state variables
 reg [12:0] /* synopsys enum STATE_TYPE */ CS;
 reg [12:0] /* synopsys enum STATE_TYPE */ NS;
+
+wire [8:0] enable_sm_cs_ddr3;
+sync_2stage #(
+  .WIDTH(9)
+) sync_enable_sm_cs (
+  .clk(clk),
+  .in(enable_sm_cs),
+  .out(enable_sm_cs_ddr3)
+);
 
 ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .clk(clk), // input wire clk
@@ -198,7 +214,7 @@ ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .probe5(app_wdf_wren),          // input wire [0:0]  probe5
   .probe6(app_wdf_rdy),           // input wire [0:0]  probe6
   .probe7(app_wdf_end),           // input wire [0:0]  probe7
-  .probe8(ddr3_wr_addr),          // input wire [25:0]  probe8
+  .probe8(enable_sm_cs_ddr3),     // input wire [9:0]  probe8
   .probe9(wr_app_en),             // input wire [0:0]  probe9
   .probe10(wr_app_rdy),           // input wire [0:0]  probe10
   .probe11(fill_header_wr_dat),   // input wire [151:0]  probe11
@@ -206,15 +222,22 @@ ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .probe13(ddr3_wr_sync_err),     // input wire [0:0]  probe13
   .probe14(ddr3_wr_done),         // input wire [0:0]  probe14
   .probe15(checksum_memory_range), // input wire [0:0]  probe15
-  .probe16(fill_header_fifo_empty),    // input wire [0:0]  probe12
-  .probe17(fill_header_fifo_rd_en),    // input wire [0:0]  probe12
-  .probe18(readout_pause_ddr3),    // input wire [0:0]  probe12
-  .probe19(enable_triggering_ddr3),    // input wire [0:0]  probe12
+  .probe16(fill_header_fifo_empty), // input wire [0:0]  probe12
+  .probe17(fill_header_fifo_rd_en), // input wire [0:0]  probe12
+  .probe18(readout_pause_ddr3),     // input wire [0:0]  probe12
+  .probe19(enable_triggering_ddr3), // input wire [0:0]  probe12
   .probe20(fill_num),
-  .probe21(initial_fill_num_wr),
+  .probe21(ddr3_wr_en_sync2),
   .probe22(evt_cnt_reset),
   .probe23(rst_from_master),
-  .probe24(latch_header)
+  .probe24(latch_header),
+  .probe25(ddr3_wr_fill_in_progress),
+  .probe26(next_ddr3_wr_fill_in_progress),
+  .probe27(header_written),
+  .probe28(acq_done_sync2),
+  .probe29(address_cntr[3:0]),
+  .probe30(app_rdy),
+  .probe31(writing_last_fill)
 );
 
 
@@ -222,8 +245,12 @@ ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
+reg ddr3_wr_fill_in_progress;       // asserted when a new fill has started, but the last write (header) has not finished
+reg next_ddr3_wr_fill_in_progress;  // asserted when a new fill has started, but the last write (header) has not finished
+reg header_written;                 // assert as soon as the header has finished writing
+reg next_header_written;            // assert as soon as the header has finished writing
 always @ (posedge clk) begin
-    if (reset || !acq_enabled) begin
+    if (reset || (!acq_enabled & !ddr3_wr_fill_in_progress) ) begin
         CS <= 13'b0;             // set all state bits to 0
         CS[IDLE] <= 1'b1;       // set IDLE state bit to 1
     end
@@ -374,17 +401,36 @@ always @ (posedge clk) begin
         ddr3_wr_sync_err        <= 1'b0;
         fill_header_wr_en       <= 1'b0;
         correct_chksum_addr     <= 1'b0;
+        ddr3_wr_fill_in_progress      <= next_ddr3_wr_fill_in_progress;
+        next_ddr3_wr_fill_in_progress <= ddr3_wr_fill_in_progress;
+        header_written                <= next_header_written;
+        next_header_written           <= header_written;
 
     // next states
     if (NS[IDLE]) begin
+      ddr3_wr_fill_in_progress      <= 1'b0;
+      next_ddr3_wr_fill_in_progress <= 1'b0;
+      header_written                <= 1'b0;
+      next_header_written           <= 1'b0;
     end
     
     if (NS[INIT_ALL]) begin
        // initialize the total_burst counter to 1 (to include fill header)
        init_total_burst_count	<= 1'b1;
+       // next_ddr3_wr_fill_in_progress <= enable_triggering_ddr3 & acq_enabled;
+       // ddr3_wr_fill_in_progress      <= enable_triggering_ddr3 & acq_enabled;
+       next_ddr3_wr_fill_in_progress <= enable_triggering_ddr3;
+       ddr3_wr_fill_in_progress      <= enable_triggering_ddr3;
+       //       ddr3_wr_fill_in_progress      <= 1'b1;
+       //       next_ddr3_wr_fill_in_progress <= 1'b1;
+       next_header_written           <= 1'b0;
+       header_written                <= 1'b0;
     end
 
     if (NS[WAIT]) begin
+      // check if the header has been written and acknowledged, and if so end the fill
+      next_ddr3_wr_fill_in_progress <= ~(header_written & acq_done_sync2);
+      ddr3_wr_fill_in_progress      <= ~(header_written & acq_done_sync2);
     end
 
     if (NS[INIT_FILL]) begin
@@ -396,6 +442,7 @@ always @ (posedge clk) begin
         init_address_cntr_to_1	<= 1'b1;
         // initialize the burst counter to 1
         init_burst_cntr_to_1	<= 1'b1;
+        // clear the header written register
     end
  
     if (NS[WRITE_FILL]) begin
@@ -437,11 +484,15 @@ always @ (posedge clk) begin
         fill_header_wr_en   <= 1'b1;
         // to allow the checksum to be written to memory
         //address_control <= 1'b1;
+        // flag that the header got written
+        next_header_written <= 1'b1;
+        header_written <= 1'b1;
     end
 
     if (NS[DONE]) begin
         ddr3_wr_done        <= 1'b1;
-    end    
+        // this fill has been processed when the header has been written and writing confirmation acknowledged
+    end
 
 
 end
