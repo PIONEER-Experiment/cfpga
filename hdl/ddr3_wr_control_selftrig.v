@@ -38,7 +38,6 @@ module ddr3_wr_control_selftrig (
     input evt_cnt_reset,
     input rst_from_master,
     input app_rdy,
-    input [8:0] enable_sm_cs,
     input ddr3_wr_en_sync2,
     //
     input acq_done,                      // asserted when the 'adc_acq_sm' is in the DONE state
@@ -193,15 +192,6 @@ assign writing_last_fill = ~enable_triggering_ddr3 & ddr3_wr_fill_in_progress;
 reg [12:0] /* synopsys enum STATE_TYPE */ CS;
 reg [12:0] /* synopsys enum STATE_TYPE */ NS;
 
-wire [8:0] enable_sm_cs_ddr3;
-sync_2stage #(
-  .WIDTH(9)
-) sync_enable_sm_cs (
-  .clk(clk),
-  .in(enable_sm_cs),
-  .out(enable_sm_cs_ddr3)
-);
-
 ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .clk(clk), // input wire clk
 
@@ -214,7 +204,7 @@ ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .probe5(app_wdf_wren),          // input wire [0:0]  probe5
   .probe6(app_wdf_rdy),           // input wire [0:0]  probe6
   .probe7(app_wdf_end),           // input wire [0:0]  probe7
-  .probe8(enable_sm_cs_ddr3),     // input wire [9:0]  probe8
+  .probe8(writing_last_fill),     // input wire [0:0]  probe8
   .probe9(wr_app_en),             // input wire [0:0]  probe9
   .probe10(wr_app_rdy),           // input wire [0:0]  probe10
   .probe11(fill_header_wr_dat),   // input wire [151:0]  probe11
@@ -236,8 +226,7 @@ ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .probe27(header_written),
   .probe28(acq_done_sync2),
   .probe29(address_cntr[3:0]),
-  .probe30(app_rdy),
-  .probe31(writing_last_fill)
+  .probe30(app_rdy)
 );
 
 

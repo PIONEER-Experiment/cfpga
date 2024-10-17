@@ -56,8 +56,7 @@ module ddr3_intf_selftrig(
     input [23:0] fill_num,
     input initial_fill_num_wr,
     input evt_cnt_reset,
-    input rst_from_master,
-    input [8:0] enable_sm_cs
+    input rst_from_master
     // end of debugging
 
 );
@@ -203,7 +202,6 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     .rst_from_master(rst_from_master),
     .ddr3_wr_en_sync2(ddr3_wr_en_sync2),
     .app_rdy(app_rdy),
-    .enable_sm_cs(enable_sm_cs),
     // done debugging
     .acq_done(acq_done),                            // input, asserted when the 'adc_acq_sm' is in the DONE state
     .writing_last_fill(writing_last_fill)
