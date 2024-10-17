@@ -135,8 +135,14 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         // We will be in the IDLE state whenever the command dispatcher does not enable us.
         // Once enabled, immediately start working. Assert 'sm_running'
         CS[IDLE]: begin
-            // Prepare to get and check trigger number.
-            NS[CHK_FIFO_EMPTY] = 1'b1;
+            if ( run_sm ) begin
+              // Prepare to get and check trigger number.
+              NS[CHK_FIFO_EMPTY] = 1'b1;
+            end
+            else begin
+              // explicitly set NS[IDLE] when not running so that sm_running logic below works properly
+              NS[IDLE] = 1'b1;
+            end
         end
 
         // We enter the CHK_FIFO_EMPTY state after we have been started.
@@ -241,6 +247,7 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
 
     endcase
 end // combinational always block to determine next state
+
 
 ///////////////////////////////////////////////////////////////////////////
 // Drive outputs for each state at the same time as when we enter the state.
