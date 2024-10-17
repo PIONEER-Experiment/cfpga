@@ -152,7 +152,7 @@ ddr3_addr_control ddr3_addr_control (
     .wr_addr(ddr3_wr_addr[25:0]),           // input, next 'write' address
     .wr_app_rdy(wr_app_rdy),                // output, increment the 'write' address
     .wr_app_en(wr_app_en),                  // input, request to perform a 'write'  
-    .acq_enabled(ddr3_wr_en_sync2),        // input, writing is enabled
+    .acq_enabled(addressing_acq_enabled),        // input, writing is enabled
     // 'read' ports
     .rd_addr(ddr3_rd_addr[25:0]),           // input, next 'read' address
     .rd_app_rdy(rd_app_rdy),                // output, increment the 'read' address
