@@ -474,7 +474,7 @@ ddr3_read_data_width_converter ddr3_read_data_width_converter(
 );
 
 // Synchronize  'readout_pause' to 'clk125'.
-(* ASYNC_REG = "TRUE" *) reg readout_pause_sync1, readout_pause_sync2;
+(* ASYNC_REG = "TRUE", mark_debug = "TRUE" *) reg readout_pause_sync1, readout_pause_sync2;
 always @(posedge clk125) begin
     readout_pause_sync1 <= readout_pause;
     readout_pause_sync2 <= readout_pause_sync1;

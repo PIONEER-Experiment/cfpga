@@ -128,7 +128,8 @@ reg [8:0] /* synopsys enum STATE_TYPE */ NS;
 
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge adc_clk) begin
-    if (reset_clk_adc | (!trig_ready_sync2 & CS[IDLE]) ) begin // -- this gave the event mismatch error on 1st read of 2nd run in 6.6.6C
+    if (reset_clk_adc | (!trig_ready_sync2 & CS[IDLE]) ) begin
+// -- this gave the event mismatch error on 1st read of 2nd run in 6.6.6C
 //    if (reset_clk_adc | !trig_ready_sync2 ) begin
 //    if (reset_clk_adc ) begin
         CS <= #1 {9{1'b0}}; // set all state bits to 0
