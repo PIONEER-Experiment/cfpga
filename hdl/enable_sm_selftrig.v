@@ -153,12 +153,12 @@ always @ (CS or trig_ready_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or p
 
         // Stay in ENABLE_WAIT until the self triggering module is enabled and ready
         CS[ENABLE_WAIT]: begin
-            if (trig_ready_sync2)
+        //    if (trig_ready_sync2)
                 // a fill of a new buffer is starting, go latch the ddr3 buffer range bit
                 NS[BUFFER_FILL_START] = 1'b1;
-             else
+        //     else
                 // wait here
-                NS[ENABLE_WAIT] = 1'b1;
+        //        NS[ENABLE_WAIT] = 1'b1;
         end
 
         // Stay in the BUFFER_FILL_START state for one clock period.
