@@ -226,7 +226,8 @@ ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .probe27(header_written),
   .probe28(acq_done_sync2),
   .probe29(address_cntr[3:0]),
-  .probe30(app_rdy)
+  .probe30(app_rdy),
+  .probe31(address_gen)
 );
 
 

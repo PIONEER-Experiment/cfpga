@@ -173,7 +173,7 @@ always @ (CS or trig_ready_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or p
        // for the current buffer. Go to CBUF_RD_ENABLED to finish writing any triggered
        // acquisitions to the DDR3 and write the final fill_header.
         CS[TRIG_ENABLED]: begin
-            if (!trig_ready_sync2 || range_flip )
+            if (!trig_ready_sync2 || range_flip ) 
                 // a fill of this buffer is ending, so swap the write buffer leave the DDR3 asserted.
                 NS[CBUF_RD_ENABLED] = 1'b1;
              else
