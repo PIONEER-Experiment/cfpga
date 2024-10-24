@@ -16,6 +16,7 @@ module ddr3_intf_selftrig(
     output ddr3_wr_sync_err,                    // synchronization error flag
     output ddr3_wr_done,                        // asserted when the 'ddr3_wr_control' is in the DONE state
     input checksum_memory_range,                // latch the memory buffer for writing the checksum
+    input ddr3_buffer,                          // buffer that the next fill will start writing
     input acq_done,                             // input from the adc_acq_sm, aquisition is done
     // reading connections
     input local_domain_clk,                     // input, the local interface synchronous clock
@@ -173,6 +174,7 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     .reset(ddr3_domain_reset),
     .acq_enabled(cbuf_rd_en_sync2),                 // input, writing from cbuf to ddr3 has been enabled for a fill.
     .checksum_memory_range(checksum_memory_range),  // latch the memory buffer for writing the checksum
+    .ddr3_buffer(ddr3_buffer),                      // buffer that the next fill will use
     // Connections to the FIFO from the ADC
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),     // input, next 'write' data from the ADC FIFO
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),        // input, data is available when this is not asserted

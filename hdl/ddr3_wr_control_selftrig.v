@@ -27,7 +27,8 @@ module ddr3_wr_control_selftrig (
     output reg ddr3_wr_sync_err,
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state (once per waveform, header or checksum)
-    input checksum_memory_range,                // latch the memory buffer for writing the checksum
+    input checksum_memory_range,          // latch the memory buffer for writing the checksum
+    input ddr3_buffer,                    // buffer that the next fill will use
     input enable_triggering_ddr3,
     // the next batch for debugging and should get eliminated afterwards
     input fill_header_fifo_empty,
@@ -110,7 +111,7 @@ reg [22:0] address_gen;
 reg init_address_gen;   // will be asserted by the state machine
 reg correct_chksum_addr;   // will be asserted by the state machine
 always @ (posedge clk) begin
-    if (reset || !acq_enabled)
+    if (reset )
         // start up with it a '1'. This way, if we have a fill with no waveforms we will put
         // the checksum in the correct place.
         address_gen[22:0] <= 23'd1;
@@ -124,7 +125,11 @@ always @ (posedge clk) begin
         address_gen[22:0] <= address_gen[22:0] + 1;
     else if (correct_chksum_addr)
         address_gen[22:0] <= {checksum_memory_range,address_gen[21:0]};
-    
+    else if ( !acq_enabled )
+        // start up with it a '1'. This way, if we have a fill with no waveforms we will put
+        // the checksum in the correct place.
+        address_gen[22:0] <= {ddr3_buffer,22'd1};
+
 end
 assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 
@@ -209,12 +214,12 @@ ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
   .probe10(wr_app_rdy),           // input wire [0:0]  probe10
   .probe11(fill_header_wr_dat),   // input wire [151:0]  probe11
   .probe12(fill_header_wr_en),    // input wire [0:0]  probe12
-  .probe13(ddr3_wr_sync_err),     // input wire [0:0]  probe13
+  .probe13(init_address_gen),     // input wire [0:0]  probe13
   .probe14(ddr3_wr_done),         // input wire [0:0]  probe14
   .probe15(checksum_memory_range), // input wire [0:0]  probe15
   .probe16(fill_header_fifo_empty), // input wire [0:0]  probe12
   .probe17(fill_header_fifo_rd_en), // input wire [0:0]  probe12
-  .probe18(readout_pause_ddr3),     // input wire [0:0]  probe12
+  .probe18(correct_chksum_addr),     // input wire [0:0]  probe12
   .probe19(enable_triggering_ddr3), // input wire [0:0]  probe12
   .probe20(fill_num),
   .probe21(ddr3_wr_en_sync2),

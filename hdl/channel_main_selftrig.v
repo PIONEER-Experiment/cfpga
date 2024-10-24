@@ -392,6 +392,7 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_wr_sync_err(),                          // synchronization error flag
     .ddr3_wr_done(ddr3_wr_done),                  // asserted when the 'ddr3_wr_control' is in the DONE state
     .checksum_memory_range(checksum_memory_range),// latch the memory buffer for writing the checksum
+    .ddr3_buffer(ddr3_buffer),                    // buffer for initializing acquisition for next fill
     .acq_done(acq_done),                          // input, acquisition is done
 
     // reading connections
