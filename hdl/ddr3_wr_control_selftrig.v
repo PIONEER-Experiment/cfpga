@@ -31,15 +31,15 @@ module ddr3_wr_control_selftrig (
     input ddr3_buffer,                    // buffer that the next fill will use
     input enable_triggering_ddr3,
     // the next batch for debugging and should get eliminated afterwards
-    input fill_header_fifo_empty,
-    input fill_header_fifo_rd_en,
-    input readout_pause_ddr3,
-    input initial_fill_num_wr,
-    input [23:0] fill_num,
-    input evt_cnt_reset,
-    input rst_from_master,
-    input app_rdy,
-    input ddr3_wr_en_sync2,
+    //input fill_header_fifo_empty,
+    //input fill_header_fifo_rd_en,
+    //input readout_pause_ddr3,
+    //input initial_fill_num_wr,
+    //input [23:0] fill_num,
+    //input evt_cnt_reset,
+    //input rst_from_master,
+    //input app_rdy,
+    //input ddr3_wr_en_sync2,
     //
     input acq_done,                      // asserted when the 'adc_acq_sm' is in the DONE state
     output writing_last_fill             // asserted when enable_triggering deasserts but we haven't finished writing the info from this fill
@@ -197,43 +197,43 @@ assign writing_last_fill = ~enable_triggering_ddr3 & ddr3_wr_fill_in_progress;
 reg [12:0] /* synopsys enum STATE_TYPE */ CS;
 reg [12:0] /* synopsys enum STATE_TYPE */ NS;
 
-ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
-  .clk(clk), // input wire clk
-
-
-  .probe0(CS),                    // input wire [12:0]  probe0
-  .probe1(acq_enabled),           // input wire [0:0]  probe1
-  .probe2(ddr3_wr_fifo_dat),      // input wire [131:0]  probe2
-  .probe3(ddr3_wr_fifo_empty),    // input wire [0:0]  probe3
-  .probe4(ddr3_wr_fifo_rd_en),    // input wire [0:0]  probe4
-  .probe5(app_wdf_wren),          // input wire [0:0]  probe5
-  .probe6(app_wdf_rdy),           // input wire [0:0]  probe6
-  .probe7(app_wdf_end),           // input wire [0:0]  probe7
-  .probe8(writing_last_fill),     // input wire [0:0]  probe8
-  .probe9(wr_app_en),             // input wire [0:0]  probe9
-  .probe10(wr_app_rdy),           // input wire [0:0]  probe10
-  .probe11(fill_header_wr_dat),   // input wire [151:0]  probe11
-  .probe12(fill_header_wr_en),    // input wire [0:0]  probe12
-  .probe13(init_address_gen),     // input wire [0:0]  probe13
-  .probe14(ddr3_wr_done),         // input wire [0:0]  probe14
-  .probe15(checksum_memory_range), // input wire [0:0]  probe15
-  .probe16(fill_header_fifo_empty), // input wire [0:0]  probe12
-  .probe17(fill_header_fifo_rd_en), // input wire [0:0]  probe12
-  .probe18(correct_chksum_addr),     // input wire [0:0]  probe12
-  .probe19(enable_triggering_ddr3), // input wire [0:0]  probe12
-  .probe20(fill_num),
-  .probe21(ddr3_wr_en_sync2),
-  .probe22(evt_cnt_reset),
-  .probe23(rst_from_master),
-  .probe24(latch_header),
-  .probe25(ddr3_wr_fill_in_progress),
-  .probe26(next_ddr3_wr_fill_in_progress),
-  .probe27(header_written),
-  .probe28(acq_done_sync2),
-  .probe29(address_cntr[3:0]),
-  .probe30(app_rdy),
-  .probe31(address_gen)
-);
+//ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
+//  .clk(clk), // input wire clk
+//
+//
+//  .probe0(CS),                    // input wire [12:0]  probe0
+//  .probe1(acq_enabled),           // input wire [0:0]  probe1
+//  .probe2(ddr3_wr_fifo_dat),      // input wire [131:0]  probe2
+//  .probe3(ddr3_wr_fifo_empty),    // input wire [0:0]  probe3
+//  .probe4(ddr3_wr_fifo_rd_en),    // input wire [0:0]  probe4
+//  .probe5(app_wdf_wren),          // input wire [0:0]  probe5
+//  .probe6(app_wdf_rdy),           // input wire [0:0]  probe6
+//  .probe7(app_wdf_end),           // input wire [0:0]  probe7
+//  .probe8(writing_last_fill),     // input wire [0:0]  probe8
+//  .probe9(wr_app_en),             // input wire [0:0]  probe9
+//  .probe10(wr_app_rdy),           // input wire [0:0]  probe10
+//  .probe11(fill_header_wr_dat),   // input wire [151:0]  probe11
+//  .probe12(fill_header_wr_en),    // input wire [0:0]  probe12
+//  .probe13(init_address_gen),     // input wire [0:0]  probe13
+//  .probe14(ddr3_wr_done),         // input wire [0:0]  probe14
+//  .probe15(checksum_memory_range), // input wire [0:0]  probe15
+//  .probe16(fill_header_fifo_empty), // input wire [0:0]  probe12
+//  .probe17(fill_header_fifo_rd_en), // input wire [0:0]  probe12
+//  .probe18(correct_chksum_addr),     // input wire [0:0]  probe12
+//  .probe19(enable_triggering_ddr3), // input wire [0:0]  probe12
+//  .probe20(fill_num),
+//  .probe21(ddr3_wr_en_sync2),
+//  .probe22(evt_cnt_reset),
+//  .probe23(rst_from_master),
+//  .probe24(latch_header),
+//  .probe25(ddr3_wr_fill_in_progress),
+//  .probe26(next_ddr3_wr_fill_in_progress),
+//  .probe27(header_written),
+//  .probe28(acq_done_sync2),
+//  .probe29(address_cntr[3:0]),
+//  .probe30(app_rdy),
+//  .probe31(address_gen)
+//);
 
 
 

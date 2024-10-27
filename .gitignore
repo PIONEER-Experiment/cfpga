@@ -10,6 +10,7 @@ project_async/
 project_selftrig/
 project_cbuf/
 ip/*/**/
+ip_debug/*/**/
 
 # Constraints
 !constraints/*.xdc
@@ -23,9 +24,13 @@ ip/*/**/
 # IPs
 !ip/*/*.xci
 !ip/*/*.prj
+!ip_debug/*/*.xci
+!ip_debug/*/*.prj
 
 ip/**/*.v
 ip/**/*.vhd
+ip_debug/**/*.v
+ip_debug/**/*.vhd
 
 # Tcl Scripts
 !scripts/**/*.tcl

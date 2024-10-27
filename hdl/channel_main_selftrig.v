@@ -107,9 +107,9 @@ wire [131:0] ddr3_wr_fifo_dat;          // 132-bit 4-bit tag plus header or ADC 
 wire [127:0] ddr3_rd_dat;               // 128-bit header or ADC data from DDR3 memory
 wire [23:0] fill_num;                   // fill number for this fill
 wire [127:0] ddr3_rd_fifo_input_dat;    // memory burst headed toward 'ddr3_read_fifo'
-(* mark_debug = "TRUE" *) wire         ddr3_rd_fifo_output_tready;
-(* mark_debug = "TRUE" *) wire         ddr3_rd_fifo_output_tvalid;
-(* mark_debug = "TRUE" *) wire [127:0] ddr3_rd_fifo_output_dat;   // memory burst headed toward 'ddr3_read_data_width_converter'
+wire         ddr3_rd_fifo_output_tready;
+wire         ddr3_rd_fifo_output_tvalid;
+wire [127:0] ddr3_rd_fifo_output_dat;   // memory burst headed toward 'ddr3_read_data_width_converter'
 wire [31:0] ddr3_32bit_tx_tdata;        // 32-bit chunks of memory burst headed toward 'axis_interconnect'
 wire [22:0] ddr3_rd_start_addr;         // the address of the first requested 128-bit burst
 wire [23:0] ddr3_rd_burst_cnt;          // number of bursts to read from the DDR3
@@ -118,7 +118,7 @@ wire [31:0] rx_tdata_swap;              // bit-reversed data from Aurora
 
 // Define the AXIS FIFO inputs and outputs for chan 0
 wire [0:31] c0_rx_axi_tdata;
-(* mark_debug = "TRUE" *) wire [0:31] c0_tx_axi_tdata;
+wire [0:31] c0_tx_axi_tdata;
 wire [0:3] c0_rx_axi_tkeep;
 wire c0_rx_axi_tvalid, c0_tx_axi_tvalid;
 wire c0_rx_axi_tlast, c0_tx_axi_tlast;
@@ -360,17 +360,6 @@ wire en_fixed_ddr3_start_addr;
 wire enable_reading;
 wire reading_done;
 
-wire [3:0] event_cnt_short;
-(* mark_debug = "true" *) wire [3:0] event_cnt_short_125;
-assign event_cnt_short[3:0] = fill_num[3:0];
-sync_2stage #(
-  .WIDTH(4)
-) evc_sync (
-  .clk(clk125),
-  .in(event_cnt_short),
-  .out(event_cnt_short_125)
-);
-
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
 wire fill_header_fifo_reset;
@@ -429,16 +418,7 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
     .xadc_temp(xadc_temp[11:0]),
-    .event_cnt_short(event_cnt_short),
-
-    // for temporary debugging
-    .enable_triggering(enable_triggering),
-    .readout_pause(readout_pause),
-    .fill_num(fill_num),
-    .initial_fill_num_wr(initial_fill_num_wr),
-    .evt_cnt_reset(evt_cnt_reset),
-    .rst_from_master(rst_from_master)
-
+    .enable_triggering(enable_triggering)
 );
 
 ////////////////////////////////////////////////////////////////////////////
@@ -475,7 +455,7 @@ ddr3_read_data_width_converter ddr3_read_data_width_converter(
 );
 
 // Synchronize  'readout_pause' to 'clk125'.
-(* ASYNC_REG = "TRUE", mark_debug = "TRUE" *) reg readout_pause_sync1, readout_pause_sync2;
+(* ASYNC_REG = "TRUE" *) reg readout_pause_sync1, readout_pause_sync2;
 always @(posedge clk125) begin
     readout_pause_sync1 <= readout_pause;
     readout_pause_sync2 <= readout_pause_sync1;

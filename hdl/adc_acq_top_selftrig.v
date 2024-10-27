@@ -279,10 +279,7 @@ circ_buf_to_ddr3_selftrig circ_buf_to_ddr3_selftrig(
     .adc_acq_out_valid(adc_acq_out_valid),         // current data should be stored in the FIFO
     .current_waveform_num(current_waveform_num[22:0]),
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),// will be enabled whenever we do not need active writing to the DDR3
-    .checksum_memory_range(checksum_memory_range),    // latch the memory buffer for writing the checksum
-    // debugging
-    .enable_triggering(enable_triggering_adc),
-    .range_flip(range_flip)
+    .checksum_memory_range(checksum_memory_range)    // latch the memory buffer for writing the checksum
 );
 
 endmodule

@@ -142,7 +142,7 @@ module command_top (
     // generate 'run' signals for the state machines that handle individual commands
     // start with 'run_cmd_sm' which is a 'run someone' from the command sm.
     // Use the actual command from the command register to activate 1 particular sm.
-    (* mark_debug = "true" *) wire run_cmd_sm;
+    wire run_cmd_sm;
     wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
     wire run_cc_rd_fill;
 

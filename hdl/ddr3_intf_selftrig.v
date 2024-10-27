@@ -21,8 +21,8 @@ module ddr3_intf_selftrig(
     // reading connections
     input local_domain_clk,                     // input, the local interface synchronous clock
     input fill_header_fifo_reset,               // input, clear out the fifo for a new run
-    (* mark_debug = "true" *) output fill_header_fifo_empty,              // output, a header is available when not asserted
-    (* mark_debug = "true" *) input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
+    output fill_header_fifo_empty,              // output, a header is available when not asserted
+    input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
     output [151:0] fill_header_fifo_out,        // output, data at the head of the FIFO
     input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
     input [23:0] ddr3_rd_burst_cnt,             // input, the number of bursts to read
@@ -50,16 +50,7 @@ module ddr3_intf_selftrig(
     output [0:0] ddr3_odt,
     output app_rdy,                              // output, PHY calibration is done
     input [11:0] xadc_temp,
-    // for debugging
-    input [3:0] event_cnt_short,
-    input enable_triggering,
-    input readout_pause,
-    input [23:0] fill_num,
-    input initial_fill_num_wr,
-    input evt_cnt_reset,
-    input rst_from_master
-    // end of debugging
-
+    input enable_triggering
 );
 // for fast simulation uncomment the next 3 lines, and comment out lines marked farther into this file.
 //wire app_wdf_rdy;				// for fast simulation ONLY
@@ -67,9 +58,9 @@ module ddr3_intf_selftrig(
 //assign app_wdf_rdy = 1'b1;	// for fast simulation ONLY
 // end fast simulation mods    
 
-// sync some signals for debugging into the various domains
-(* mark_debug = "true" *) wire enable_triggering_ddr3;
-(* mark_debug = "true" *) wire enable_triggering_125;
+// sync some signals into the various domains
+wire enable_triggering_ddr3;
+wire enable_triggering_125;
 sync_2stage et_ddr3 (
    .clk(ddr3_domain_clk),
    .in(enable_triggering),
@@ -79,28 +70,6 @@ sync_2stage et_125 (
    .clk(local_domain_clk),
    .in(enable_triggering),
    .out(enable_triggering_125)
-);
-(* mark_debug = "true" *) wire readout_pause_ddr3;
-(* mark_debug = "true" *) wire readout_pause_125;
-sync_2stage rp_ddr3 (
-   .clk(ddr3_domain_clk),
-   .in(readout_pause),
-   .out(readout_pause_ddr3)
-);
-sync_2stage rp_125 (
-   .clk(local_domain_clk),
-   .in(readout_pause),
-   .out(readout_pause_125)
-);
-
-// sync event_cnt_short into this domain
-wire [3:0] event_cnt_short_ddr3;
-sync_2stage  #(
-  .WIDTH(4)
-) event_cnt_ddr3_sync (
-   .clk(ddr3_domain_clk),
-   .in(event_cnt_short),
-   .out(event_cnt_short_ddr3)
 );
 
 //synchronize the 'reset' signal
@@ -125,18 +94,9 @@ always @(posedge ddr3_domain_clk) begin
     cbuf_rd_en_sync2 <= cbuf_rd_en_sync1;
 end
 
-(* mark_debug = "true" *) wire [23:0] fill_num_ddr3;
-sync_2stage #(
-  .WIDTH(24)
-) fn_sync_ddr3 (
-  .clk(ddr3_domain_clk),
-  .in(fill_num),
-  .out(fill_num_ddr3)
-);
-
 wire [25:0] ddr3_wr_addr;
 wire [25:0] ddr3_rd_addr;
-(* mark_debug = "true" *) wire [151:0] fill_header_wr_dat;
+wire [151:0] fill_header_wr_dat;
 wire [26:0] app_addr;
 wire [2:0] app_cmd;
 wire [127:0] ddr3_rd_dat;
@@ -167,7 +127,7 @@ ddr3_addr_control ddr3_addr_control (
 
 /////////////////////////////////////////////////////////////
 // Connect the module that manages writing data to the memory
-(* mark_debug = "true" *) wire fill_header_wr_en;
+wire fill_header_wr_en;
 ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     // User interface clock and reset   
     .clk(ddr3_domain_clk),
@@ -193,17 +153,12 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     .ddr3_wr_sync_err(ddr3_wr_sync_err),            // synchronization error flag
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
-    // next batch for debugging, eliminate when done
-    .fill_header_fifo_empty(fill_header_fifo_empty),
-    .fill_header_fifo_rd_en(fill_header_fifo_rd_en),
-    .readout_pause_ddr3(readout_pause_ddr3),
     .enable_triggering_ddr3(enable_triggering_ddr3),
-    .fill_num(fill_num_ddr3),
-    .initial_fill_num_wr(initial_fill_num_wr),
-    .evt_cnt_reset(evt_cnt_reset),
-    .rst_from_master(rst_from_master),
-    .ddr3_wr_en_sync2(ddr3_wr_en_sync2),
-    .app_rdy(app_rdy),
+    // next batch for debugging, eliminate when done
+    //.fill_header_fifo_empty(fill_header_fifo_empty),
+    //.fill_header_fifo_rd_en(fill_header_fifo_rd_en),
+    //.ddr3_wr_en_sync2(ddr3_wr_en_sync2),
+    //.app_rdy(app_rdy),
     // done debugging
     .acq_done(acq_done),                            // input, asserted when the 'adc_acq_sm' is in the DONE state
     .writing_last_fill(writing_last_fill)
@@ -327,207 +282,5 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     // .dbg_po_f_stg23_sel(dbg_po_f_stg23_sel),
     // .dbg_po_f_dec(dbg_po_f_dec),
 );
-
-
-//*************************************************************************
-// read data shift latch
-//   data should come in bursts of qty 8 16 bit words
-//   shift them in and then tell the reader when they are valid (TBD)
-//*************************************************************************
-//always @ (posedge ui_clk)
-//begin
-//  if (app_rd_data_valid)
-//      data_out[127:0] <= app_rd_data[127:0];
-//  else
-//      data_out[127:0] <= data_out[127:0];
-
-//end
-
-
-//*************************************************************************
-// state machine to drive the ddr app interface
-//*************************************************************************
-
-// write cycle
-//  app_cmd:  driven 000 = Write, 001 = Read
-//  app_en:   driven 1= enable
-//  app_rdy:  read 1 = ready for command
-//  app_wdf_data
-//  app_wdf_wren
-//  app_wdf_wend
-//
-//  check for app_rdy = 1 then drive app_en simultaneous with app_cmd,
-//  app_addr, app_wdf_data, app_wdf_wren, app_wdf_end  
-
-
-// read cycle
-//  app_cmd:  driven 000 = Write, 001 = Read
-//  app_en:   driven 1= enable
-//  app_rdy:  read 1 = ready for command
-//  app_rd_data
-//  app_rd_data_valid
-
-
-//  check for app_rdy = 1 then drive app_en simultaneous with app_cmd,
-//  app_addr
-//  check for app_data_valid and simultaneously latch app_rd_data
-
-
-// states:      IDLE, 
-//      READ_CHK_RDY 
-//      READ_CMD 
-//      READ_CHK_VALID 
-//
-//      WRITE_CHK_RDY
-//      WRITE_CMD
-//      WRITE_DRIVE
-//  
-//      REMOVE_STROBE
-
-//parameter S1 = 8'b00000001;
-//parameter S2 = 8'b00000010;
-//parameter S3 = 8'b00000100;
-//parameter S4 = 8'b00001000;
-//parameter S5 = 8'b00010000;
-//parameter S6 = 8'b00100000;
-//parameter S7 = 8'b01000000;
-//parameter S8 = 8'b10000000;
-
-//reg[7:0] ddr3_state = S1;
-
-//always @ (posedge ui_clk)
-//begin
-//  if (ui_clk_sync_rst)
-//      begin
-//          app_cmd <= 3'b000;
-//          app_en <= 1'b0;
-//          app_wdf_wren <= 1'b0;
-//          app_wdf_end <= 1'b0;
-//      end
-//  else
-//      begin
-//          case (ddr3_state)
-//              //IDLE
-//              S1 : begin
-//                  app_cmd <= 3'b000;
-//                  app_en <= 1'b0;
-//                  app_wdf_wren <= 1'b0;
-//                  app_wdf_end <= 1'b0;
-//                  if (rd_enS)         // get a read command
-//                      ddr3_state <= S2;
-//                  else if (wr_enS)
-//                      ddr3_state <= S5;
-//                  else
-//                      ddr3_state <= S1;
-//              end
-                
-//              //READ_CHK_RDY
-//              S2 : begin
-//                  app_cmd <= 3'b000;
-//                  app_en <= 1'b0;
-//                  app_wdf_wren <= 1'b0;
-//                  app_wdf_end <= 1'b0;
-//                  if (app_rdy)            //the app must be ready
-//                      ddr3_state <= S3;
-//                  else
-//                      ddr3_state <= S2;
-//              end
-                
-//              //READ_CMD
-//              S3 : begin
-//                  app_cmd <= 3'b001;
-//                  app_en <= 1'b1;
-//                  app_wdf_wren <= 1'b0;
-//                  app_wdf_end <= 1'b0;
-//                  if (!app_rdy)           //make sure it is still ready
-//                      ddr3_state <= S3;
-//                  else
-//                      ddr3_state <= S4;
-//              end
-                
-//              //READ_CHK_VALID
-//              S4 : begin
-//                  app_cmd <= 3'b001;
-//                  app_en <= 1'b0;
-//                  app_wdf_wren <= 1'b0;
-//                  app_wdf_end <= 1'b0;
-//                  if (app_rd_data_valid)      //valid will go away when the data is done
-//                      ddr3_state <= S4;
-//                  else
-//                      ddr3_state <= S8;
-//              end
-                
-//              //WRITE_CHK_RDY
-//              S5 : begin
-//                  app_cmd <= 3'b000;
-//                  app_en <= 1'b0;
-//                  app_wdf_wren <= 1'b0;
-//                  app_wdf_end <= 1'b0;
-//                  if (app_rdy)            //the app must be ready
-//                      ddr3_state <= S6;
-//                  else
-//                      ddr3_state <= S5;
-
-//              end
-
-//              //WRITE_CMD
-//              S6 : begin
-//                  app_cmd <= 3'b000;
-//                  app_en <= 1'b1;
-//                  app_wdf_wren <= 1'b0;
-//                  app_wdf_end <= 1'b0;
-//                  if (!app_rdy)           //make sure it is still ready
-//                      ddr3_state <= S6;
-//                  else
-//                      ddr3_state <= S7;
-
-//              end
-
-//              //WRITE_DRIVE
-//              S7 : begin
-//                  app_cmd <= 3'b000;
-//                  app_en <= 1'b0;
-//                  app_wdf_wren <= 1'b1;       //data is assumed to be stable
-//                  app_wdf_end <= 1'b1;        //single word writes for now
-//                  if (!app_wdf_rdy)       //seperate write ready to check
-//                      ddr3_state <= S7;
-//                  else
-//                      ddr3_state <= S8;
-//              end
-
-//              //REMOVE_STROBE
-//              S8 : begin
-//                  app_cmd <= 3'b000;
-//                  app_en <= 1'b0;
-//                  app_wdf_wren <= 1'b0;
-//                  app_wdf_end <= 1'b0;
-//                  if (rd_enS || wr_enS)       //wait till the strobe is removed
-//                      ddr3_state <= S8;
-//                  else
-//                      ddr3_state <= S1;                   
-
-//              end
-
-
-//          endcase
-//      end
-
-
-
-//end
-
-
-//*************************************************************************
-// debug assignments
-//*************************************************************************
-//assign debug[7] = ui_clk;
-//assign debug[6] = wr_enS;
-//assign debug[5] = rd_enS;
-//assign debug[4] = app_rdy; 
-//assign debug[3] = app_wdf_rdy; 
-//assign debug[2] = app_en;
-//assign debug[1] = app_rd_data_valid;
-//assign debug[0] = app_rd_data_end;
-
 
 endmodule

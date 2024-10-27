@@ -8,7 +8,7 @@ module ddr3_rd_control (
   input reset,              // reset at startup or when requested
   input acq_enabled,            // input, writing is enabled
   // connections to the 'rd_fill' command logic
-  (* mark_debug = "true" *) input [22:0] ddr3_rd_start_addr,    // input, the address of the first requested 128-bit burst
+  input [22:0] ddr3_rd_start_addr,    // input, the address of the first requested 128-bit burst
   input [23:0] ddr3_rd_burst_cnt,     // input, the number of bursts to read
   input enable_reading,               // input, initialize the address generator and both counters, go
   output reading_done,                // output, reading is complete
@@ -18,7 +18,7 @@ module ddr3_rd_control (
   //input [127:0] app_rd_data,        // input, memory data
   // 'read' ports to address controller
   input rd_app_rdy,            // input, increment the 'read' address
-(* mark_debug = "true" *) output [25:0] ddr3_rd_addr,        // output, next 'read' address
+  output [25:0] ddr3_rd_addr,        // output, next 'read' address
   output rd_app_en,              // output, request to perform a 'read'
   // ports to the 'read' fifo
   output ddr3_rd_fifo_wr_en,             // data is valid, so put it in the READ FIFO
@@ -50,8 +50,8 @@ assign address_accept = (rd_app_en & rd_app_rdy); // we presented an address and
 // Create an address generator
 // Initialize it from the 'ddr3_rd_start_addr' extracted from the 'fill_header_fifo'
 // Increment it whenever the address is accepted (we get a 'rd_app_rdy' while asserting 'rd_app_en') 
-(* mark_debug = "true" *) reg [22:0] address_gen;
-(* mark_debug = "true" *) reg init_address_gen;  // will be asserted by the state machine
+reg [22:0] address_gen;
+reg init_address_gen;  // will be asserted by the state machine
 always @ (posedge clk) begin
   if (reset) address_gen[22:0] <= 23'b0;
   else if (enable_reading_pulse) address_gen[22:0] <= ddr3_rd_start_addr[22:0];
@@ -91,17 +91,6 @@ assign burst_cntr_zero = (burst_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 assign burst_cntr_one  = (burst_cntr[23:0] == 24'd1) ? 1'b1 : 1'b0;
 assign ddr3_rd_fifo_input_tlast = burst_cntr_one;
 
-// to help with debugging, create an event counter
-(* mark_debug = "true" *) reg [11:0] event_ctr;
-always @ (posedge clk) begin
-  if (enable_reading_pulse) begin
-    event_ctr[11:0] = event_ctr[11:0] + 1;
-  end
-  else begin
-    event_ctr[11:0] = event_ctr[11:0];
-  end
-end
-
 
 //  Leave the comments containing "synopsys" in your HDL code.
  
@@ -113,7 +102,7 @@ parameter [1:0]
   DONE = 2'd2;
   
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [2:0] /* synopsys enum STATE_TYPE */ CS;
+reg [2:0] /* synopsys enum STATE_TYPE */ CS;
 reg [2:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  

@@ -22,44 +22,44 @@
 // 2) Response Code (RC) equals the bitwise inverse of the CC
 
 module cc_rd_fill_sm (
-    input clk,                                // local clock
-    input reset,                            // active-high
+  input clk,                                // local clock
+  input reset,                            // active-high
 
-(* mark_debug = "true" *) input run_sm,                               // run this state machine
-(* mark_debug = "true" *) output reg sm_running,                    // we are running
-(* mark_debug = "true" *) output reg sm_done,                        // we are finished
+  input run_sm,                               // run this state machine
+  output reg sm_running,                    // we are running
+  output reg sm_done,                        // we are finished
 
-(* mark_debug = "true" *) output reg tx_tvalid,                    // the data we are presenting is valid
-(* mark_debug = "true" *) output reg tx_tlast,                       // this is the final word in the frame
-(* mark_debug = "true" *) input tx_tready,                         // signal that the TX fifo has accepted the data
+  output reg tx_tvalid,                    // the data we are presenting is valid
+  output reg tx_tlast,                       // this is the final word in the frame
+  input tx_tready,                         // signal that the TX fifo has accepted the data
 
-(* mark_debug = "true" *) output reg send_csn,                    // send the CSN
-(* mark_debug = "true" *) output reg send_cmd,                    // send the CC
-(* mark_debug = "true" *) output reg send_inv_cmd,                // send the inverse CC
+  output reg send_csn,                    // send the CSN
+  output reg send_cmd,                    // send the CC
+  output reg send_inv_cmd,                // send the inverse CC
 
-    // interface to the header FIFO
-(* mark_debug = "true" *) input fill_header_fifo_empty,            // a header is available when not asserted
-(* mark_debug = "true" *) output reg fill_header_fifo_rd_en,        // remove the current data from the FIFO
-(* mark_debug = "true" *) input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
-(* mark_debug = "true" *) input [22:0] fixed_ddr3_start_addr,
-(* mark_debug = "true" *) input en_fixed_ddr3_start_addr,
+  // interface to the header FIFO
+  input fill_header_fifo_empty,            // a header is available when not asserted
+  output reg fill_header_fifo_rd_en,        // remove the current data from the FIFO
+  input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
+  input [22:0] fixed_ddr3_start_addr,
+  input en_fixed_ddr3_start_addr,
 
-    // interface to the DDR3 memory
-(* mark_debug = "true" *) output reg [22:0] ddr3_rd_start_addr,     // the address of the first requested 128-bit burst
-(* mark_debug = "true" *) output reg [23:0] ddr3_rd_burst_cnt,      // number of bursts to read from the DDR3
-(* mark_debug = "true" *) output reg enable_reading,                 // start the 'ddr3_rd_control'
-(* mark_debug = "true" *) input reading_done,                       // reading is complete
-(* mark_debug = "true" *) input acq_done_latch,                     // input, last self-trigger safely processed (default to 1 in other modes)
+  // interface to the DDR3 memory
+  output reg [22:0] ddr3_rd_start_addr,     // the address of the first requested 128-bit burst
+  output reg [23:0] ddr3_rd_burst_cnt,      // number of bursts to read from the DDR3
+  output reg enable_reading,                 // start the 'ddr3_rd_control'
+  input reading_done,                       // reading is complete
+  input acq_done_latch,                     // input, last self-trigger safely processed (default to 1 in other modes)
 
-    // interface to the AXIS 2:1 MUX
-(* mark_debug = "true" *) output reg use_ddr3_data,                // the data source is the DDR3 memory
-(* mark_debug = "true" *) input aurora_ddr3_accept,                // DDR3 data has been accepted by the Aurora
-    // for debugging
-(* mark_debug = "true" *) input initial_fill_num_wr                // tells the debugging event counter to reset to zero
+// interface to the AXIS 2:1 MUX
+  output reg use_ddr3_data,                // the data source is the DDR3 memory
+  input aurora_ddr3_accept,                // DDR3 data has been accepted by the Aurora
+// for debugging
+  input initial_fill_num_wr                // tells the debugging event counter to reset to zero
 );
 
 // Synchronize  'reading_done'.
-(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg reading_done_sync1, reading_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg reading_done_sync1, reading_done_sync2;
 always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;
@@ -69,7 +69,7 @@ end
 reg [127:0] saved_header;
     
 // make a register to hold error status
-(* mark_debug = "true" *) reg error_found;
+reg error_found;
 
 // make a counter to keep track of how many 32-bit DDR3 words still need to
 // be accepted by the Aurora interface
@@ -97,8 +97,8 @@ parameter [3:0]
     DONE                 = 4'd9;  // 200
                 
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
-(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ NS;
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
@@ -109,21 +109,6 @@ always @ (posedge clk) begin
         CS[IDLE] <= 1'b1; // set IDLE state bit to 1
     end
     else CS <= NS;          // set state bits to next state
-end
-
-// to help with debugging, create an event counter
-(* mark_debug = "true" *) reg [11:0] event_ctr;
-reg update_event_ctr;
-always @ (posedge clk) begin
-  if ( initial_fill_num_wr ) begin
-     event_ctr[11:0] = 11'b0;
-  end
-  else if (update_event_ctr) begin
-    event_ctr[11:0] = event_ctr[11:0] + 1;
-  end
-  else begin
-    event_ctr[11:0] = event_ctr[11:0];
-  end
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments)
@@ -253,7 +238,6 @@ end // combinational always block to determine next state
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
 reg [11:0] header_address;
-reg ohoh;
 always @ (posedge clk) begin
     // defaults
     sm_running              <= 1'b1;    // negate this when IDLE
@@ -266,8 +250,6 @@ always @ (posedge clk) begin
     send_cmd                <= 1'b0;
     send_inv_cmd            <= 1'b0;
     use_ddr3_data           <= 1'b0;
-    update_event_ctr        <= 1'b0;
-    ohoh                    <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
@@ -301,14 +283,10 @@ always @ (posedge clk) begin
         ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
         // remove the word from the FIFO head
         fill_header_fifo_rd_en <= 1'b1;
-        update_event_ctr       <= 1'b1;
         header_address         <= fill_header_fifo_out[11:0];
     end
 
     if (NS[ECHO_CSN1]) begin
-        if ( header_address != event_ctr ) begin
-            ohoh <= 1'b1;
-        end
         send_csn <= 1'b1;
     end
 
