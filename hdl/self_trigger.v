@@ -125,7 +125,7 @@ parameter [2:0]
   PIPE_ADJUST     = 3'd5;
 
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [5:0] /* synopsys enum STATE_TYPE */ CS;
+reg [5:0] /* synopsys enum STATE_TYPE */ CS;
 reg [5:0] /* synopsys enum STATE_TYPE */ NS;
 
 // sync the enable signal into the adc clk domain
