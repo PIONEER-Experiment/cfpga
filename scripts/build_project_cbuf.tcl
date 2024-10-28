@@ -68,14 +68,14 @@ if {[string equal [get_filesets -quiet constrs_impl_1] ""]} {
 # Set 'constrs_1' fileset object
 set obj [get_filesets constrs_1]
 
-set cflist [glob $origin_dir/constraints/ios.xdc \
+set cflist [glob $origin_dir/constraints/cbuf/ios.xdc \
                  $origin_dir/constraints/cbuf/timing.xdc \
                  $origin_dir/constraints/wizard.xdc \
                  $origin_dir/constraints/synthesis.xdc \
                  $origin_dir/constraints/aurora_8b10b_0.xdc \
                  $origin_dir/constraints/bitstream.xdc]
 
-set ciflist [glob $origin_dir/constraints/ios.xdc \
+set ciflist [glob $origin_dir/constraints/cbuf/ios.xdc \
                   $origin_dir/constraints/cbuf/timing.xdc \
                   $origin_dir/constraints/timing_impl.xdc \
                   $origin_dir/constraints/wizard.xdc \

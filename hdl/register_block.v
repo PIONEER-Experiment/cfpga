@@ -42,6 +42,8 @@ module register_block(
     output [21:0] ped_waveform_gap,             // idle time between waveforms 
     output [13:0] async_num_bursts,          // number of 8-sample bursts in an ASYNC waveform
     output [15:0] async_pre_trig,            // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    output [11:0] selftrig_threshold,        // above-pedestal threshold for self triggering
+    output        selftrig_polarity,         // for self-triggering: 0 => negative polarity, 1 => positive
     input  [22:0] current_waveform_num,
  
     // slow control
@@ -85,7 +87,7 @@ module register_block(
     reg [31:0] reg4_  = 32'd100;      // pedestal fill burst count of 100
     reg [31:0] reg8_  = 32'd11;       // data bus delay tap value of 11
     reg [31:0] reg13_ = 32'hf0000000; // use normal DDR3 start addresses
-    reg [31:0] reg14_ = 32'd1;        // 1 muon waveform per trigger
+    reg [31:0] reg14_ = 32'd1;        // 1 muon waveform per trigger; 1 threshold and negative polarity for self triggering
     reg [31:0] reg16_ = 32'd4;        // 4 laser waveform per trigger
     reg [31:0] reg18_ = 32'd1;        // 1 pedestal waveform per trigger
     reg [31:0] reg19_ = 32'd1;        // muon waveform gap of 1
@@ -182,8 +184,11 @@ module register_block(
     assign en_fixed_ddr3_start_addr = (reg13_[31:28] == 4'b1111) ? 1'b0 : 1'b1;
     
     // R14
-    // number of muon waveforms to store per trigger
+    // number of muon waveforms to store per trigger (regular mode)
+    // triggering threshold, self-triggering mode
     assign muon_num_waveforms[11:0]  = reg14_[11:0];
+    assign selftrig_threshold[11:0]    = {0,reg14_[10:0]};
+    assign selftrig_polarity           = reg14_[11];
 
     // R15
     // idle time between laser waveforms

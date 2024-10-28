@@ -280,7 +280,7 @@ wire [11:0] selftrig_threshold;
 //  .in(muon_num_waveforms),
 //  .out(selftrig_threshold)
 //);
-assign selftrig_threshold[11:0] = muon_num_waveforms[11:0];
+//assign selftrig_threshold[11:0] = muon_num_waveforms[11:0];
 wire [11:0] channel_tag_adclk;
 sync_2stage #(
   .WIDTH(12)
@@ -310,9 +310,10 @@ adc_acq_top_selftrig adc_acq_top_selftrig (
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
-     .async_num_bursts(async_num_bursts[13:0]),          // number of 8-sample bursts in an ASYNC waveform
+    .async_num_bursts(async_num_bursts[13:0]),           // number of 8-sample bursts in an ASYNC waveform
     .async_pre_trig(async_pre_trig[15:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    .selftrig_threshold(selftrig_threshold[11:0]),             // the amount by which the sample average must exceed the average pedestal to trigger
+    .selftrig_threshold(selftrig_threshold[11:0]),       // the amount by which the sample average must exceed the average pedestal to trigger
+    .selftrig_polarity( selftrig_polarity),              // for self-triggering: 0 => negative polarity, 1 => positive
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
@@ -635,6 +636,8 @@ command_top command_top (
     .ped_waveform_gap(ped_waveform_gap[21:0]),         // idle time between waveforms 
     .async_num_bursts(async_num_bursts[13:0]),          // number of 8-sample bursts in an ASYNC waveform
     .async_pre_trig(async_pre_trig[15:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
+    .selftrig_polarity(selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished

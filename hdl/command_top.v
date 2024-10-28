@@ -53,14 +53,16 @@ module command_top (
     input  [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
     output [22:0] fixed_ddr3_start_addr,
     output en_fixed_ddr3_start_addr,
-    output [11:0] muon_num_waveforms,          // number of waveforms to store per trigger
+    output [11:0] muon_num_waveforms,         // number of waveforms to store per trigger
     output [21:0] muon_waveform_gap,          // idle time between waveforms 
-    output [11:0] laser_num_waveforms,          // number of waveforms to store per trigger
-    output [21:0] laser_waveform_gap,          // idle time between waveforms 
+    output [11:0] laser_num_waveforms,        // number of waveforms to store per trigger
+    output [21:0] laser_waveform_gap,         // idle time between waveforms
     output [11:0] ped_num_waveforms,          // number of waveforms to store per trigger
-    output [21:0] ped_waveform_gap,              // idle time between waveforms 
+    output [21:0] ped_waveform_gap,           // idle time between waveforms
     output [13:0] async_num_bursts,           // number of 8-sample bursts in an ASYNC waveform
     output [15:0] async_pre_trig,             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    output [11:0] selftrig_threshold,         // above-pedestal threshold for self triggering
+    output        selftrig_polarity,          // for self-triggering: 0 => negative polarity, 1 => positive
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
     output read_fill_done,                    // read fill state machine finished
@@ -407,6 +409,8 @@ module command_top (
         .ped_num_waveforms(ped_num_waveforms[11:0]),                   // number of waveforms to store per trigger
         .ped_waveform_gap(ped_waveform_gap[21:0]),                     // idle time between waveforms
         .async_num_bursts(async_num_bursts[13:0]),                     // number of 8-sample bursts in an ASYNC waveform
+        .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
+        .selftrig_polarity( selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
         .async_pre_trig(async_pre_trig[15:0]),                         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
         .current_waveform_num(current_waveform_num[22:0]),
         // slow control

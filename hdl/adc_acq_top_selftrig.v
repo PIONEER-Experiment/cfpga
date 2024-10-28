@@ -23,6 +23,7 @@ module adc_acq_top_selftrig (
     input [13:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     input [11:0] selftrig_threshold,// the amount by which the sample average must exceed the average pedestal to trigger
+    input        selftrig_polarity, // for self-triggering: 0 => negative polarity, 1 => positive
     input [3:0] xadc_alarms,
 
     // outputs
@@ -178,8 +179,8 @@ adc_to_circ_buf_ASYNC adc_to_circ_buf_ASYNC (
 );
 
 // XXX this needs to come from a register!!
-wire signal_polarity;
-assign signal_polarity = 1'b0;
+//wire signal_polarity;
+//assign signal_polarity = 1'b0;
 ////////////////////////////////////////////////////////////////////////////
 // Self-trigger module
 // A trigger will be established when a pulse exceeds a set threshold above a
@@ -191,7 +192,7 @@ self_trigger self_trigger(
     .adcdat(packed_adc_dat),                  // a pair of ADC samples and a pair of over-range bits
     .timing_counter(timing_counter),          // input the 400 MHz clock counter
     .threshold(selftrig_threshold),           // threshold for average - pedestal to trigger a trigger pulse
-    .polarity(signal_polarity),               // 1 => positive going signal, 0 => negative going
+    .polarity(selftrig_polarity),             // 1 => positive going signal, 0 => negative going
     .enable(enable_triggering),               // start looking for triggers
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid
     .trigger(self_trig),                      // a trigger has been found
