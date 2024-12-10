@@ -6,13 +6,13 @@
 //
 // Create Date:   16:42:36 03/03/2016
 // Design Name:   channel_main_async
-// Module Name:   C:/USER_LOCAL/crs/7104_016_LLRF_DSP_Board/Xilinx/CESR_V1/channel_main_selftrig_tb1.v
+// Module Name:   C:/USER_LOCAL/crs/7104_016_LLRF_DSP_Board/Xilinx/CESR_V1/channel_main_selftrigc_tb1.v
 // Project Name:  CESR_llrf_fpga
 // Target Device:  
 // Tool versions:  
 // Description: 
 //
-// Verilog Test Fixture created by ISE for module: channel_main_selftrig
+// Verilog Test Fixture created by ISE for module: channel_main_selftrigc
 //
 // Dependencies:
 // 
@@ -22,7 +22,7 @@
 // 
 ////////////////////////////////////////////////////////////////////////////////
 
-module channel_main_selftrig_tb1;
+module channel_main_selftrigc_tb1;
 
 	// Inputs
 	reg [2:0] ch_addr;
@@ -98,7 +98,7 @@ module channel_main_selftrig_tb1;
 	wire [1:0] ddr3_dqs_p;
 
 	// Instantiate the Unit Under Test (UUT)
-	channel_main_selftrig uut (
+	channel_main_selftrigc uut (
 		.debug(debug),
 		.ch_addr(ch_addr), 
 		.power_good(power_good), 

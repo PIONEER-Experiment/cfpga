@@ -22,34 +22,35 @@
 // 2) Response Code (RC) equals the bitwise inverse of the CC
 
 module cc_rd_fill_sm (
-  input clk,                                // local clock
-  input reset,                            // active-high
+  input clk,                                 // local clock
+  input reset,                               // active-high
 
-  input run_sm,                               // run this state machine
-  output reg sm_running,                    // we are running
-  output reg sm_done,                        // we are finished
+  input run_sm,                           // run this state machine
+  output reg sm_running,                  // we are running
+  output reg sm_done,                     // we are finished
 
-  output reg tx_tvalid,                    // the data we are presenting is valid
-  output reg tx_tlast,                       // this is the final word in the frame
-  input tx_tready,                         // signal that the TX fifo has accepted the data
+  output reg tx_tvalid,                   // the data we are presenting is valid
+  output reg tx_tlast,                    // this is the final word in the frame
+  input tx_tready,                        // signal that the TX fifo has accepted the data
 
   output reg send_csn,                    // send the CSN
   output reg send_cmd,                    // send the CC
   output reg send_inv_cmd,                // send the inverse CC
 
   // interface to the header FIFO
-  input fill_header_fifo_empty,            // a header is available when not asserted
-  output reg fill_header_fifo_rd_en,        // remove the current data from the FIFO
-  input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
+  input fill_header_fifo_empty,           // a header is available when not asserted
+  output reg fill_header_fifo_rd_en,      // remove the current data from the FIFO
+  output reg fill_address_fifo_rd_en,     // remove the address for the fill just read from the FIFO
+  input [151:0] fill_header_fifo_out,     // data at the head of the FIFO
   input [22:0] fixed_ddr3_start_addr,
   input en_fixed_ddr3_start_addr,
 
   // interface to the DDR3 memory
-  output reg [22:0] ddr3_rd_start_addr,     // the address of the first requested 128-bit burst
-  output reg [23:0] ddr3_rd_burst_cnt,      // number of bursts to read from the DDR3
-  output reg enable_reading,                 // start the 'ddr3_rd_control'
-  input reading_done,                       // reading is complete
-  input acq_done_latch,                     // input, last self-trigger safely processed (default to 1 in other modes)
+  output reg [22:0] ddr3_rd_start_addr,   // the address of the first requested 128-bit burst
+  output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
+  output reg enable_reading,              // start the 'ddr3_rd_control'
+  input reading_done,                     // reading is complete
+  input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
 
 // interface to the AXIS 2:1 MUX
   output reg use_ddr3_data,                // the data source is the DDR3 memory
@@ -243,6 +244,7 @@ always @ (posedge clk) begin
     sm_running              <= 1'b1;    // negate this when IDLE
     sm_done                 <= 1'b0;
     fill_header_fifo_rd_en  <= 1'b0;
+    fill_address_fifo_rd_en <= 1'b0;
     enable_reading          <= 1'b0;
     tx_tvalid               <= 1'b0;
     tx_tlast                <= 1'b0;
@@ -333,6 +335,8 @@ always @ (posedge clk) begin
         end
         // notify calling logic that we are done
         sm_done <= 1'b1;
+        // we've finished reading this fill, so clear its address from the FIFO for the high water mark calculation
+        fill_address_fifo_rd_en <= 1'b1;
     end
 end
 
