@@ -35,8 +35,9 @@ module adc_acq_sm (
     output reg waveform_gap_cntr_en,    // enable after each initialization
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
     output reg acq_done,                // acquisition is done
-    output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
-);      
+    output reg sm_idle,                 // signal that this state machine is idle (used for front panel LED status)
+    output     [18:0] adc_acq_state     // state machine state
+);
 
 
 // synchronize ENABLE and TRIGGER inputs to this clock domain
@@ -118,6 +119,8 @@ parameter [4:0]
 // Declare current state and next state variables
 reg [18:0] /* synopsys enum STATE_TYPE */ CS;
 reg [18:0] /* synopsys enum STATE_TYPE */ NS;
+assign adc_acq_state = CS;
+
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

@@ -14,8 +14,10 @@ module circ_buf_to_ddr3_ASYNC (
     input [15:0] async_pre_trig,    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     input [25:0] circ_buf_rd_dat,    // 26-bit wide data from the circular buffer 
     input [15:0] circ_buf_trig_addr, // circular buffer address corresponding to a trigger, FIFO output
-    input trig_fifo_empty,            // no triggers available when asserted
-    input [1:0] fill_type,            // the levels on the 'acq_enable[1:0]' inputs
+    input        trig_fifo_empty,    // no triggers available when asserted
+    input [ 1:0] fill_type,          // the levels on the 'acq_enable[1:0]' inputs
+    input        evt_cnt_reset,
+
     input [3:0] xadc_alarms,
 
     // outputs
@@ -25,7 +27,8 @@ module circ_buf_to_ddr3_ASYNC (
     output reg [15:0] circ_buf_rd_addr,    // read address for the circular buffer
     output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,           // current data should be stored in the FIFO
-    output [22:0] current_waveform_num
+    output [22:0] current_waveform_num,
+    output [17:0] circ_to_ddr3_state    // current state
 );
 
 wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
@@ -154,6 +157,19 @@ waveform_cntr_ASYNC waveform_cntr_ASYNC (
     .current_waveform_num(current_waveform_num[22:0]) // to be used in header
 );
 
+reg [19:0] waveform_counter;
+always @(posedge adc_clk) begin
+  if ( reset_clk_adc | evt_cnt_reset ) begin
+    waveform_counter <= 20'd0;
+  end
+  else begin
+    if ( waveform_cntr_en ) begin
+       waveform_counter[19:0] <= waveform_counter[19:0] + 1;
+    end
+  end
+end
+
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // connect an up-counter that will keep track of the fill number
 // It will be initialized at the start of a run, or when necessary.
@@ -199,7 +215,8 @@ circ_buf_to_ddr3_sm_ASYNC circ_buf_to_ddr3_sm_ASYNC (
     .burst_cntr_en(burst_cntr_en),          // will be enabled once per burst
     .fill_cntr_en(fill_cntr_en),            // will be enabled once per fill
     .waveform_cntr_init(waveform_cntr_init),                  // initialize when triggered
-    .waveform_cntr_en(waveform_cntr_en)                  // will be enabled once after each waveform
-);      
+    .waveform_cntr_en(waveform_cntr_en),                 // will be enabled once after each waveform
+    .circ_to_ddr3_state(circ_to_ddr3_state)    // current state
+);
 
 endmodule

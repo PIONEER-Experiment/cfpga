@@ -19,7 +19,7 @@ module channel_main_async (
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
+  (* mark_debug = "true" *) input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
   output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> red + green = orange, [1=0,2=1]-> red, [1=1,2=0]-> green, [1=1,2=1]-> off 
@@ -76,8 +76,8 @@ wire [22:0] current_waveform_num;
 wire readout_pause;
 assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1:2] : 'acq_enable'
-wire acq_enable0;                       // indicates enabled for triggers, and fill type
-wire acq_enable1;                       // indicates enabled for triggers, and fill type
+(* mark_debug = "true" *) wire acq_enable0;                       // indicates enabled for triggers, and fill type
+(* mark_debug = "true" *) wire acq_enable1;                       // indicates enabled for triggers, and fill type
 assign acq_enable0 = io[1];
 assign acq_enable1 = io[2];
 //   io[3]   : 'rst_from_master'
@@ -92,7 +92,7 @@ wire [22:0] muon_num_bursts;            // number of sample bursts in a MUON fil
 wire [22:0] laser_num_bursts;           // number of sample bursts in a LASER fill
 wire [22:0] ped_num_bursts;             // number of sample bursts in a PEDESTAL fill
 wire [23:0] initial_fill_num;           // event number to assign to the first fill
-wire [131:0] adc_acq_out_dat;           // 132-bit 4-bit tag plus header or ADC data to 'ddr3_write_fifo'
+(* mark_debug = "true" *) wire [131:0] adc_acq_out_dat;           // 132-bit 4-bit tag plus header or ADC data to 'ddr3_write_fifo'
 wire [11:0] muon_num_waveforms;         // number of waveforms to store per trigger
 wire [21:0] muon_waveform_gap;          // idle time between waveforms
 wire [11:0] laser_num_waveforms;        // number of waveforms to store per trigger
@@ -128,7 +128,7 @@ wire [31:0] genreg_rd_data;
 wire [31:0] adc_intf_rd_data;
 wire [31:0] adc_intf_wr_data;
 
-wire [151:0] fill_header_fifo_out;
+(* mark_debug = "true" *) wire [151:0] fill_header_fifo_out;
 wire [22:0] ddr3_rd_burst_addr;
 
 wire [4:0] adc_buf_data_delay;
@@ -138,6 +138,13 @@ wire [64:0] adc_buf_current_data_delay;
 wire aurora_channel_up;
 wire adc_acq_sm_idle;
 wire command_sm_idle;
+
+// state machine states
+wire [18:0] adc_acq_state;
+wire [17:0] circ_to_ddr3_state;
+wire [ 9:0] cc_rd_fill_state;
+wire [ 2:0] ddr3_rd_ctrl_state;            // read control current state
+wire [12:0] ddr3_wr_ctrl_state;            // write control current state
 
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
@@ -187,6 +194,22 @@ startup_reset startup_reset(
     .adc_acq_full_reset(adc_acq_full_reset) // active-high reset output, goes low after startup
 );
 
+(* mark_debug = "true" *) wire pulse_trigger_125, pulse_trigger_ddr3, pulse_trigger_adc;
+sync_2stage pulse_125 (
+  .clk(clk125),
+  .in(acq_trig),
+  .out(pulse_trigger_125)
+);
+sync_2stage pulse_ddr3 (
+  .clk(ddr3_domain_clk),
+  .in(acq_trig),
+  .out(pulse_trigger_ddr3)
+);
+sync_2stage pulse_adc (
+  .clk(adc_clk),
+  .in(acq_trig),
+  .out(pulse_trigger_adc)
+);
 
 wire rst_from_master_sync;
 sync_2stage rst_from_master_sync_inst (
@@ -203,7 +226,6 @@ master_reset master_reset (
   .short_reset(evt_cnt_reset),
   .long_reset(full_reset)
 );
-
 
 // ======== communicate with FPGA XADC ========
 
@@ -256,6 +278,7 @@ assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
 
 wire [25:0] packed_adc_dat;
+wire [ 8:0] enable_sm_state;
 
 adc_acq_top_ASYNC adc_acq_top_ASYNC (
     // inputs
@@ -280,6 +303,9 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
     .async_num_bursts(async_num_bursts[13:0]),           // number of 8-sample bursts in an ASYNC waveform
     .async_pre_trig(async_pre_trig[15:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .muon_num_waveforms(muon_num_waveforms[11:0]),
+    .muon_waveform_gap(muon_waveform_gap[21:0]),
+    .evt_cnt_reset(evt_cnt_reset),
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
@@ -289,7 +315,9 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
-    .adc_acq_sm_idle(adc_acq_sm_idle),                    // ADC acquisition state machine is idle (used for front panel LED status)
+    .circ_to_ddr3_state(circ_to_ddr3_state),             // circ_buf_to_ddr3 current state
+    .enable_sm_state(enable_sm_state),                   // enable_sm current state
+    .adc_acq_sm_idle(adc_acq_sm_idle),                   // ADC acquisition state machine is idle (used for front panel LED status)
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0])
 );
@@ -298,9 +326,13 @@ wire ddr3_write_fifo_full;
         
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
+wire dwf_reset;
+assign dwf_reset = adc_acq_full_reset | evt_cnt_reset;
+(* mark_debug = "true" *) wire ddr3_wr_fifo_rd_en;
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
-    .rst(reset_clk50),             // reset at startup or when requested
+    .rst(dwf_reset),             // reset at startup or when requested
+    //.rst(reset_clk50),             // reset at startup or when requested
     .wr_clk(adc_clk),               // clock extracted from ADC DDR clock
     .rd_clk(ddr3_domain_clk),       // clock extracted from DDR3 block
     .din(adc_acq_out_dat[131:0]),   // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -319,6 +351,8 @@ wire reading_done;
 
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
+wire fill_header_fifo_reset;
+assign fill_header_fifo_reset = adc_acq_full_reset | evt_cnt_reset;
 ddr3_intf_ASYNC ddr3_intf_ASYNC(
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
@@ -338,6 +372,7 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
 
     // reading connections
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
+    .fill_header_fifo_reset(fill_header_fifo_reset),     // input, clear out the fifo for a new run
     .fill_header_fifo_empty(fill_header_fifo_empty),     // output, a header is available when not asserted
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // input, remove the current data from the FIFO
     .fill_header_fifo_out(fill_header_fifo_out[151:0]),  // output, data at the head of the FIFO
@@ -368,11 +403,16 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
+     // states
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),            // read control current state
+    .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
+
     .xadc_temp(xadc_temp[11:0])
 );
 
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the data from the DDR3 block
+(* mark_debug = "true" *) wire ddr3_rd_fifo_output_tvalid;
 ddr3_read_fifo ddr3_read_fifo(
     .m_aclk(clk125),
     .s_aclk(ddr3_domain_clk),
@@ -526,6 +566,7 @@ command_top command_top (
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),      // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
     .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go
+    .acq_done_latch(1'b1),                               // input, last self-trigger safely processed in selftrig mode, default to 1 in other modes
     .reading_done(reading_done),                        // output, reading is complete
 
     // registers to/from the ADC acquisition state machine
@@ -552,6 +593,13 @@ command_top command_top (
      .async_pre_trig(async_pre_trig[15:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
+
+    // other state machine states
+    .adc_acq_state(19'd0),
+    .circ_to_ddr3_state(circ_to_ddr3_state),
+    .enable_sm_state(enable_sm_state),
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
+    .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state),
 
     .xadc_temp(xadc_temp[15:0]),
     .xadc_vccint(xadc_vccint[15:0]),

@@ -9,17 +9,17 @@ module ddr3_wr_control_ASYNC (
     input reset,
     input acq_enabled,                    // input, writing is enabled
     // Connections to the FIFO from the ADC
-    input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
-    input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
-    output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
+    (* mark_debug = "true" *) input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
+    (* mark_debug = "true" *) input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
+    (* mark_debug = "true" *) output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
     // 'write' ports to memory
-    output  app_wdf_wren,                 // output, request to perform a 'write' 
-    input app_wdf_rdy,                    // input, memory can accept data
-    output  app_wdf_end,                  // output, last data cycle
+    (* mark_debug = "true" *) output  app_wdf_wren,                 // output, request to perform a 'write'
+    (* mark_debug = "true" *) input app_wdf_rdy,                    // input, memory can accept data
+    (* mark_debug = "true" *) output  app_wdf_end,                  // output, last data cycle
     // 'write' ports to address controller
-    output [25:0] ddr3_wr_addr,           // output, next 'write' address
-    output  wr_app_en,                    // output, request to perform a 'write' 
-    input wr_app_rdy,                     // input, increment the 'write' address
+    (* mark_debug = "true" *) output [25:0] ddr3_wr_addr,           // output, next 'write' address
+    (* mark_debug = "true" *) output  wr_app_en,                    // output, request to perform a 'write' 
+    (* mark_debug = "true" *) input wr_app_rdy,                     // input, increment the 'write' address
     // 'write' ports to the fill_header_fifo
     output [151:0] fill_header_wr_dat,    // header data
     output reg fill_header_wr_en,         // store header in FIFO
@@ -27,6 +27,7 @@ module ddr3_wr_control_ASYNC (
     output reg ddr3_wr_sync_err,
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
+    (* mark_debug = "true" *) output [12:0] ddr3_wr_ctrl_state,     // current state
     input acq_done                        // asserted when the 'adc_acq_sm' is in the DONE state
 );
 
@@ -35,22 +36,22 @@ module ddr3_wr_control_ASYNC (
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
-    IDLE        = 4'd0,
-    INIT_ALL	= 4'd1,
-    WAIT		= 4'd2,
-    TST_TAG     = 4'd3,
-    SYNC_ERR    = 4'd4,
-    INIT_FILL	= 4'd5,
-    WRITE_FILL	= 4'd6,
-    INIT_WFM    = 4'd7,
-    INIT_CKSM   = 4'd8,
-    WRITE       = 4'd9,
-    WRITE_CKSM  = 4'd10,
-    WRITE_HDR   = 4'd11,
-    DONE        = 4'd12;
+    IDLE        = 4'd0,   // 0001
+    INIT_ALL    = 4'd1,   // 0002
+    WAIT        = 4'd2,   // 0004
+    TST_TAG     = 4'd3,   // 0008
+    SYNC_ERR    = 4'd4,   // 0010
+    INIT_FILL   = 4'd5,   // 0020
+    WRITE_FILL  = 4'd6,   // 0040
+    INIT_WFM    = 4'd7,   // 0080
+    INIT_CKSM   = 4'd8,   // 0100
+    WRITE       = 4'd9,   // 0200
+    WRITE_CKSM  = 4'd10,  // 0400
+    WRITE_HDR   = 4'd11,  // 0800
+    DONE        = 4'd12;  // 1000
 
 // synchronize 'acq_done'
-(* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;
+(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg acq_done_sync1, acq_done_sync2;
 always @ (posedge clk) begin
     acq_done_sync1 <= acq_done;
     acq_done_sync2 <= acq_done_sync1;
@@ -76,8 +77,8 @@ always @ (posedge clk) begin
 end
 	 
 // Create a register to hold the header for future writing to the fill-header FIFO
-reg [151:0] fill_header_wr_dat_reg;
-reg latch_header;   // will be asserted by the state machine
+(* mark_debug = "true" *) reg [151:0] fill_header_wr_dat_reg;
+(* mark_debug = "true" *) reg latch_header;   // will be asserted by the state machine
 always @ (posedge clk) begin
     if (reset) fill_header_wr_dat_reg <= {152{1'b0}};
     else if (latch_header) begin
@@ -132,10 +133,10 @@ assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 // For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever we get a successful write. This happens when
 // we are asserting 'wdf_wren' and receiving 'wdf_rdy'.
-reg [23:0] burst_cntr;
+(* mark_debug = "true" *) reg [23:0] burst_cntr;
 reg init_burst_cntr;   // will be asserted by the state machine
 reg init_burst_cntr_to_1;   // will be asserted by the state machine
-wire burst_cntr_zero;  // the counter is at zero
+(* mark_debug = "true" *) wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) burst_cntr[23:0] <= 24'd0;
     else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 24'd1;
@@ -168,6 +169,8 @@ assign address_allow = ~(address_control == 0);
 // Declare current state and next state variables
 reg [12:0] /* synopsys enum STATE_TYPE */ CS;
 reg [12:0] /* synopsys enum STATE_TYPE */ NS;
+assign ddr3_wr_ctrl_state = CS;
+
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

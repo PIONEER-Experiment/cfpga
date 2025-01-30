@@ -168,3 +168,14 @@ set_property "steps.write_bitstream.tcl.post" "[file normalize "$origin_dir/scri
 current_run -implementation [get_runs impl_1]
 
 puts "INFO: Project created: WFD_Channel_ASYNC"
+
+
+
+channels/chan0/aurora/inst/gt_wrapper_i/aurora_8b10b_0_multi_gt_i/gt0_aurora_8b10b_0_i/gtxe2_i/TXOUTCLK clkin
+                                   clkfbout_g2_chan_clks clk_50M_g2_chan_clks clk_200M_g2_chan_clks
+                                   clk_250M_g2_chan_clks clk_8M_g2_chan_clks adc_sdclk_g2_chan_clks
+                                   pll_clkfbout freq_refclk mem_refclk sync_pulse pll_clk3_out oserdes_clk
+                                   oserdes_clk_1 u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/iserdes_clk
+                                   oserdes_clk_2 u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/iserdes_clk
+                                   oserdes_clk_3 clk_pll_i mmcm_ps_clk_bufg_in clk_div2_bufg_in oserdes_clkdiv oserdes_clkdiv_1 iserdes_clkdiv oserdes_clkdiv_2 iserdes_clkdiv_1 oserdes_clkdiv_3 xcvr_clk
+                                   adc_clk

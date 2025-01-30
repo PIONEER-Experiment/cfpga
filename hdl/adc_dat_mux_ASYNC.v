@@ -14,20 +14,20 @@ module adc_dat_mux_ASYNC (
     input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
-    input [11:0] channel_tag, 		   // stuff about the channel to put in the header
-    input [1:0] fill_type,             // to determine how much data to collect
+    (* mark_debug = "true" *) input [11:0] channel_tag,          // stuff about the channel to put in the header
+    (* mark_debug = "true" *) input [1:0] fill_type,             // to determine how much data to collect
     input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
     input [22:0] waveform_start_adr,   // first DDR3 memory location for this waveform
     input [23:0] fill_num,             // fill number for this fill
     input [22:0] current_waveform_num, // the current waveform number, to be used in header
     input [3:0] xadc_alarms,
     input clk,
-    input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
-	input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    input select_fill_hdr,     	 	   // selects fill header
-    input select_waveform_hdr,  	   // selects waveform header
-    input select_dat,                  // selects data
-    input select_checksum,             // selects checksum
+    (* mark_debug = "true" *) input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
+    (* mark_debug = "true" *) input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    (* mark_debug = "true" *) input select_fill_hdr,     	 	   // selects fill header
+    (* mark_debug = "true" *) input select_waveform_hdr,  	   // selects waveform header
+    (* mark_debug = "true" *) input select_dat,                  // selects data
+    (* mark_debug = "true" *) input select_checksum,             // selects checksum
 	input checksum_init,			   // initialize the checksum
     input checksum_update,			   // update the checksum
     // outputs

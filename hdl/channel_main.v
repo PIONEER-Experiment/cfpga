@@ -563,6 +563,7 @@ command_top command_top (
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),      // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
     .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go
+    .acq_done_latch(1'b1),                               // input, last self-trigger safely processed in selftrig mode, default to 1 in other modes
     .reading_done(reading_done),                        // output, reading is complete
 
     // registers to/from the ADC acquisition state machine

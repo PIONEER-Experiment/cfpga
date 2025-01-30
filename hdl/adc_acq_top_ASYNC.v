@@ -24,6 +24,9 @@ module adc_acq_top_ASYNC (
     input ddr3_wr_done,             // asserted when the 'ddr3_wr_control' is in the DONE state
     input [13:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    input [11:0] muon_num_waveforms,// generate a 2nd trigger pulse from first if > 1
+    input [21:0] muon_waveform_gap,	// delay time between until 2nd pulse
+    input        evt_cnt_reset,
     input [3:0] xadc_alarms,
 
     // outputs
@@ -35,6 +38,9 @@ module adc_acq_top_ASYNC (
     // output adc_clk,                            // ADC clock used by the FIFO
     output ext_done,                           // external output indicating acquisition is done
     output adc_acq_sm_idle,                    // ADC acquisition state machine is idle (used for front panel LED status)
+    output [ 17:0] circ_to_ddr3_state,         // circ_buf_to_ddr3 current state
+    output [  8:0] enable_sm_state,            // enable_sm current state
+
     output [ 22:0] current_waveform_num,       // the current waveform number, to be used in header
     output [ 25:0] packed_adc_dat              // two samples, with over-range bits, packed in one wide-word
                                                // bit[0]      = first overrange
@@ -72,6 +78,22 @@ always @(posedge adc_clk) begin
         dummy_dat_reset_mode <= #1 1'b0;
 end
 
+// synchronize 'ext_trig' and create a pulse when it is asserted
+reg trig_sync1, trig_sync2, trig_sync3, trig_sync4, trig_sync5;
+reg trig_pulse;
+always @ (posedge adc_clk) begin
+    trig_sync1 <= #1 ext_trig;
+    trig_sync2 <= #1 trig_sync1;
+    trig_sync3 <= #1 trig_sync2;
+    trig_sync4 <= #1 trig_sync3;
+    trig_sync5 <= #1 trig_sync4;
+    // assert 'trig_pulse' when 'ext_trig' has gotten to the fourth register, but not the fifth
+    // pass triggers only during the TRIG_ENABLED state
+    trig_pulse <= #1 ((trig_sync4 & ~trig_sync5) && cbuf_trig_en);
+end
+
+
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // connect a module that handles the ENABLE, TRIGGER, and RESET signals
 wire [1:0] fill_type;        // level of the two 'ext_enable' bits
@@ -92,8 +114,9 @@ enable_sm_ASYNC enable_sm_ASYNC (
     .cbuf_rd_en(cbuf_rd_en),            // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     .ddr3_wr_en(ddr3_wr_en),            // writing of triggered events to memory is enabled
     .fill_type(fill_type[1:0]),         // level of the two 'ext_enable' bits
-    .trig_pulse(trig_pulse),            // a trigger passed while the system is enabled for new triggers
+    .trig_pulse(have_trigger),          // a single cycle pulse formed from trigger passed while the system is enabled for new triggers
     .adc_acq_sm_idle(adc_acq_sm_idle),  // ADC acquisition state machine is idle (used for front panel LED status)
+    .enable_sm_state(enable_sm_state),  // enable_sm current state
     .ext_done(ext_done)                 // assert external acquisition is done
 );
 
@@ -118,7 +141,7 @@ adc_to_circ_buf_ASYNC adc_to_circ_buf_ASYNC (
     .cbuf_wr_en(cbuf_wr_en),                        // writing into the circ buf by the ADC is enabled, must extend past final trigger
     .dummy_dat_reset_mode(dummy_dat_reset_mode),    // if true, reset the dummy data source for each trigger
     .use_dummy_data(use_dummy_data),                // if true, use counter instead of ADC
-    .trig_pulse(trig_pulse),                        // single-period pulse from 'acq_trig' input
+    .trig_pulse(have_trigger),                        // single-period pulse from 'acq_trig' input
     // outputs
     .packed_adc_dat(packed_adc_dat[25:0]),
     .adc_buf_current_data_delay(adc_buf_current_data_delay), // 13 lines *5 bits/line, current tap settings
@@ -159,17 +182,45 @@ endgenerate
 // );
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+// If requested, generate a 2nd trigger pulse from the 1st after a specified delay
+wire trigger2;
+wire enable_trigger2;
+assign enable_trigger2 = muon_num_waveforms > 1;
+delay_signal delay_signal (
+  .clk(adc_clk),
+  .enable(enable_trigger2),
+  .delay(muon_waveform_gap),
+  .trig_pulse(trig_pulse),
+  .delayed_pulse(trigger2)
+);
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a FIFO that will hold the value of the 'write' address for each trigger point.
+wire have_trigger;
+assign have_trigger = trig_pulse | trigger2;
+(* mark_debug = "true" *) wire trig_fifo_empty;
 circ_buf_fifo circ_buf_fifo (
   .clk(adc_clk),                    // 400 MHz ADC DDR clock
   .rst(adc_acq_full_reset),                 // reset from the Master FPGA
   .din(circ_buf_wr_addr[15:0]),        // current 'write' address
-  .wr_en(trig_pulse),                // single-period pulse from 'acq_trig' input
+  .wr_en(have_trigger),                // single-period pulse from 'acq_trig' input
   .rd_en(trig_addr_rd_en),            // read a trigger address from the FIFO
   .dout(circ_buf_trig_addr[15:0]),    // circular bufferr address corresponding to a trigger
   .full(),                            // 'full' is not used
   .empty(trig_fifo_empty)            // no triggers available when asserted
 );
+
+reg [19:0] trig_counter;
+always @(posedge adc_clk) begin
+  if ( adc_acq_full_reset | evt_cnt_reset ) begin
+    trig_counter <= 20'd0;
+  end
+  else begin
+    if ( have_trigger ) begin
+       trig_counter[19:0] <= trig_counter[19:0] + 1;
+    end
+  end
+end
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a module that moves data from the circular buffer to the DDR3 'write' FIFO.
@@ -188,6 +239,7 @@ circ_buf_to_ddr3_ASYNC circ_buf_to_ddr3_ASYNC(
     .circ_buf_trig_addr(circ_buf_trig_addr[15:0]), // circular buffer address corresponding to a trigger, FIFO output
     .trig_fifo_empty(trig_fifo_empty),             // no triggers available when asserted
     .fill_type(fill_type[1:0]),                    // the levels on the 'acq_enable[1:0]' inputs
+    .evt_cnt_reset(evt_cnt_reset),
     .xadc_alarms(xadc_alarms[3:0]),
     // outputs
     .cbuf_rd_trig_wait(cbuf_rd_trig_wait),         // waiting for another trigger or the negation of 'cbuf_rd_en'
@@ -196,7 +248,8 @@ circ_buf_to_ddr3_ASYNC circ_buf_to_ddr3_ASYNC(
     .circ_buf_rd_addr(circ_buf_rd_addr[15:0]),     // read address for the circular buffer
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),      // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),         // current data should be stored in the FIFO
-    .current_waveform_num(current_waveform_num[22:0])
+    .current_waveform_num(current_waveform_num[22:0]),
+    .circ_to_ddr3_state(circ_to_ddr3_state)        // current state
 );
 
 endmodule

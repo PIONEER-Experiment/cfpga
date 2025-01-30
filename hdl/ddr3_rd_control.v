@@ -24,7 +24,8 @@ module ddr3_rd_control (
   output ddr3_rd_fifo_wr_en,             // data is valid, so put it in the READ FIFO
   //output [127:0] ddr3_rd_fifo_input_dat, // output, memory data
   input ddr3_rd_fifo_almost_full,        // there is not much room left
-  output ddr3_rd_fifo_input_tlast       // the last burst for this fill
+  output ddr3_rd_fifo_input_tlast,       // the last burst for this fill
+  output [2:0] ddr3_rd_ctrl_state        // read control state
 );
 
 // just pass the DDR3 data thru to the FIFO
@@ -102,8 +103,9 @@ parameter [1:0]
   DONE = 2'd2;
   
 // Declare current state and next state variables
-reg [2:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [2:0] /* synopsys enum STATE_TYPE */ CS;
 reg [2:0] /* synopsys enum STATE_TYPE */ NS;
+assign ddr3_rd_ctrl_state = CS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

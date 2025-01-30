@@ -3,10 +3,10 @@
 module circ_buf_to_ddr3_sm_ASYNC (
     // inputs
   input adc_clk,
-  input reset_clk_adc,				// synchronously negated reset all of the acquisition logic
-  input cbuf_rd_en,					// moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-  input cbuf_trig_en,					// triggering of new waveforms is enabled
-  input trig_fifo_empty,				// if not empty then process a waveform
+  (* mark_debug = "true" *) input reset_clk_adc,				// synchronously negated reset all of the acquisition logic
+  (* mark_debug = "true" *) input cbuf_rd_en,					// moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+  (* mark_debug = "true" *) input cbuf_trig_en,					// triggering of new waveforms is enabled
+  (* mark_debug = "true" *) input trig_fifo_empty,				// if not empty then process a waveform
   input burst_cntr_zero,              // all sample bursts have been saved
   // outputs
   output reg cbuf_rd_trig_wait,		// waiting for another trigger or the negation of 'cbuf_rd_en'
@@ -29,9 +29,9 @@ module circ_buf_to_ddr3_sm_ASYNC (
   output reg burst_cntr_en,			// will be enabled once per burst
   output reg waveform_cntr_init,      // initialize when triggered
   output reg waveform_cntr_en,        // will be enabled once after each waveform
-  output reg fill_cntr_en			    // will be enabled once per fill
+  output reg fill_cntr_en,            // will be enabled once per fill
+  output [17:0] circ_to_ddr3_state    // current state
 );
-
 
 // Leave the comments containing "synopsys" in your HDL code.
 
@@ -49,7 +49,7 @@ always @ (posedge adc_clk) begin
 end
 
 // create a flag to indicate whether or not a trigger was seen
-reg got_trig;
+(* mark_debug = "true" *) reg got_trig;
 
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
@@ -74,8 +74,10 @@ parameter [4:0]
     DONE            = 5'd17;  // 20000
     
 // Declare current state and next state variables
-reg [17:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [17:0] /* synopsys enum STATE_TYPE */ CS;
 reg [17:0] /* synopsys enum STATE_TYPE */ NS;
+assign circ_to_ddr3_state = CS;
+
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
@@ -225,8 +227,8 @@ end // combinational always block to determine next state
 
 // handle the "got_trig" flag
 always @(posedge adc_clk) begin
-	if (NS[FILL_INIT1])
-		// clear the flag at the start of a fill
+	if (NS[FILL_INIT1] || reset_clk_adc )
+		// clear the flag at the start of a fill or with a reset
 		got_trig <= 1'b0;
 	else if (NS[WAVEFORM_INIT1])
 		// set the flag when a trigger is received and a waveform has started
