@@ -49,6 +49,9 @@ module ddr3_intf_selftrig(
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
     output app_rdy,                              // output, PHY calibration is done
+    // states
+    output [ 2:0] ddr3_rd_ctrl_state,            // read control current state
+    output [12:0] ddr3_wr_ctrl_state,            // write control current state
     input [11:0] xadc_temp,
     input enable_triggering
 );
@@ -160,6 +163,7 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     //.ddr3_wr_en_sync2(ddr3_wr_en_sync2),
     //.app_rdy(app_rdy),
     // done debugging
+    .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),        // write control current state
     .acq_done(acq_done),                            // input, asserted when the 'adc_acq_sm' is in the DONE state
     .writing_last_fill(writing_last_fill)
  );
@@ -188,7 +192,8 @@ ddr3_rd_control ddr3_rd_control (
     .ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),                // data is valid, so put it in the READ FIFO    
     //.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
-    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)    // the last burst for this fill 
+    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast),   // the last burst for this fill 
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state)                 // read control current state
 );
 
 ////////////////////////////////////////////////////////////////////////////

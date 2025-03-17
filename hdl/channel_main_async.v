@@ -141,7 +141,7 @@ wire command_sm_idle;
 
 // state machine states
 wire [18:0] adc_acq_state;
-wire [17:0] circ_to_ddr3_state;
+wire [18:0] circ_to_ddr3_state;
 wire [ 9:0] cc_rd_fill_state;
 wire [ 2:0] ddr3_rd_ctrl_state;            // read control current state
 wire [12:0] ddr3_wr_ctrl_state;            // write control current state
@@ -208,7 +208,7 @@ sync_2stage pulse_ddr3 (
 sync_2stage pulse_adc (
   .clk(adc_clk),
   .in(acq_trig),
-  .out(pulse_trigger_adc)
+  .out(pulse_trigger_adcx)
 );
 
 wire rst_from_master_sync;

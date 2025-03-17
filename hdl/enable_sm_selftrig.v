@@ -21,6 +21,7 @@ module enable_sm_selftrig (
     output reg trig_pulse,      // a trigger passed while the system is enabled for new triggers
     output reg adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
     output reg ext_done,        // external output indicating acquisition is done
+    output [8:0] enable_sm_state, // enable_sm current state
 //    output reg reset_timer,     // triggers reset of the 800 MHz counter used to time stamp events
     output reg [1:0] ext_done_buffer,                // everything has been written to DDR3 and fill header FIFO
     output reg range_flip
@@ -123,6 +124,7 @@ parameter [3:0]
 // Declare current state and next state variables
 reg [8:0] /* synopsys enum STATE_TYPE */ CS;
 reg [8:0] /* synopsys enum STATE_TYPE */ NS;
+(* mark_debug = "true" *) assign enable_sm_state[8:0] = CS[8:0];
 
 //synopsys state_vector CS
 

@@ -30,7 +30,7 @@ module circ_buf_to_ddr3_sm_ASYNC (
   output reg waveform_cntr_init,      // initialize when triggered
   output reg waveform_cntr_en,        // will be enabled once after each waveform
   output reg fill_cntr_en,            // will be enabled once per fill
-  output [17:0] circ_to_ddr3_state    // current state
+  output [18:0] circ_to_ddr3_state    // current state
 );
 
 // Leave the comments containing "synopsys" in your HDL code.
@@ -76,7 +76,7 @@ parameter [4:0]
 // Declare current state and next state variables
 (* mark_debug = "true" *) reg [17:0] /* synopsys enum STATE_TYPE */ CS;
 reg [17:0] /* synopsys enum STATE_TYPE */ NS;
-assign circ_to_ddr3_state = CS;
+assign circ_to_ddr3_state = {1'b0,CS};
 
 //synopsys state_vector CS
  

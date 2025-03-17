@@ -38,7 +38,7 @@ module adc_acq_top_ASYNC (
     // output adc_clk,                            // ADC clock used by the FIFO
     output ext_done,                           // external output indicating acquisition is done
     output adc_acq_sm_idle,                    // ADC acquisition state machine is idle (used for front panel LED status)
-    output [ 17:0] circ_to_ddr3_state,         // circ_buf_to_ddr3 current state
+    output [ 18:0] circ_to_ddr3_state,         // circ_buf_to_ddr3 current state
     output [  8:0] enable_sm_state,            // enable_sm current state
 
     output [ 22:0] current_waveform_num,       // the current waveform number, to be used in header

@@ -44,7 +44,9 @@ module adc_acq_top(
                                     //   bits[11:1]  = first ADC sample
                                     //   bit[12]     = second overrange
                                     //   bits[25:13] = second ADC sample
-    output adc_acq_sm_idle          // ADC acquisition state machine is idle (used for front panel LED status)
+    output adc_acq_sm_idle,         // ADC acquisition state machine is idle (used for front panel LED status)
+    output [18:0] adc_acq_state     // state machine state
+
 );
 
 wire [1:0] fill_type;           // to determine how much data to collect
@@ -317,7 +319,8 @@ adc_acq_sm adc_acq_sm (
     .waveform_gap_cntr_en(waveform_gap_cntr_en),          // enable after each initialization
 
     .acq_done(acq_done),                    // acquisition is done
-    .sm_idle(adc_acq_sm_idle)               // state machine is idle
-);      
+    .sm_idle(adc_acq_sm_idle),              // state machine is idle
+    .adc_acq_state(adc_acq_state)
+);
 
 endmodule

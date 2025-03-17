@@ -28,7 +28,8 @@ module circ_buf_to_ddr3_selftrig (
     output adc_acq_out_valid,           // current data should be stored in the FIFO
     output [22:0] current_waveform_num,
     output ddr3_selftrig_wr_active,     // enabled whenever we are actively writing a trigger to the DDR3
-    output checksum_memory_range       // latch the memory buffer for writing the checksum
+    output checksum_memory_range,      // latch the memory buffer for writing the checksum
+    output [18:0] circ_to_ddr3_state    // current state
 );
 
 wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
@@ -209,7 +210,8 @@ circ_buf_to_ddr3_sm_selftrig circ_buf_to_ddr3_sm_selftrig (
     .fill_cntr_en(fill_cntr_en),                   // will be enabled once per fill
     .waveform_cntr_init(waveform_cntr_init),       // initialize when triggered
     .waveform_cntr_en(waveform_cntr_en),           // will be enabled once after each waveform
-    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active) // will be enabled whenever we need active writing to the DDR3
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),// will be enabled whenever we need active writing to the DDR3
+    .circ_to_ddr3_state(circ_to_ddr3_state)    // current state
 );
 
 endmodule

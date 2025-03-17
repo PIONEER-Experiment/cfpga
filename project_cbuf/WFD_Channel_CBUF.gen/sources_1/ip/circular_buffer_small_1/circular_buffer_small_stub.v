@@ -2,8 +2,8 @@
 // Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2023.2 (lin64) Build 4029153 Fri Oct 13 20:13:54 MDT 2023
-// Date        : Sun Oct 27 19:01:37 2024
-// Host        : lkgVivadoContainer running 64-bit Ubuntu 22.04.4 LTS
+// Date        : Thu Feb 13 18:44:00 2025
+// Host        : lkgVivadoContainer running 64-bit unknown
 // Command     : write_verilog -force -mode synth_stub
 //               /home/user/cfpga_selftrig/project_cbuf/WFD_Channel_CBUF.gen/sources_1/ip/circular_buffer_small_1/circular_buffer_small_stub.v
 // Design      : circular_buffer_small

@@ -18,6 +18,7 @@ module ddr3_intf(
     input en_fixed_ddr3_start_addr,
     // reading connections
     input local_domain_clk,                     // input, the local interface synchronous clock
+    input fill_header_fifo_reset,               // input, clear out the fifo for a new run
     output fill_header_fifo_empty,              // output, a header is available when not asserted
     input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
     output [151:0] fill_header_fifo_out,        // output, data at the head of the FIFO
@@ -46,6 +47,9 @@ module ddr3_intf(
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
     output app_rdy,                             // output, PHY calibration is done
+    // states
+    output [ 2:0] ddr3_rd_ctrl_state,            // read control current state
+    output [12:0] ddr3_wr_ctrl_state,            // write control current state
     input [11:0] xadc_temp
 );
 
@@ -121,6 +125,7 @@ ddr3_wr_control ddr3_wr_control (
     .ddr3_wr_sync_err(ddr3_wr_sync_err),            // synchronization error flag
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
+    .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),        // write control current state
     .acq_done(acq_done)                             // input, asserted when the 'adc_acq_sm' is in the DONE state
 );
 
@@ -148,15 +153,19 @@ ddr3_rd_control ddr3_rd_control (
     .ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),                // data is valid, so put it in the READ FIFO    
     //.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
-    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)     // the last burst for this fill 
+    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast),    // the last burst for this fill 
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state)                 // read control current state
 );
 
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO for the fill header info.
 // The write port will be connected to the 'write' controller.
 // The read port will be connected to the 'read' controller.
+wire full_fifo_reset;
+assign full_fifo_reset = fill_header_fifo_reset | ddr3_domain_reset;
 fill_header_fifo fill_header_fifo (
-    .rst(ddr3_domain_reset),                // reset at startup or when requested
+    .rst(full_fifo_reset),                  // reset at startup or when requested
+    //.rst(ddr3_domain_reset),                // reset at startup or when requested
     .wr_clk(ddr3_domain_clk),               // clock used by 'write' controller
     .rd_clk(local_domain_clk),              // clock used by 'rd_fill' controller
     .din(fill_header_wr_dat[151:0]),        // header data to write

@@ -41,6 +41,7 @@ module ddr3_wr_control_selftrig (
     //input app_rdy,
     //input ddr3_wr_en_sync2,
     //
+    output [12:0] ddr3_wr_ctrl_state,     // current state
     input acq_done,                      // asserted when the 'adc_acq_sm' is in the DONE state
     output writing_last_fill             // asserted when enable_triggering deasserts but we haven't finished writing the info from this fill
 );
@@ -196,6 +197,7 @@ assign writing_last_fill = ~enable_triggering_ddr3 & ddr3_wr_fill_in_progress;
 // Declare current state and next state variables
 reg [12:0] /* synopsys enum STATE_TYPE */ CS;
 reg [12:0] /* synopsys enum STATE_TYPE */ NS;
+assign ddr3_wr_ctrl_state = CS;
 
 //ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
 //  .clk(clk), // input wire clk

@@ -37,6 +37,8 @@ module adc_acq_top_selftrig (
     output adc_acq_out_valid,                  // current data should be stored in the FIFO
     output ext_done,                           // external output indicating acquisition is done
     output adc_acq_sm_idle,                    // ADC acquisition state machine is idle (used for front panel LED status)
+    output [ 18:0] circ_to_ddr3_state,         // circ_buf_to_ddr3 current state
+    output [  8:0] enable_sm_state,            // enable_sm current state
     output [ 22:0] current_waveform_num,       // the current waveform number, to be used in header
     output [ 25:0] packed_adc_dat,             // two samples, with over-range bits, packed in one wide-word
                                                // bit[0]      = first overrange
@@ -142,6 +144,7 @@ enable_sm_selftrig enable_sm_selftrig (
     .trig_pulse(trig_pulse),                 // a trigger passed while the system is enabled for new triggers
     .adc_acq_sm_idle(adc_acq_sm_idle),       // ADC acquisition state machine is idle (used for front panel LED status)
     .ext_done(ext_done),                     // assert external acquisition is done
+    .enable_sm_state(enable_sm_state),       // enable_sm current state
 //    .reset_timer(reset_timer),               // triggers reset of the 400 MHz counter used to time stamp events
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), // will be enabled whenever we need active writing to the DDR3
     .ext_done_buffer(ext_done_buffer),
@@ -280,7 +283,8 @@ circ_buf_to_ddr3_selftrig circ_buf_to_ddr3_selftrig(
     .adc_acq_out_valid(adc_acq_out_valid),         // current data should be stored in the FIFO
     .current_waveform_num(current_waveform_num[22:0]),
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),// will be enabled whenever we do not need active writing to the DDR3
-    .checksum_memory_range(checksum_memory_range)    // latch the memory buffer for writing the checksum
+    .checksum_memory_range(checksum_memory_range),   // latch the memory buffer for writing the checksum
+    .circ_to_ddr3_state(circ_to_ddr3_state)        // current state
 );
 
 endmodule

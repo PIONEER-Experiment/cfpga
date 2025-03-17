@@ -24,7 +24,8 @@ module adc_acq_top_cbuf(
     input ddr3_wr_done, // asserted when the 'ddr3_wr_control' is in the DONE state
     input [13:0] async_num_bursts,  // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,	   // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    input [3:0] xadc_alarms,
+    input        evt_cnt_reset,
+    input [3:0]  xadc_alarms,
     // outputs
     output acq_enabled, // the system is in acquisition mode, rather than readout mode
     output [64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
@@ -37,7 +38,8 @@ module adc_acq_top_cbuf(
     //   bits[11:1]  = first ADC sample
     //   bit[12] = second overrange
     //   bits[25:13] = second ADC sample
-    output adc_acq_sm_idle  // ADC acquisition state machine is idle (used for front panel LED status)
+    output adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
+    output [18:0] adc_acq_state     // state machine state
 );
 
 wire [1:0] fill_type;           // to determine how much data to collect
@@ -339,7 +341,8 @@ adc_acq_sm_cbuf adc_acq_sm_cbuf (
     .inc_circ_buf_rd_addr(inc_circ_buf_rd_addr),   // increment the circular buffer address
     .trig_addr_rd_en(trig_addr_rd_en),             // read a trigger address from the FIFO
     .latch_circ_buf_dat(latch_circ_buf_dat),       // save the current 32-bit data word from the circular buffer
-    .sm_idle(adc_acq_sm_idle)   // state machine is idle
+    .sm_idle(adc_acq_sm_idle),                     // state machine is idle
+    .adc_acq_state(adc_acq_state)
 );
 
 endmodule

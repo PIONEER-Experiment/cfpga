@@ -29,6 +29,7 @@ module ddr3_wr_control (
     output reg ddr3_wr_sync_err,
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
+    output [12:0] ddr3_wr_ctrl_state,     // current state
     input acq_done                        // asserted when the 'adc_acq_sm' is in the DONE state
 
 );
@@ -53,6 +54,7 @@ parameter [3:0]
 // Declare current state and next state variables
 reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
+assign ddr3_wr_ctrl_state = {3'd0,CS};
 
 // synchronize 'acq_done'
 (* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;

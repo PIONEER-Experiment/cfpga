@@ -142,6 +142,13 @@ wire aurora_channel_up;
 wire adc_acq_sm_idle; // also used to tell master that no data transfer to DDR3 is in process
 wire command_sm_idle;
 
+// state machine states
+wire [18:0] adc_acq_state;
+wire [18:0] circ_to_ddr3_state;
+wire [ 9:0] cc_rd_fill_state;
+wire [ 2:0] ddr3_rd_ctrl_state;            // read control current state
+wire [12:0] ddr3_wr_ctrl_state;            // write control current state
+
 ////////////////////////////////////////////////////////////////////////////
 // Inform the master FPGA that no data transfer to DDR3 is in process
 assign acq_idle = adc_acq_sm_idle || acq_done || !ddr3_selftrig_wr_active;
@@ -269,6 +276,7 @@ assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
 
 wire [25:0] packed_adc_dat;
+wire [ 8:0] enable_sm_state;
 
 // -- note, we are co-opting the muon_num_waveforms register to pass the self triggering threshold
 //    see note below for command_top instantiation
@@ -326,6 +334,8 @@ adc_acq_top_selftrig adc_acq_top_selftrig (
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
+    .circ_to_ddr3_state(circ_to_ddr3_state),             // circ_buf_to_ddr3 current state
+    .enable_sm_state(enable_sm_state),                   // enable_sm current state
     .adc_acq_sm_idle(adc_acq_sm_idle),                   // ADC acquisition state machine is idle (used for front panel LED status)
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0]),
@@ -418,6 +428,10 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
+     // states
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),            // read control current state
+    .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
+
     .xadc_temp(xadc_temp[11:0]),
     .enable_triggering(enable_triggering)
 );
@@ -641,6 +655,13 @@ command_top command_top (
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished
+
+    // other state machine states
+    .adc_acq_state(19'd0),
+    .circ_to_ddr3_state(circ_to_ddr3_state),
+    .enable_sm_state(enable_sm_state),
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
+    .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state),
 
     .xadc_temp(xadc_temp[15:0]),
     .xadc_vccint(xadc_vccint[15:0]),

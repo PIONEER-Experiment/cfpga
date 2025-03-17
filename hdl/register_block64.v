@@ -61,7 +61,7 @@ module register_block64(
 
     // state machine states
     input [18:0] adc_acq_state,
-    input [17:0] circ_to_ddr3_state,
+    input [18:0] circ_to_ddr3_state,
     input [ 9:0] cc_rd_fill_state,
     input [ 8:0] enable_sm_state,
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
@@ -273,7 +273,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h1e)) rdbk_reg[31:0] <= reg30_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h1f)) rdbk_reg[31:0] <= {4'b0, image_type, `MAJOR_REV, `MINOR_REV, `PATCH_REV}; // R31 is read only
         if (rd_en && (reg_num[5:0] == 6'h20)) rdbk_reg[31:0] <= {13'd0,adc_acq_state[18:0]};
-        if (rd_en && (reg_num[5:0] == 6'h21)) rdbk_reg[31:0] <= {14'd0,circ_to_ddr3_state[17:0]};
+        if (rd_en && (reg_num[5:0] == 6'h21)) rdbk_reg[31:0] <= {13'd0,circ_to_ddr3_state[18:0]};
         if (rd_en && (reg_num[5:0] == 6'h22)) rdbk_reg[31:0] <= {22'd0,cc_rd_fill_state[9:0]};
         if (rd_en && (reg_num[5:0] == 6'h23)) rdbk_reg[31:0] <= {29'd0,ddr3_rd_ctrl_state[2:0]};
         if (rd_en && (reg_num[5:0] == 6'h24)) rdbk_reg[31:0] <= {19'd0,ddr3_wr_ctrl_state[12:0]};

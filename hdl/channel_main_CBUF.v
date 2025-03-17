@@ -138,6 +138,14 @@ wire aurora_channel_up;
 wire adc_acq_sm_idle;
 wire command_sm_idle;
 
+// state machine states
+wire [18:0] adc_acq_state;
+wire [18:0] circ_to_ddr3_state;
+wire [ 9:0] cc_rd_fill_state;
+wire [ 2:0] ddr3_rd_ctrl_state;            // read control current state
+wire [12:0] ddr3_wr_ctrl_state;            // write control current state
+
+
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
 // Connect an input buffer and a global clock buffer to the 50 MHz clock
@@ -256,7 +264,8 @@ assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
 
 wire [25:0] packed_adc_dat;
- 
+wire [ 8:0] enable_sm_state;
+
 adc_acq_top_cbuf adc_acq_top_cbuf (
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
@@ -289,7 +298,8 @@ adc_acq_top_cbuf adc_acq_top_cbuf (
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .acq_done(acq_done),                                 // acquisition is done
-    .packed_adc_dat(packed_adc_dat[25:0]),               // 
+    .packed_adc_dat(packed_adc_dat[25:0]),               //
+    .adc_acq_state(adc_acq_state),
     .adc_acq_sm_idle(adc_acq_sm_idle)                    // ADC acquisition state machine is idle (used for front panel LED status)
 );
 
@@ -297,9 +307,12 @@ wire ddr3_write_fifo_full;
         
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
+wire dwf_reset;
+assign dwf_reset = adc_acq_full_reset | evt_cnt_reset;
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
-    .rst(adc_acq_full_reset),       // reset at startup or when requested
+    .rst(dwf_reset),                // reset at startup or when requested
+//    .rst(adc_acq_full_reset),       // reset at startup or when requested
     .wr_clk(adc_clk),               // clock extracted from ADC DDR clock
     .rd_clk(ddr3_domain_clk),       // clock extracted from DDR3 block
     .din(adc_acq_out_dat[131:0]),   // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -315,6 +328,8 @@ wire en_fixed_ddr3_start_addr;
 
 ////////////////////////////////////////////////////////////////////////////
 // Connect the DDR3 interface
+wire fill_header_fifo_reset;
+assign fill_header_fifo_reset = adc_acq_full_reset | evt_cnt_reset;
 ddr3_intf_cbuf ddr3_intf_cbuf(
     // clocks and resets
     .refclk(clk200),                    // input, 200 MHz for I/O timing adjustments
@@ -334,6 +349,7 @@ ddr3_intf_cbuf ddr3_intf_cbuf(
     .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
 
     // reading connections
+    .fill_header_fifo_reset(fill_header_fifo_reset),     // input, clear out the fifo for a new run
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
     .fill_header_fifo_empty(fill_header_fifo_empty),     // output, a header is available when not asserted
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // input, remove the current data from the FIFO
@@ -365,6 +381,10 @@ ddr3_intf_cbuf ddr3_intf_cbuf(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
+     // states
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),            // read control current state
+    .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
+
     .xadc_temp(xadc_temp[11:0])
 );
 
@@ -586,6 +606,13 @@ command_top command_top (
     .async_pre_trig(async_pre_trig[15:0]),                      // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(23'd0),
+
+    // other state machine states
+    .adc_acq_state(19'd0),
+    .circ_to_ddr3_state(circ_to_ddr3_state),
+    .enable_sm_state(enable_sm_state),
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
+    .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state),
 
     .xadc_temp(xadc_temp[15:0]),
     .xadc_vccint(xadc_vccint[15:0]),

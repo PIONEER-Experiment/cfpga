@@ -28,7 +28,7 @@ module circ_buf_to_ddr3_ASYNC (
     output [131:0] adc_acq_out_dat, // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,           // current data should be stored in the FIFO
     output [22:0] current_waveform_num,
-    output [17:0] circ_to_ddr3_state    // current state
+    output [18:0] circ_to_ddr3_state    // current state
 );
 
 wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform

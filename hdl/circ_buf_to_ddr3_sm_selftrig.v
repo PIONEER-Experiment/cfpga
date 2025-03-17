@@ -30,7 +30,8 @@ module circ_buf_to_ddr3_sm_selftrig (
   output reg waveform_cntr_init,    // initialize when triggered
   output reg waveform_cntr_en,      // will be enabled once after each waveform
   output reg ddr3_selftrig_wr_active, // we are in a state where we are actively writing to the ddr3
-  output reg fill_cntr_en          // will be enabled once per fill
+  output reg fill_cntr_en,          // will be enabled once per fill
+  output [18:0] circ_to_ddr3_state  // current state
 );
 
 
@@ -78,6 +79,7 @@ parameter [4:0]
 // Declare current state and next state variables
 reg [18:0] /* synopsys enum STATE_TYPE */ CS;
 reg [18:0] /* synopsys enum STATE_TYPE */ NS;
+assign circ_to_ddr3_state = CS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
