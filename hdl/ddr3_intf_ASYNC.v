@@ -166,7 +166,7 @@ ddr3_rd_control ddr3_rd_control (
 // The read port will be connected to the 'read' controller.
 wire full_fifo_reset;
 assign full_fifo_reset = fill_header_fifo_reset | ddr3_domain_reset;
-(* mark_debug = "true" *) wire fill_header_fifo_rd_en;
+wire fill_header_fifo_rd_en;
 fill_header_fifo fill_header_fifo (
     .rst(full_fifo_reset),                  // reset at startup or when requested
     //.rst(ddr3_domain_reset),                // reset at startup or when requested

@@ -27,6 +27,7 @@ module ddr3_intf_selftrig(
     input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
     input [23:0] ddr3_rd_burst_cnt,             // input, the number of bursts to read
     input enable_reading,                       // input, initialize the address generator and both counters, go
+    input run_in_progress,                      // input, run is in progress
     output reading_done,                        // output, reading is complete
     // ports to the 'read' fifo
     output ddr3_rd_fifo_wr_en,                  // data is valid, so put it in the READ FIFO
@@ -157,6 +158,7 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
     .enable_triggering_ddr3(enable_triggering_ddr3),
+    .run_in_progress(run_in_progress),              // run is in progress, don't force IDLE state too soon
     // next batch for debugging, eliminate when done
     //.fill_header_fifo_empty(fill_header_fifo_empty),
     //.fill_header_fifo_rd_en(fill_header_fifo_rd_en),

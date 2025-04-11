@@ -124,7 +124,7 @@ parameter [3:0]
 // Declare current state and next state variables
 reg [8:0] /* synopsys enum STATE_TYPE */ CS;
 reg [8:0] /* synopsys enum STATE_TYPE */ NS;
-(* mark_debug = "true" *) assign enable_sm_state[8:0] = CS[8:0];
+assign enable_sm_state[8:0] = CS[8:0];
 
 //synopsys state_vector CS
 

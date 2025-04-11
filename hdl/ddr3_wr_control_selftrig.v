@@ -7,10 +7,10 @@ module ddr3_wr_control_selftrig (
     // User interface clock and reset
     input clk,                            // DDR3 domain user clock
     input reset,
-    input acq_enabled,                    // input, writing is enabled
+    (* mark_debug = "true" *) input acq_enabled,                    // input, writing is enabled
     // Connections to the FIFO from the ADC
     input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
-    input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
+    (* mark_debug = "true" *) input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
     output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
     // 'write' ports to memory
     output  app_wdf_wren,                 // output, request to perform a 'write'
@@ -30,6 +30,7 @@ module ddr3_wr_control_selftrig (
     input checksum_memory_range,          // latch the memory buffer for writing the checksum
     input ddr3_buffer,                    // buffer that the next fill will use
     input enable_triggering_ddr3,
+    input run_in_progress,                // run is in progress -- don't force IDLE stage too soon
     // the next batch for debugging and should get eliminated afterwards
     //input fill_header_fifo_empty,
     //input fill_header_fifo_rd_en,
@@ -134,6 +135,25 @@ always @ (posedge clk) begin
 end
 assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
 
+// create a flag that indicates that we should still watch out for collected data.
+// Looking at run_in_progress directly makes system too senstive to timings at the
+// beginning of the run and it ends up out of sync
+(* mark_debug = "true" *) reg data_collection_in_progress;
+(* mark_debug = "true" *) reg set_data_collection;
+(* mark_debug = "true" *) reg clear_data_collection;
+always @ (posedge clk) begin
+  if (reset )
+    data_collection_in_progress <= 1'b0;
+  else if ( set_data_collection )
+    data_collection_in_progress <= 1'b1;
+  else if ( clear_data_collection )
+    data_collection_in_progress <= 1'b0;
+end
+
+// for ease of debugging, separate out the tag of the event
+(* mark_debug = "true" *) wire [3:0] tag;
+assign tag = ddr3_wr_fifo_dat[131:128];
+
 // Create an address counter that will count how many addresses are accepted
 // For storing the fill_header or the checksum, initialize it to 1.
 // For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
@@ -172,6 +192,14 @@ end
 // create a flag that gets set when the burst counter is down to zero
 assign burst_cntr_zero = (burst_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 
+// sync the run in progress signal
+(* mark_debug = "true" *) wire run_in_progress_sync;
+sync_2stage sync_rip (
+  .clk(clk),
+  .in(run_in_progress),
+  .out(run_in_progress_sync)
+);
+
 // Create a counter that will control when addresses are sent to the DDR3 interface.
 // Since addresses come from a counter, we always have addresses available. However, when we
 // send an address, we must send the data within 2 clock periods.
@@ -195,7 +223,7 @@ assign address_allow = ~(address_control == 0);
 assign writing_last_fill = ~enable_triggering_ddr3 & ddr3_wr_fill_in_progress;
 
 // Declare current state and next state variables
-reg [12:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [12:0] /* synopsys enum STATE_TYPE */ CS;
 reg [12:0] /* synopsys enum STATE_TYPE */ NS;
 assign ddr3_wr_ctrl_state = CS;
 
@@ -242,12 +270,15 @@ assign ddr3_wr_ctrl_state = CS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
-reg ddr3_wr_fill_in_progress;       // asserted when a new fill has started, but the last write (header) has not finished
+(* mark_debug = "true" *) reg ddr3_wr_fill_in_progress;       // asserted when a new fill has started, but the last write (header) has not finished
 reg next_ddr3_wr_fill_in_progress;  // asserted when a new fill has started, but the last write (header) has not finished
 reg header_written;                 // assert as soon as the header has finished writing
 reg next_header_written;            // assert as soon as the header has finished writing
+reg delayed_run_in_progress;        // wait until first readout has happened before checking with the run status => acq_enable determines initial timing
+
 always @ (posedge clk) begin
-    if (reset || (!acq_enabled & !ddr3_wr_fill_in_progress) ) begin
+//    if (reset || (!acq_enabled & !ddr3_wr_fill_in_progress) ) begin
+    if (reset ) begin
         CS <= 13'b0;             // set all state bits to 0
         CS[IDLE] <= 1'b1;       // set IDLE state bit to 1
     end
@@ -263,9 +294,12 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
 
         // Stay in the IDLE state until we are released from the 'reset' condition by the assertion of 'acq_enabled".
        CS[IDLE]: begin
-                NS[INIT_ALL] = 1'b1;
-		end
-		
+         if ( acq_enabled )
+           NS[INIT_ALL] = 1'b1;
+         else
+           NS[IDLE]     = 1'b1;
+       end
+  
         // Stay in the INIT_ALL state for 1 clock period.
         // Initialize stuff for a new fill.
         CS[INIT_ALL]: begin
@@ -374,7 +408,10 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
         // Write the original header to the fill_header_fifo
         CS[DONE]: begin
             if (acq_done_sync2)
-               NS[WAIT] = 1'b1;
+               if ( acq_enabled )
+                 NS[WAIT] = 1'b1;
+               else
+                 NS[IDLE] = 1'b1;
             else
                 NS[DONE] = 1'b1;
         end
@@ -402,6 +439,8 @@ always @ (posedge clk) begin
         next_ddr3_wr_fill_in_progress <= ddr3_wr_fill_in_progress;
         header_written                <= next_header_written;
         next_header_written           <= header_written;
+        set_data_collection     <= 1'b0;
+        clear_data_collection   <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
@@ -409,6 +448,7 @@ always @ (posedge clk) begin
       next_ddr3_wr_fill_in_progress <= 1'b0;
       header_written                <= 1'b0;
       next_header_written           <= 1'b0;
+      clear_data_collection         <= ~run_in_progress_sync & data_collection_in_progress;
     end
     
     if (NS[INIT_ALL]) begin
@@ -487,8 +527,9 @@ always @ (posedge clk) begin
     end
 
     if (NS[DONE]) begin
-        ddr3_wr_done        <= 1'b1;
         // this fill has been processed when the header has been written and writing confirmation acknowledged
+        ddr3_wr_done        <= 1'b1;
+        set_data_collection <= ~data_collection_in_progress;
     end
 
 

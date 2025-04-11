@@ -18,13 +18,13 @@ module command_top (
     // channel connections
     // connections to 4-byte wide AXI4-stream clock domain crossing and data buffering FIFOs
     // RX Interface to master side of receive FIFO for receiving from the Master FPGA
-    (* mark_debug = "true" *) input  [31:0] rx_data,                    // note index order
+    input  [31:0] rx_data,                    // note index order
     input  [ 0:3] rx_tkeep,                   // note index order
-    (* mark_debug = "true" *) input  rx_tvalid,
-    (* mark_debug = "true" *) input  rx_tlast,
-    (* mark_debug = "true" *) output rx_tready,                         // input wire m_axis_tready
+    input  rx_tvalid,
+    input  rx_tlast,
+    output rx_tready,                         // input wire m_axis_tready
     // TX interface to slave side of transmit FIFO for sending to the Master FPGA
-    (* mark_debug = "true" *) output [31:0] tx_data,                    // note index order
+    output [31:0] tx_data,                    // note index order
     output tx_tvalid,
     output tx_tlast,
     input  tx_tready,
@@ -66,6 +66,7 @@ module command_top (
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
     output read_fill_done,                    // read fill state machine finished
+    output run_in_progress,                   // a run is in progress
 
     input  [15:0] xadc_temp,
     input  [15:0] xadc_vccint,
@@ -152,9 +153,9 @@ module command_top (
     // generate 'run' signals for the state machines that handle individual commands
     // start with 'run_cmd_sm' which is a 'run someone' from the command sm.
     // Use the actual command from the command register to activate 1 particular sm.
-    (* mark_debug = "true" *) wire run_cmd_sm;
-    (* mark_debug = "true" *) wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
-    (* mark_debug = "true" *) wire run_cc_rd_fill;
+    wire run_cmd_sm;
+    wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
+    wire run_cc_rd_fill;
 
     assign run_cc_loopback  = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
     assign run_cc_rd_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_RD_REG));
@@ -196,7 +197,7 @@ module command_top (
     // merge 'running' and 'done' signals from the state machines that handle individual commands.
     // only 1 of each, from the activated sm, should ever be active at the same time
     wire cmd_sm_running, map_sm_running;
-    (* mark_debug = "true" *) wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_map_delay_running;
+    wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_map_delay_running;
     assign cmd_sm_running = cc_loopback_running || cc_rd_reg_running || cc_wr_reg_running || cc_rd_fill_running || cc_map_delay_running;
 
     wire cmd_sm_done, map_sm_done;
@@ -427,6 +428,7 @@ module command_top (
         .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
         .selftrig_polarity( selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
         .async_pre_trig(async_pre_trig[15:0]),                         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+        .run_in_progress(run_in_progress),                             // a run is in progress
         .current_waveform_num(current_waveform_num[22:0]),
         // slow control
         .xadc_temp(xadc_temp[15:0]),

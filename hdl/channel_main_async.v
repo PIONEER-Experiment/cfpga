@@ -19,7 +19,7 @@ module channel_main_async (
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  (* mark_debug = "true" *) input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
+  input acq_trig,               // from master, asserted active-hi to start acquisition, C0_TRIG on schematic
   output acq_done,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   input [3:0] io,               // connections to the master FPGA
   output led1, led2,            // multi color LED, [1=0,2=0]-> red + green = orange, [1=0,2=1]-> red, [1=1,2=0]-> green, [1=1,2=1]-> off 
@@ -76,8 +76,8 @@ wire [22:0] current_waveform_num;
 wire readout_pause;
 assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1:2] : 'acq_enable'
-(* mark_debug = "true" *) wire acq_enable0;                       // indicates enabled for triggers, and fill type
-(* mark_debug = "true" *) wire acq_enable1;                       // indicates enabled for triggers, and fill type
+wire acq_enable0;                       // indicates enabled for triggers, and fill type
+wire acq_enable1;                       // indicates enabled for triggers, and fill type
 assign acq_enable0 = io[1];
 assign acq_enable1 = io[2];
 //   io[3]   : 'rst_from_master'
@@ -92,7 +92,7 @@ wire [22:0] muon_num_bursts;            // number of sample bursts in a MUON fil
 wire [22:0] laser_num_bursts;           // number of sample bursts in a LASER fill
 wire [22:0] ped_num_bursts;             // number of sample bursts in a PEDESTAL fill
 wire [23:0] initial_fill_num;           // event number to assign to the first fill
-(* mark_debug = "true" *) wire [131:0] adc_acq_out_dat;           // 132-bit 4-bit tag plus header or ADC data to 'ddr3_write_fifo'
+wire [131:0] adc_acq_out_dat;           // 132-bit 4-bit tag plus header or ADC data to 'ddr3_write_fifo'
 wire [11:0] muon_num_waveforms;         // number of waveforms to store per trigger
 wire [21:0] muon_waveform_gap;          // idle time between waveforms
 wire [11:0] laser_num_waveforms;        // number of waveforms to store per trigger
@@ -128,7 +128,7 @@ wire [31:0] genreg_rd_data;
 wire [31:0] adc_intf_rd_data;
 wire [31:0] adc_intf_wr_data;
 
-(* mark_debug = "true" *) wire [151:0] fill_header_fifo_out;
+wire [151:0] fill_header_fifo_out;
 wire [22:0] ddr3_rd_burst_addr;
 
 wire [4:0] adc_buf_data_delay;
@@ -194,7 +194,7 @@ startup_reset startup_reset(
     .adc_acq_full_reset(adc_acq_full_reset) // active-high reset output, goes low after startup
 );
 
-(* mark_debug = "true" *) wire pulse_trigger_125, pulse_trigger_ddr3, pulse_trigger_adc;
+wire pulse_trigger_125, pulse_trigger_ddr3, pulse_trigger_adc;
 sync_2stage pulse_125 (
   .clk(clk125),
   .in(acq_trig),
@@ -328,7 +328,7 @@ wire ddr3_write_fifo_full;
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
 wire dwf_reset;
 assign dwf_reset = adc_acq_full_reset | evt_cnt_reset;
-(* mark_debug = "true" *) wire ddr3_wr_fifo_rd_en;
+wire ddr3_wr_fifo_rd_en;
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
     .rst(dwf_reset),             // reset at startup or when requested
@@ -412,7 +412,7 @@ ddr3_intf_ASYNC ddr3_intf_ASYNC(
 
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the data from the DDR3 block
-(* mark_debug = "true" *) wire ddr3_rd_fifo_output_tvalid;
+wire ddr3_rd_fifo_output_tvalid;
 ddr3_read_fifo ddr3_read_fifo(
     .m_aclk(clk125),
     .s_aclk(ddr3_domain_clk),

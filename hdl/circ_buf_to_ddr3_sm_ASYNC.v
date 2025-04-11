@@ -3,10 +3,10 @@
 module circ_buf_to_ddr3_sm_ASYNC (
     // inputs
   input adc_clk,
-  (* mark_debug = "true" *) input reset_clk_adc,				// synchronously negated reset all of the acquisition logic
-  (* mark_debug = "true" *) input cbuf_rd_en,					// moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-  (* mark_debug = "true" *) input cbuf_trig_en,					// triggering of new waveforms is enabled
-  (* mark_debug = "true" *) input trig_fifo_empty,				// if not empty then process a waveform
+  input reset_clk_adc,				// synchronously negated reset all of the acquisition logic
+  input cbuf_rd_en,					// moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+  input cbuf_trig_en,					// triggering of new waveforms is enabled
+  input trig_fifo_empty,				// if not empty then process a waveform
   input burst_cntr_zero,              // all sample bursts have been saved
   // outputs
   output reg cbuf_rd_trig_wait,		// waiting for another trigger or the negation of 'cbuf_rd_en'
@@ -49,7 +49,7 @@ always @ (posedge adc_clk) begin
 end
 
 // create a flag to indicate whether or not a trigger was seen
-(* mark_debug = "true" *) reg got_trig;
+reg got_trig;
 
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
@@ -74,7 +74,7 @@ parameter [4:0]
     DONE            = 5'd17;  // 20000
     
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [17:0] /* synopsys enum STATE_TYPE */ CS;
+reg [17:0] /* synopsys enum STATE_TYPE */ CS;
 reg [17:0] /* synopsys enum STATE_TYPE */ NS;
 assign circ_to_ddr3_state = {1'b0,CS};
 

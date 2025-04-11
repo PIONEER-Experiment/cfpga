@@ -50,43 +50,62 @@ assign dat1[13:0] = p2_1[13:0];
 
 // the variables for accumulating and buffering the sums
 reg signed [13:0] input_sum, updating_sum, updating_sum_reg1, updating_sum_reg2;
-reg signed [11:0] ped_buffer1;
+reg signed [11:0] ped_buffer1, ped_buffer0, ped_buffer3;
 reg signed [11:0] ped_buffer2;
 reg signed [13:0] sum_buffer0, sum_buffer1;
 
 // the average signal.  4 samples, so bitshift by 2
 wire signed [11:0] signal_average;
 assign signal_average[11:0] = updating_sum[13:2];
+reg signed [11:0] dbg_av0, dbg_av1, dbg_av2;
+reg signed [11:0] dbg_av3;
 
 // the running average and delayed average
 reg holding_trigger, init_hold_counter;
 wire local_trigger_wire;
 assign local_trigger_wire = self_trig_ready ? polarity ? signal_average > (threshold + ped_buffer2) : ped_buffer2 > (threshold + signal_average) : 0;
-reg local_trigger_reg;
-reg local_trigger;
+
+reg local_trigger_reg, local_trigger_reg2, local_trigger_reg3, local_trigger_reg4;
+reg local_trigger_reg5;
+(* mark_debug = "true" *) reg local_trigger;
 always @(posedge clk ) begin
   if (rst) begin
      input_sum        <= 14'sd0;
      updating_sum     <= 14'sd0;
      sum_buffer0      <= 14'sd0;
      sum_buffer1      <= 14'sd0;
+     ped_buffer0      <= 12'sd0;
      ped_buffer1      <= 12'sd0;
      ped_buffer2      <= 12'sd0;
-  end 
+     ped_buffer3      <= 12'sd0;
+  end
   else begin
      // update the running sum with the newest two samples, dropping the older two samples. Pipeline the results
      input_sum <= dat0 + dat1;
      updating_sum_reg1 <= updating_sum_reg1 + input_sum - sum_buffer0;
      updating_sum_reg2 <= updating_sum_reg1;
      updating_sum      <= updating_sum_reg2;
-     sum_buffer0 <= sum_buffer1;
      sum_buffer1 <= input_sum;
-     // store the previous average as an estimate of the pedestal
-     ped_buffer1 <= signal_average;
-     ped_buffer2 <= ped_buffer1;
+     sum_buffer0 <= sum_buffer1;
+     // store the previous average as an estimate of the pedestal0
+     ped_buffer0 <= signal_average;
+     ped_buffer1 <= ped_buffer0;
+     ped_buffer3 <= ped_buffer1;
+     ped_buffer2 <= ped_buffer3;
      local_trigger_reg <= local_trigger_wire;
      local_trigger     <= local_trigger_reg;
+     local_trigger_reg2    <= local_trigger_reg;
+     local_trigger_reg3    <= local_trigger_reg2;
+     local_trigger_reg4    <= local_trigger_reg3;
+     local_trigger_reg5    <= local_trigger_reg4;
      trigger <= holding_trigger;
+
+     // for debugging
+     dbg_av0 <= threshold + signal_average;
+     dbg_av1 <= dbg_av0;
+     dbg_av2 <= dbg_av1;
+     dbg_av3 <= dbg_av2;
+
   end
 end
 

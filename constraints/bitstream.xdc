@@ -1,6 +1,6 @@
 set_property BITSTREAM.CONFIG.OVERTEMPPOWERDOWN ENABLE [current_design]
 set_property BITSTREAM.CONFIG.USERID 32'h57464435 [current_design]
-set_property BITSTREAM.CONFIG.USR_ACCESS 0x43050206 [current_design]
+set_property BITSTREAM.CONFIG.USR_ACCESS 0x43050300 [current_design]
 
 
 

@@ -9,17 +9,17 @@ module ddr3_wr_control_ASYNC (
     input reset,
     input acq_enabled,                    // input, writing is enabled
     // Connections to the FIFO from the ADC
-    (* mark_debug = "true" *) input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
-    (* mark_debug = "true" *) input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
-    (* mark_debug = "true" *) output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
+    input [131:0] ddr3_wr_fifo_dat,       // input, next 'write' data from the ADC FIFO
+    input ddr3_wr_fifo_empty,             // input, data is available when this is not asserted
+    output ddr3_wr_fifo_rd_en,            // output, use and remove the data on the FIFO head
     // 'write' ports to memory
-    (* mark_debug = "true" *) output  app_wdf_wren,                 // output, request to perform a 'write'
-    (* mark_debug = "true" *) input app_wdf_rdy,                    // input, memory can accept data
-    (* mark_debug = "true" *) output  app_wdf_end,                  // output, last data cycle
+    output  app_wdf_wren,                 // output, request to perform a 'write'
+    input app_wdf_rdy,                    // input, memory can accept data
+    output  app_wdf_end,                  // output, last data cycle
     // 'write' ports to address controller
-    (* mark_debug = "true" *) output [25:0] ddr3_wr_addr,           // output, next 'write' address
-    (* mark_debug = "true" *) output  wr_app_en,                    // output, request to perform a 'write' 
-    (* mark_debug = "true" *) input wr_app_rdy,                     // input, increment the 'write' address
+    output [25:0] ddr3_wr_addr,           // output, next 'write' address
+    output  wr_app_en,                    // output, request to perform a 'write'
+    input wr_app_rdy,                     // input, increment the 'write' address
     // 'write' ports to the fill_header_fifo
     output [151:0] fill_header_wr_dat,    // header data
     output reg fill_header_wr_en,         // store header in FIFO
@@ -27,7 +27,7 @@ module ddr3_wr_control_ASYNC (
     output reg ddr3_wr_sync_err,
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state
-    (* mark_debug = "true" *) output [12:0] ddr3_wr_ctrl_state,     // current state
+    output [12:0] ddr3_wr_ctrl_state,     // current state
     input acq_done                        // asserted when the 'adc_acq_sm' is in the DONE state
 );
 
@@ -51,7 +51,7 @@ parameter [3:0]
     DONE        = 4'd12;  // 1000
 
 // synchronize 'acq_done'
-(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg acq_done_sync1, acq_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;
 always @ (posedge clk) begin
     acq_done_sync1 <= acq_done;
     acq_done_sync2 <= acq_done_sync1;
@@ -77,8 +77,8 @@ always @ (posedge clk) begin
 end
 	 
 // Create a register to hold the header for future writing to the fill-header FIFO
-(* mark_debug = "true" *) reg [151:0] fill_header_wr_dat_reg;
-(* mark_debug = "true" *) reg latch_header;   // will be asserted by the state machine
+reg [151:0] fill_header_wr_dat_reg;
+reg latch_header;   // will be asserted by the state machine
 always @ (posedge clk) begin
     if (reset) fill_header_wr_dat_reg <= {152{1'b0}};
     else if (latch_header) begin
@@ -133,10 +133,10 @@ assign address_cntr_zero = (address_cntr[23:0] == 24'd0) ? 1'b1 : 1'b0;
 // For storing waveform data, initialize it to the 'burst_cnt' in the header plus 1
 // Decrement it whenever we get a successful write. This happens when
 // we are asserting 'wdf_wren' and receiving 'wdf_rdy'.
-(* mark_debug = "true" *) reg [23:0] burst_cntr;
+reg [23:0] burst_cntr;
 reg init_burst_cntr;   // will be asserted by the state machine
 reg init_burst_cntr_to_1;   // will be asserted by the state machine
-(* mark_debug = "true" *) wire burst_cntr_zero;  // the counter is at zero
+wire burst_cntr_zero;  // the counter is at zero
 always @ (posedge clk) begin
     if (reset) burst_cntr[23:0] <= 24'd0;
     else if (init_burst_cntr_to_1) burst_cntr[23:0] <= 24'd1;

@@ -30,13 +30,13 @@ module cc_rd_fill_sm (
   output reg sm_done,                         // we are finished
   output [ 9:0] cc_rd_fill_state,                 // current state
 
-  (* mark_debug = "true" *) output reg tx_tvalid,                    // the data we are presenting is valid
-  (* mark_debug = "true" *) output reg tx_tlast,                       // this is the final word in the frame
-  (* mark_debug = "true" *) input tx_tready,                         // signal that the TX fifo has accepted the data
+  output reg tx_tvalid,                    // the data we are presenting is valid
+  output reg tx_tlast,                       // this is the final word in the frame
+  input tx_tready,                         // signal that the TX fifo has accepted the data
 
-  (* mark_debug = "true" *) output reg send_csn,                    // send the CSN
-  (* mark_debug = "true" *) output reg send_cmd,                    // send the CC
-  (* mark_debug = "true" *) output reg send_inv_cmd,                // send the inverse CC
+  output reg send_csn,                    // send the CSN
+  output reg send_cmd,                    // send the CC
+  output reg send_inv_cmd,                // send the inverse CC
 
   // interface to the header FIFO
   input fill_header_fifo_empty,            // a header is available when not asserted
@@ -54,13 +54,13 @@ module cc_rd_fill_sm (
 
 // interface to the AXIS 2:1 MUX
   output reg use_ddr3_data,                // the data source is the DDR3 memory
-  (* mark_debug = "true" *) input aurora_ddr3_accept,                // DDR3 data has been accepted by the Aurora
+  input aurora_ddr3_accept,                // DDR3 data has been accepted by the Aurora
 // for debugging
   input initial_fill_num_wr                // tells the debugging event counter to reset to zero
 );
 
 // Synchronize  'reading_done'.
-(* ASYNC_REG = "TRUE", mark_debug = "true"  *) reg reading_done_sync1, reading_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg reading_done_sync1, reading_done_sync2;
 always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;
@@ -74,8 +74,8 @@ reg error_found;
 
 // make a counter to keep track of how many 32-bit DDR3 words still need to
 // be accepted by the Aurora interface
-(* mark_debug = "true" *) reg [25:0] ddr3_words_to_send;
-(* mark_debug = "true" *) reg all_ddr3_words_sent;
+reg [25:0] ddr3_words_to_send;
+reg all_ddr3_words_sent;
 always @(posedge clk) begin
     all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 25'b0);
 end
@@ -98,7 +98,7 @@ parameter [3:0]
     DONE                 = 4'd9;  // 200
                 
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 assign cc_rd_fill_state = CS;
 
@@ -115,7 +115,7 @@ always @ (posedge clk) begin
 end
 
 // to help with debugging, create an event counter
-(* mark_debug = "true" *) reg [11:0] event_ctr;
+reg [11:0] event_ctr;
 reg update_event_ctr;
 always @ (posedge clk) begin
   if ( initial_fill_num_wr ) begin

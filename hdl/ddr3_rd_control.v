@@ -103,7 +103,7 @@ parameter [1:0]
   DONE = 2'd2;
   
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [2:0] /* synopsys enum STATE_TYPE */ CS;
+reg [2:0] /* synopsys enum STATE_TYPE */ CS;
 reg [2:0] /* synopsys enum STATE_TYPE */ NS;
 assign ddr3_rd_ctrl_state = CS;
 //synopsys state_vector CS

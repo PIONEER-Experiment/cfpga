@@ -3,36 +3,36 @@
 module enable_sm_ASYNC (
     // inputs
     input adc_clk,
-    (* mark_debug = "true" *) input ext_enable0,          // external 'enable' for triggers, and fill type
-    (* mark_debug = "true" *) input ext_enable1,          // external 'enable' for triggers, and fill type
-    (* mark_debug = "true" *) input ext_trig,             // external trigger to start collecting data
-    (* mark_debug = "true" *) input reset_clk50,          // synchronously negated reset all of the acquisition logic
-    (* mark_debug = "true" *) input reset_clk_adc,        // reset everything related to ADC acquisition and storage -- now just reset_clk50 synced to adc_clk
-    (* mark_debug = "true" *) input cbuf_rd_trig_wait,    // waiting for another trigger or the negation of 'cbuf_rd_en'
-    (* mark_debug = "true" *) input ddr3_wr_done,         // asserted when the 'ddr3_wr_control' is in the DONE state
+    input ext_enable0,          // external 'enable' for triggers, and fill type
+    input ext_enable1,          // external 'enable' for triggers, and fill type
+    input ext_trig,             // external trigger to start collecting data
+    input reset_clk50,          // synchronously negated reset all of the acquisition logic
+    input reset_clk_adc,        // reset everything related to ADC acquisition and storage -- now just reset_clk50 synced to adc_clk
+    input cbuf_rd_trig_wait,    // waiting for another trigger or the negation of 'cbuf_rd_en'
+    input ddr3_wr_done,         // asserted when the 'ddr3_wr_control' is in the DONE state
     // outputs
-    (* mark_debug = "true" *) output reg cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
-    (* mark_debug = "true" *) output reg cbuf_trig_en,    // triggering of new waveforms is enabled
-    (* mark_debug = "true" *) output reg cbuf_rd_en,      // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-    (* mark_debug = "true" *) output reg ddr3_wr_en,      // writing of triggered events to memory is enabled
-    (* mark_debug = "true" *) output reg [1:0] fill_type, // level of the two 'ext_enable' bits
-    (* mark_debug = "true" *) input trig_pulse,      // a trigger passed while the system is enabled for new triggers
-    (* mark_debug = "true" *) output reg adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
-    (* mark_debug = "true" *) output [8:0] enable_sm_state, // enable_sm current state
-    (* mark_debug = "true" *) output reg ext_done         // external output indicating acquisition is done
+    output reg cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
+    output reg cbuf_trig_en,    // triggering of new waveforms is enabled
+    output reg cbuf_rd_en,      // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
+    output reg ddr3_wr_en,      // writing of triggered events to memory is enabled
+    output reg [1:0] fill_type, // level of the two 'ext_enable' bits
+    input trig_pulse,      // a trigger passed while the system is enabled for new triggers
+    output reg adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
+    output [8:0] enable_sm_state, // enable_sm current state
+    output reg ext_done         // external output indicating acquisition is done
 
 );
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Sync the two 'ext_enable' inputs to the ADC clock domain. OR them together.
-(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg enable_sync1, enable_sync2;
+(* ASYNC_REG = "TRUE" *) reg enable_sync1, enable_sync2;
 always @(posedge adc_clk) begin
     enable_sync1 <= #1 ext_enable0 | ext_enable1;
     enable_sync2 <= #1 enable_sync1;
 end
  
 // synchronize 'ddr3_wr_done'
-(* ASYNC_REG = "TRUE", mark_debug = "true"  *) reg ddr3_wr_done_sync1, ddr3_wr_done_sync2;
+(* ASYNC_REG = "TRUE"  *) reg ddr3_wr_done_sync1, ddr3_wr_done_sync2;
 always @ (posedge adc_clk) begin
     ddr3_wr_done_sync1 <= #1 ddr3_wr_done;
     ddr3_wr_done_sync2 <= #1 ddr3_wr_done_sync1;
@@ -61,9 +61,9 @@ end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Create a down-counter that will extend the assertion time of 'ext_done'
-(* mark_debug = "true" *) reg [5:0] pulse_cntr;
-(* mark_debug = "true" *) reg init_pulse_cntr;
-(* mark_debug = "true" *) wire pulse_cntr_zero;
+reg [5:0] pulse_cntr;
+reg init_pulse_cntr;
+wire pulse_cntr_zero;
 // set a flag when the counter is equal to zero
 assign pulse_cntr_zero = (pulse_cntr[5:0] == 0) ? 1'b1 : 1'b0;
 always @(posedge adc_clk) begin
@@ -96,9 +96,9 @@ parameter [3:0]
     DONE2           = 4'd8;  // 100
    
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [8:0] /* synopsys enum STATE_TYPE */ CS;
-(* mark_debug = "true" *) reg [8:0] /* synopsys enum STATE_TYPE */ NS;
-(* mark_debug = "true" *) assign enable_sm_state[8:0] = CS[8:0];
+reg [8:0] /* synopsys enum STATE_TYPE */ CS;
+reg [8:0] /* synopsys enum STATE_TYPE */ NS;
+assign enable_sm_state[8:0] = CS[8:0];
 
 //synopsys state_vector CS
  
@@ -204,7 +204,7 @@ end // combinational always block to determine next state
 
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
-(* mark_debug = "true" *) reg latch_fill_type;
+reg latch_fill_type;
 always @ (posedge adc_clk) begin
     // defaults
     cbuf_wr_en             <= #1 1'b0;        // writing into the circ buf by the ADC is enabled, must extend past final trigger

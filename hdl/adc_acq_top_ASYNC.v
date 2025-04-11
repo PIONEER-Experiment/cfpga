@@ -198,7 +198,7 @@ delay_signal delay_signal (
 // Connect a FIFO that will hold the value of the 'write' address for each trigger point.
 wire have_trigger;
 assign have_trigger = trig_pulse | trigger2;
-(* mark_debug = "true" *) wire trig_fifo_empty;
+wire trig_fifo_empty;
 circ_buf_fifo circ_buf_fifo (
   .clk(adc_clk),                    // 400 MHz ADC DDR clock
   .rst(adc_acq_full_reset),                 // reset from the Master FPGA

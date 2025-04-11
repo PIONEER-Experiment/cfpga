@@ -45,6 +45,7 @@ module register_block64(
     output [11:0] selftrig_threshold,        // above-pedestal threshold for self triggering
     output        selftrig_polarity,         // for self-triggering: 0 => negative polarity, 1 => positive
     input  [22:0] current_waveform_num,
+    output        run_in_progress,           // a run is in progress
  
     // slow control
     input [15:0] xadc_temp,
@@ -60,12 +61,12 @@ module register_block64(
     input  [3:0] image_type,
 
     // state machine states
-    input [18:0] adc_acq_state,
-    input [18:0] circ_to_ddr3_state,
-    input [ 9:0] cc_rd_fill_state,
-    input [ 8:0] enable_sm_state,
-    input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
-    input [12:0] ddr3_wr_ctrl_state            // write control current state
+    (* mark_debug = "true" *) input [18:0] adc_acq_state,
+    (* mark_debug = "true" *) input [18:0] circ_to_ddr3_state,
+    (* mark_debug = "true" *) input [ 9:0] cc_rd_fill_state,
+    (* mark_debug = "true" *) input [ 8:0] enable_sm_state,
+    (* mark_debug = "true" *) input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
+    (* mark_debug = "true" *) input [12:0] ddr3_wr_ctrl_state            // write control current state
 );
 
     // make a register to hold the number of the selected register.
@@ -84,7 +85,7 @@ module register_block64(
     // set the illegal flag if any upper bit is non-zero
     assign illegal_reg_num = (reg_num[31:6] == 26'b00000000000000000000000000) ? 1'b0 : 1'b1;
     
-    // make a block of 32 32-bit registers
+    // make a block of 64 32-bit registers
     // those with explicit defaults follow below
     reg [31:0] reg1_, reg5_, reg6_, reg26_, reg27_, reg28_, reg29_, reg30_;
 
@@ -103,6 +104,8 @@ module register_block64(
     reg [31:0] reg17_ = 32'd1;        // pedestal waveform gap of 1
     reg [31:0] reg20_ = 32'd10;       // async burst count of 10
     reg [31:0] reg21_ = 32'd2;        // async pre-trigger of 2
+    reg [31:0] reg38_ = 32'd200;      // self trigger threshold and polarity
+    reg [31:0] reg39_ = 32'd0;        // run in progress
     
     // write to the writable registers
     always @ (posedge clk) begin
@@ -137,8 +140,10 @@ module register_block64(
         if (wr_en && (reg_num[4:0] == 5'h1c)) reg28_[31:0] <= rx_data[31:0];
         if (wr_en && (reg_num[4:0] == 5'h1d)) reg29_[31:0] <= rx_data[31:0];
         if (wr_en && (reg_num[4:0] == 5'h1e)) reg30_[31:0] <= rx_data[31:0];
-        // R31 is read only
-        // R32 through R63 are read only
+        // R31 through 37 are read only
+        if (wr_en && (reg_num[4:0] == 5'h26)) reg38_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[4:0] == 5'h27)) reg39_[31:0] <= rx_data[31:0];
+        // R40 through R63 are read only
     end
 
     // Register to/from the ADC acquisition state machine
@@ -196,8 +201,6 @@ module register_block64(
     // number of muon waveforms to store per trigger (regular mode)
     // triggering threshold, self-triggering mode
     assign muon_num_waveforms[11:0]  = reg14_[11:0];
-    assign selftrig_threshold[11:0]    = {1'b0,reg14_[10:0]};
-    assign selftrig_polarity           = reg14_[11];
 
     // R15
     // idle time between laser waveforms
@@ -231,7 +234,18 @@ module register_block64(
     // R23 is read only
     // R24 is read only
     // R25 is read only
+    
     // R31 is read only
+
+
+    // R38
+    // value away from pedestal to self trigger (above or below depends on polarity)
+    // 0 for odd polarity and 1 for even polarity
+    assign selftrig_threshold[11:0]    = reg38_[11:0];
+    assign selftrig_polarity           = reg38_[12];
+    
+    // R39 run in progress
+    assign run_in_progress             = reg39_[0];
 
     reg [31:0] rdbk_reg;
     assign tx_data[31:0] = rdbk_reg[31:0];
@@ -278,8 +292,8 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h23)) rdbk_reg[31:0] <= {29'd0,ddr3_rd_ctrl_state[2:0]};
         if (rd_en && (reg_num[5:0] == 6'h24)) rdbk_reg[31:0] <= {19'd0,ddr3_wr_ctrl_state[12:0]};
         if (rd_en && (reg_num[5:0] == 6'h25)) rdbk_reg[31:0] <= {23'd0,enable_sm_state[8:0]};
-        if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= reg38_[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= reg39_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= 32'd0;
