@@ -67,7 +67,7 @@ assign local_trigger_wire = self_trig_ready ? polarity ? signal_average > (thres
 
 reg local_trigger_reg, local_trigger_reg2, local_trigger_reg3, local_trigger_reg4;
 reg local_trigger_reg5;
-(* mark_debug = "true" *) reg local_trigger;
+reg local_trigger;
 always @(posedge clk ) begin
   if (rst) begin
      input_sum        <= 14'sd0;

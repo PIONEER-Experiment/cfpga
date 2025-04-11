@@ -404,7 +404,6 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),       // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),         // input, the number of bursts to read
     .enable_reading(enable_reading),                     // input, initialize the address generator and both counters, go
-    .run_in_progress(run_in_progress),                   // input, a run is in progress
     .reading_done(reading_done),                         // output, reading is complete
 
     // ports to the 'read' fifo
@@ -656,7 +655,6 @@ command_top command_top (
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished
-    .run_in_progress(run_in_progress),                  // run is in progress
 
     // other state machine states
     .adc_acq_state(19'd0),

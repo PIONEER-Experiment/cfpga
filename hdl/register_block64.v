@@ -45,7 +45,6 @@ module register_block64(
     output [11:0] selftrig_threshold,        // above-pedestal threshold for self triggering
     output        selftrig_polarity,         // for self-triggering: 0 => negative polarity, 1 => positive
     input  [22:0] current_waveform_num,
-    output        run_in_progress,           // a run is in progress
  
     // slow control
     input [15:0] xadc_temp,
@@ -61,12 +60,12 @@ module register_block64(
     input  [3:0] image_type,
 
     // state machine states
-    (* mark_debug = "true" *) input [18:0] adc_acq_state,
-    (* mark_debug = "true" *) input [18:0] circ_to_ddr3_state,
-    (* mark_debug = "true" *) input [ 9:0] cc_rd_fill_state,
-    (* mark_debug = "true" *) input [ 8:0] enable_sm_state,
-    (* mark_debug = "true" *) input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
-    (* mark_debug = "true" *) input [12:0] ddr3_wr_ctrl_state            // write control current state
+    input [18:0] adc_acq_state,
+    input [18:0] circ_to_ddr3_state,
+    input [ 9:0] cc_rd_fill_state,
+    input [ 8:0] enable_sm_state,
+    input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
+    input [12:0] ddr3_wr_ctrl_state            // write control current state
 );
 
     // make a register to hold the number of the selected register.
@@ -244,9 +243,6 @@ module register_block64(
     assign selftrig_threshold[11:0]    = reg38_[11:0];
     assign selftrig_polarity           = reg38_[12];
     
-    // R39 run in progress
-    assign run_in_progress             = reg39_[0];
-
     reg [31:0] rdbk_reg;
     assign tx_data[31:0] = rdbk_reg[31:0];
     always @ (posedge clk) begin
@@ -293,7 +289,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h24)) rdbk_reg[31:0] <= {19'd0,ddr3_wr_ctrl_state[12:0]};
         if (rd_en && (reg_num[5:0] == 6'h25)) rdbk_reg[31:0] <= {23'd0,enable_sm_state[8:0]};
         if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= reg38_[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= reg39_[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // reg39_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= 32'd0;

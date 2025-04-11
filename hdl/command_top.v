@@ -66,7 +66,6 @@ module command_top (
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
     output read_fill_done,                    // read fill state machine finished
-    output run_in_progress,                   // a run is in progress
 
     input  [15:0] xadc_temp,
     input  [15:0] xadc_vccint,
@@ -428,7 +427,6 @@ module command_top (
         .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
         .selftrig_polarity( selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
         .async_pre_trig(async_pre_trig[15:0]),                         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-        .run_in_progress(run_in_progress),                             // a run is in progress
         .current_waveform_num(current_waveform_num[22:0]),
         // slow control
         .xadc_temp(xadc_temp[15:0]),
