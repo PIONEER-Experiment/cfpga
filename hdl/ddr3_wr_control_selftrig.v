@@ -413,8 +413,6 @@ always @ (posedge clk) begin
         next_ddr3_wr_fill_in_progress <= ddr3_wr_fill_in_progress;
         header_written                <= next_header_written;
         next_header_written           <= header_written;
-        set_data_collection     <= 1'b0;
-        clear_data_collection   <= 1'b0;
 
     // next states
     if (NS[IDLE]) begin
