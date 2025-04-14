@@ -32,7 +32,7 @@ module circ_buf_to_ddr3_selftrig (
     output [18:0] circ_to_ddr3_state    // current state
 );
 
-wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
+(* mark_debug = "true" *) wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
 reg  [22:0] waveform_start_adr; // DDR3 burst memory location (3 LSBs=0) for a waveform
 reg  [22:0] num_fill_bursts;    // total number of bursts in a fill
 
@@ -114,7 +114,7 @@ adc_dat_mux_selftrig adc_dat_mux_selftrig (
 // It will be preset to '0x0001' when 'mem_enabled' is negated.
 // Its content will be put in the waveform headers.
 // It will increment every time data is written to the FIFO
-wire burst_adr_cntr_en;
+(* mark_debug = "true" *) wire burst_adr_cntr_en;
 burst_address_cntr_ASYNC burst_address_cntr_ASYNC (
     // inputs
     .clk(adc_clk),

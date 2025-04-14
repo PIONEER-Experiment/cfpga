@@ -16,6 +16,7 @@ module adc_acq_top_selftrig (
     input [23:0] initial_fill_num,  // event number to assign to the first fill
     input initial_fill_num_wr,      // write-strobe to store the initial_fill_num
     input enable_triggering,        // master FPGA has enabled triggering
+    input enable_acquisition,       // master FPGA has enabled acquisition
     input ddr3_buffer,              // ddr3 buffer (lower half or upper half of memory) to write events to
     input adc_buf_delay_data_reset, // use the new delay settings
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
@@ -127,7 +128,7 @@ wire self_trig_ready;
 enable_sm_selftrig enable_sm_selftrig (
     // inputs
     .adc_clk(adc_clk),                       // run the sm in this clock domain
-    .enable_triggering(enable_triggering),   // a run has started and enabled triggers
+    .enable_triggering(enable_triggering_adc), // a run has started and enabled triggers
     .ddr3_buffer(ddr3_buffer),               // which buffer to write to
     .self_trig(self_trig),                   // self trigger to start collecting data
     .reset_clk50(reset_clk50),               // synchronously negated

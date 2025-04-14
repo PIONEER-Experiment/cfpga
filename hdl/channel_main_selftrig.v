@@ -76,9 +76,19 @@ wire [22:0] current_waveform_num;
 wire readout_pause;
 assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1:2] : 'acq_enable'
-wire enable_triggering;                 // indicates enabled for triggers
+wire enable_triggering;                 // indicates enabled for self triggering
+wire enable_acquisition;                // indicates that data acquisition has not yet completed
+enableControlInst enableControl(
+  .clk125(clk125),
+  .reset(reset_clk125),
+  .master_signal(io[1]),
+  .enable_acquisition(enable_acquisition),
+  .enable_triggering(enable_triggering)
+);
+
+//assign enable_triggering  = io[1];
+
 wire ddr3_buffer;                       // indicates writing top vs bottom half of DDR3 should switch
-assign enable_triggering  = io[1];
 assign ddr3_buffer        = io[2];
 //   io[3]   : 'rst_from_master'
 wire rst_from_master;
@@ -314,6 +324,7 @@ adc_acq_top_selftrig adc_acq_top_selftrig (
     .initial_fill_num(initial_fill_num[23:0]),           // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr),           // write-strobe to store the initial_fill_num
     .enable_triggering(enable_triggering),               // master FPGA has enabled triggering
+    .enable_acquisition(enable_acquisition),             // master FPGA has enabled triggering
     .ddr3_buffer(ddr3_buffer),                           // ddr3 buffer for writing
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
