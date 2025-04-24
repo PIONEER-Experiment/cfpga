@@ -129,6 +129,7 @@ enable_sm_selftrig enable_sm_selftrig (
     // inputs
     .adc_clk(adc_clk),                       // run the sm in this clock domain
     .enable_triggering(enable_triggering_adc), // a run has started and enabled triggers
+    .enable_acquisition(enable_acquisition), // data acquisition has not yet ended -- decoupled from triggering to avoid end of run timing issues
     .ddr3_buffer(ddr3_buffer),               // which buffer to write to
     .self_trig(self_trig),                   // self trigger to start collecting data
     .reset_clk50(reset_clk50),               // synchronously negated

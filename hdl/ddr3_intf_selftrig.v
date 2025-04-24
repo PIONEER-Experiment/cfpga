@@ -53,7 +53,8 @@ module ddr3_intf_selftrig(
     output [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     output [12:0] ddr3_wr_ctrl_state,            // write control current state
     input [11:0] xadc_temp,
-    input enable_triggering
+    input enable_triggering,
+    input enable_acquisition
 );
 // for fast simulation uncomment the next 3 lines, and comment out lines marked farther into this file.
 //wire app_wdf_rdy;				// for fast simulation ONLY
@@ -63,16 +64,16 @@ module ddr3_intf_selftrig(
 
 // sync some signals into the various domains
 wire enable_triggering_ddr3;
-wire enable_triggering_125;
+wire enable_acquisition_ddr3;
 sync_2stage et_ddr3 (
    .clk(ddr3_domain_clk),
    .in(enable_triggering),
    .out(enable_triggering_ddr3)
 );
-sync_2stage et_125 (
-   .clk(local_domain_clk),
-   .in(enable_triggering),
-   .out(enable_triggering_125)
+sync_2stage ea_ddr3 (
+   .clk(ddr3_domain_clk),
+   .in(enable_acquisition),
+   .out(enable_acquisition_ddr3)
 );
 
 //synchronize the 'reset' signal
@@ -157,6 +158,7 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
     .enable_triggering_ddr3(enable_triggering_ddr3),
+    .enable_acquisition_ddr3(enable_acquisition_ddr3),
     // next batch for debugging, eliminate when done
     //.fill_header_fifo_empty(fill_header_fifo_empty),
     //.fill_header_fifo_rd_en(fill_header_fifo_rd_en),

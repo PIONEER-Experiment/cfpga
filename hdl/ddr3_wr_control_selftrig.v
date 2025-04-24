@@ -30,6 +30,7 @@ module ddr3_wr_control_selftrig (
     input checksum_memory_range,          // latch the memory buffer for writing the checksum
     input ddr3_buffer,                    // buffer that the next fill will use
     input enable_triggering_ddr3,
+    input enable_acquisition_ddr3,
     // the next batch for debugging and should get eliminated afterwards
     //input fill_header_fifo_empty,
     //input fill_header_fifo_rd_en,
@@ -43,7 +44,7 @@ module ddr3_wr_control_selftrig (
     //
     output [12:0] ddr3_wr_ctrl_state,     // current state
     input acq_done,                      // asserted when the 'adc_acq_sm' is in the DONE state
-    output writing_last_fill             // asserted when enable_triggering deasserts but we haven't finished writing the info from this fill
+    output writing_last_fill             // asserted when enable_acquisition_ddr3 deasserts but we haven't finished writing the info from this fill
 );
 
 // Leave the comments containing "synopsys" in your HDL code.
@@ -196,7 +197,7 @@ end
 assign address_allow = ~(address_control == 0);
     
 // we want to keep writing the last fill's information out, where last is flagged by enable_triggering deasserting
-assign writing_last_fill = ~enable_triggering_ddr3 & ddr3_wr_fill_in_progress;
+assign writing_last_fill = ~enable_acquisition_ddr3 & ddr3_wr_fill_in_progress;
 
 // Declare current state and next state variables
 reg [12:0] /* synopsys enum STATE_TYPE */ CS;
@@ -226,7 +227,7 @@ assign ddr3_wr_ctrl_state = CS;
 //  .probe16(fill_header_fifo_empty), // input wire [0:0]  probe12
 //  .probe17(fill_header_fifo_rd_en), // input wire [0:0]  probe12
 //  .probe18(correct_chksum_addr),     // input wire [0:0]  probe12
-//  .probe19(enable_triggering_ddr3), // input wire [0:0]  probe12
+//  .probe19(enable_acquisition_ddr3), // input wire [0:0]  probe12
 //  .probe20(fill_num),
 //  .probe21(ddr3_wr_en_sync2),
 //  .probe22(evt_cnt_reset),
@@ -425,8 +426,8 @@ always @ (posedge clk) begin
     if (NS[INIT_ALL]) begin
        // initialize the total_burst counter to 1 (to include fill header)
        init_total_burst_count	<= 1'b1;
-       next_ddr3_wr_fill_in_progress <= enable_triggering_ddr3;
-       ddr3_wr_fill_in_progress      <= enable_triggering_ddr3;
+       next_ddr3_wr_fill_in_progress <= enable_acquisition_ddr3;
+       ddr3_wr_fill_in_progress      <= enable_acquisition_ddr3;
        next_header_written           <= 1'b0;
        header_written                <= 1'b0;
     end

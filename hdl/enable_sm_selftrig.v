@@ -4,6 +4,7 @@ module enable_sm_selftrig (
     // inputs
     input adc_clk,
     input enable_triggering,    // self triggers enabled and valid.
+    input enable_acquisition,   // data acquisition still enabled
     input ddr3_buffer,          // master's request for which buffer to write to
     input self_trig,            // self trigger condition has been met
     input reset_clk50,          // synchronously negated reset all of the acquisition logic
@@ -28,11 +29,11 @@ module enable_sm_selftrig (
 );
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Sync the enable_triggering inputs to the ADC clock domain.
-(* ASYNC_REG = "TRUE" *) reg trig_ready_sync1, trig_ready_sync2;
+// Sync the enable_acquisition inputs to the ADC clock domain.
+(* ASYNC_REG = "TRUE" *) reg acq_active_sync1, acq_active_sync2;
 always @(posedge adc_clk) begin
-    trig_ready_sync1 <= #1 enable_triggering;
-    trig_ready_sync2 <= #1 trig_ready_sync1;
+    acq_active_sync1 <= #1 enable_acquisition;
+    acq_active_sync2 <= #1 acq_active_sync1;
 end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,9 +131,9 @@ assign enable_sm_state[8:0] = CS[8:0];
 
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge adc_clk) begin
-    if (reset_clk_adc | (!trig_ready_sync2 & CS[IDLE]) ) begin
+    if (reset_clk_adc | (!acq_active_sync2 & CS[IDLE]) ) begin
 // -- this gave the event mismatch error on 1st read of 2nd run in 6.6.6C
-//    if (reset_clk_adc | !trig_ready_sync2 ) begin
+//    if (reset_clk_adc | !acq_active_sync2 ) begin
 //    if (reset_clk_adc ) begin
         CS <= #1 {9{1'b0}}; // set all state bits to 0
         CS[IDLE] <= #1 1'b1; // set IDLE state bit to 1
@@ -142,7 +143,7 @@ always @ (posedge adc_clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or trig_ready_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or pulse_cntr_zero or range_flip ) begin
+always @ (CS or acq_active_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or pulse_cntr_zero or range_flip ) begin
     NS = {9{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
@@ -155,7 +156,7 @@ always @ (CS or trig_ready_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or p
 
         // Stay in ENABLE_WAIT until the self triggering module is enabled and ready
         CS[ENABLE_WAIT]: begin
-        //    if (trig_ready_sync2)
+        //    if (acq_active_sync2)
                 // a fill of a new buffer is starting, go latch the ddr3 buffer range bit
                 NS[BUFFER_FILL_START] = 1'b1;
         //     else
@@ -175,7 +176,7 @@ always @ (CS or trig_ready_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or p
        // for the current buffer. Go to CBUF_RD_ENABLED to finish writing any triggered
        // acquisitions to the DDR3 and write the final fill_header.
         CS[TRIG_ENABLED]: begin
-            if (!trig_ready_sync2 || range_flip ) 
+            if (!acq_active_sync2 || range_flip ) 
                 // a fill of this buffer is ending, so swap the write buffer leave the DDR3 asserted.
                 NS[CBUF_RD_ENABLED] = 1'b1;
              else
@@ -223,7 +224,7 @@ always @ (CS or trig_ready_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or p
         // Stay in DONE2 until the pulse duration counter is zero.
         CS[DONE2]: begin
             if (pulse_cntr_zero) begin
-                if ( trig_ready_sync2 )
+                if ( acq_active_sync2 )
                     NS[BUFFER_FILL_START] = 1'b1;
                 else
                     NS[IDLE] = 1'b1;
@@ -268,7 +269,7 @@ always @ (posedge adc_clk) begin
 
     if (NS[TRIG_ENABLED]) begin
         cbuf_rd_en           <= #1 1'b1;        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
-        cbuf_trig_en         <= #1 trig_ready_sync2; // triggering of new waveforms is enabled for most states
+        cbuf_trig_en         <= #1 acq_active_sync2; // triggering of new waveforms is enabled for most states
         ddr3_wr_en           <= #1 ddr3_selftrig_wr_active;        // writing of triggered events to memory is enabled (now only during triggers)
      end
 
@@ -279,13 +280,13 @@ always @ (posedge adc_clk) begin
 
     if (NS[CBUF_RD_DONE]) begin
         ddr3_wr_en           <= #1 ddr3_selftrig_wr_active;        // writing of triggered events to memory is enabled
-        cbuf_rd_en           <= #1 trig_ready_sync2;    // moving data from the circ buf to the DDR3 FIFO is enabled,
+        cbuf_rd_en           <= #1 acq_active_sync2;    // moving data from the circ buf to the DDR3 FIFO is enabled,
                                                         // -- checksum and fill header go when first negated. Disable if running has been disabled
     end
 
     if (NS[DDR3_DONE_WAIT]) begin
         ddr3_wr_en           <= #1 ddr3_selftrig_wr_active;        // writing of triggered events to memory is enabled
-        cbuf_rd_en           <= #1 trig_ready_sync2;        // moving data from the circ buf to the DDR3 FIFO is enabled, chec
+        cbuf_rd_en           <= #1 acq_active_sync2;        // moving data from the circ buf to the DDR3 FIFO is enabled, chec
                                                             // -- checksum and fill header go when first negated. Disable if running has been disabled
     end
 

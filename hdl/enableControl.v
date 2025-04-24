@@ -42,15 +42,13 @@ module enableControl (
     
     // sequential always block for state transitions (use non-blocking [<=] assignments)
     // Reset the sm whenever we get to the end of a frame
-    always @ (posedge clk) begin
+    always @ (posedge clk125) begin
         if (reset) begin
-            CS <= 11'b0;        // set all state bits to 0
-            CS[IDLE] <= 1'b1;   // set IDLE state bit to 1
-            // disable triggering and data acquisition
-            enable_acq_reg  = 1'b0;
-            enable_trig_reg = 1'b0;
+          CS <= 11'b0;        // set all state bits to 0
+          CS[IDLE] <= 1'b1;   // set IDLE state bit to 1
         end
-        else CS <= NS;          // set state bits to next state
+        else
+          CS <= NS;          // set state bits to next state
     end
 
     // combinational always block to determine next state (use blocking [=] assignments)
@@ -73,7 +71,7 @@ module enableControl (
             // Stay here while master is high
             // We stay here for one cycle, during which the word is discarded.
             CS[COUNT]: begin
-                if ( master_signal ) begin
+                if ( master_signal )
                   // remain here counting clock pulses
                   NS[COUNT] = 1'b1;
                 else
@@ -92,29 +90,37 @@ module enableControl (
 
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
-always @ (posedge clk) begin
+always @ (posedge clk125) begin
+  if ( reset ) begin
+    // disable triggering and data acquisition
+    enable_acq_reg  = 1'b0;
+    enable_trig_reg = 1'b0;
+  end
+  else begin
+    
   // defaults
-  increment_counter <= 1'b0;
-  zero_counter      <= 1'b0;
-
-  // next states
-  if (NS[IDLE]) begin
-    zero_counter      <= 1'b1;
-  end
-
-  if (NS[IDLE]) begin
-    zero_counter      <= 1'b1;
-  end
-
-  if (NS[COUNT]) begin
-    increment_counter      <= 1'b1;
-  end
-
-  if (NS[TOGGLE]) begin
-    if ( counter[15:0] > 6 )
-      enable_acq_reg  <= ~enable_acq_reg;
-    else
-      enable_trig_reg <= ~enable_trig_reg;
+    increment_counter <= 1'b0;
+    zero_counter      <= 1'b0;
+  
+    // next states
+    if (NS[IDLE]) begin
+      zero_counter      <= 1'b1;
+    end
+  
+    if (NS[IDLE]) begin
+      zero_counter      <= 1'b1;
+    end
+  
+    if (NS[COUNT]) begin
+      increment_counter      <= 1'b1;
+    end
+  
+    if (NS[TOGGLE]) begin
+      if ( counter[15:0] > 6 )
+        enable_acq_reg  <= ~enable_acq_reg;
+      else
+        enable_trig_reg <= ~enable_trig_reg;
+    end
   end
 
 end // of always block

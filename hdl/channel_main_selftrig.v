@@ -78,7 +78,7 @@ assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1:2] : 'acq_enable'
 wire enable_triggering;                 // indicates enabled for self triggering
 wire enable_acquisition;                // indicates that data acquisition has not yet completed
-enableControlInst enableControl(
+enableControl enableControl(
   .clk125(clk125),
   .reset(reset_clk125),
   .master_signal(io[1]),
@@ -444,7 +444,8 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
 
     .xadc_temp(xadc_temp[11:0]),
-    .enable_triggering(enable_triggering)
+    .enable_triggering(enable_triggering),
+    .enable_acquisition(enable_acquisition)
 );
 
 ////////////////////////////////////////////////////////////////////////////
