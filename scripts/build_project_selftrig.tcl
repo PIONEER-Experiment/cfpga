@@ -138,9 +138,9 @@ set_property "top" "channel_main_selftrig_tb1" $obj
 
 # Create 'synth_1' run (if not found)
 if {[string equal [get_runs -quiet synth_1] ""]} {
-  create_run -name synth_1 -part xc7k70tfbg484-2 -flow {Vivado Synthesis 2023} -strategy "Vivado Synthesis Defaults" -constrset constrs_1
+  create_run -name synth_1 -part xc7k70tfbg484-2 -flow {Vivado Synthesis 2023} -strategy "Flow_PerfOptimized_high" -constrset constrs_1
 } else {
-  set_property strategy "Vivado Synthesis Defaults" [get_runs synth_1]
+  set_property strategy "Flow_PerfOptimized_high" [get_runs synth_1]
   set_property flow "Vivado Synthesis 2023" [get_runs synth_1]
 }
 set obj [get_runs synth_1]

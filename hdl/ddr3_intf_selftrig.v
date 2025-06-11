@@ -16,7 +16,6 @@ module ddr3_intf_selftrig(
     output ddr3_wr_sync_err,                    // synchronization error flag
     output ddr3_wr_done,                        // asserted when the 'ddr3_wr_control' is in the DONE state
     input checksum_memory_range,                // latch the memory buffer for writing the checksum
-    input ddr3_buffer,                          // buffer that the next fill will start writing
     input acq_done,                             // input from the adc_acq_sm, aquisition is done
     // reading connections
     input local_domain_clk,                     // input, the local interface synchronous clock
@@ -33,6 +32,9 @@ module ddr3_intf_selftrig(
     output [127:0] ddr3_rd_fifo_input_dat,      // output, memory data
     input ddr3_rd_fifo_almost_full,             // there is not much room left
     output ddr3_rd_fifo_input_tlast,            // the last burst for this fill
+    output wire write_buffer_rd_en,             // done all writing for fill, read out the write buffer bit from the fifo
+    input wire write_buffer_empty,
+
     // connections to the DDR3 chips
     output [12:0] ddr3_addr,
     output [2:0] ddr3_ba,
@@ -62,20 +64,6 @@ module ddr3_intf_selftrig(
 //assign app_wdf_rdy = 1'b1;	// for fast simulation ONLY
 // end fast simulation mods    
 
-// sync some signals into the various domains
-wire enable_triggering_ddr3;
-wire enable_acquisition_ddr3;
-sync_2stage et_ddr3 (
-   .clk(ddr3_domain_clk),
-   .in(enable_triggering),
-   .out(enable_triggering_ddr3)
-);
-sync_2stage ea_ddr3 (
-   .clk(ddr3_domain_clk),
-   .in(enable_acquisition),
-   .out(enable_acquisition_ddr3)
-);
-
 //synchronize the 'reset' signal
 (* ASYNC_REG = "TRUE" *) reg reset_sync1, reset_sync2;
 always @(posedge sysclk) begin
@@ -97,6 +85,8 @@ always @(posedge ddr3_domain_clk) begin
     cbuf_rd_en_sync1 <= cbuf_rd_en;
     cbuf_rd_en_sync2 <= cbuf_rd_en_sync1;
 end
+wire cbuf_rd_en_dbg;
+assign cbuf_rd_en_dbg = cbuf_rd_en_sync2;
 
 wire [25:0] ddr3_wr_addr;
 wire [25:0] ddr3_rd_addr;
@@ -138,7 +128,6 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     .reset(ddr3_domain_reset),
     .acq_enabled(cbuf_rd_en_sync2),                 // input, writing from cbuf to ddr3 has been enabled for a fill.
     .checksum_memory_range(checksum_memory_range),  // latch the memory buffer for writing the checksum
-    .ddr3_buffer(ddr3_buffer),                      // buffer that the next fill will use
     // Connections to the FIFO from the ADC
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),     // input, next 'write' data from the ADC FIFO
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),        // input, data is available when this is not asserted
@@ -157,8 +146,8 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     .ddr3_wr_sync_err(ddr3_wr_sync_err),            // synchronization error flag
     // status signals connected to the ADC acquisition machine
     .ddr3_wr_done(ddr3_wr_done),                    // asserted when the 'ddr3_wr_control' is in the DONE state
-    .enable_triggering_ddr3(enable_triggering_ddr3),
-    .enable_acquisition_ddr3(enable_acquisition_ddr3),
+    .enable_triggering_ddr3(enable_triggering),
+    .enable_acquisition_ddr3(enable_acquisition),
     // next batch for debugging, eliminate when done
     //.fill_header_fifo_empty(fill_header_fifo_empty),
     //.fill_header_fifo_rd_en(fill_header_fifo_rd_en),
@@ -166,6 +155,8 @@ ddr3_wr_control_selftrig ddr3_wr_control_selftrig (
     //.app_rdy(app_rdy),
     // done debugging
     .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),        // write control current state
+    .write_buffer_rd_en(write_buffer_rd_en),       // done all writing for fill, read out the write buffer bit from the fifo
+    .write_buffer_empty(write_buffer_empty),
     .acq_done(acq_done),                            // input, asserted when the 'adc_acq_sm' is in the DONE state
     .writing_last_fill(writing_last_fill)
  );

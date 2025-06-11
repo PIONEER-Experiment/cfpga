@@ -142,7 +142,7 @@ wire [18:0] circ_to_ddr3_state;
 wire [ 9:0] cc_rd_fill_state;
 wire [ 2:0] ddr3_rd_ctrl_state;            // read control current state
 wire [12:0] ddr3_wr_ctrl_state;            // write control current state
-wire [ 8:0] enable_sm_state;
+wire [ 9:0] enable_sm_state;
 
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling

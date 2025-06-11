@@ -85,8 +85,8 @@ end
 // Create a register to hold the header for future writing to the fill-header FIFO
 wire burst_cntr_zero;  // the burst counter is at zero
 wire address_cntr_zero;  // the address counter is at zero
-(* mark_debug = "true" *) reg [151:0] fill_header_wr_dat_reg;
-(* mark_debug = "true" *) reg latch_header;   // will be asserted by the state machine
+reg [151:0] fill_header_wr_dat_reg;
+reg latch_header;   // will be asserted by the state machine
 always @ (posedge clk) begin
     if (reset) fill_header_wr_dat_reg <= {152{1'b0}};
     else if (latch_header) begin
@@ -101,8 +101,8 @@ assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];
 // Create an address generator
 // Initialize it from the 'start_address' in the fill_header
 // Increment it whenever the address is accepted ( we get a 'wr_app_rdy' while asserting 'wr_app_en') 
-(* mark_debug = "true" *) reg [22:0] address_gen;
-(* mark_debug = "true" *) reg init_address_gen;   // will be asserted by the state machine
+reg [22:0] address_gen;
+reg init_address_gen;   // will be asserted by the state machine
 always @ (posedge clk) begin
     if (reset) address_gen[22:0] <= 23'b0;
     else if (init_address_gen && en_fixed_ddr3_start_addr) address_gen[22:0] <= fixed_ddr3_start_addr[22:0];

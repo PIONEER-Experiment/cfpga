@@ -278,7 +278,7 @@ assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
 
 wire [25:0] packed_adc_dat;
-wire [ 8:0] enable_sm_state;
+wire [ 9:0] enable_sm_state;
 
 adc_acq_top_ASYNC adc_acq_top_ASYNC (
     // inputs
@@ -316,7 +316,7 @@ adc_acq_top_ASYNC adc_acq_top_ASYNC (
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
     .circ_to_ddr3_state(circ_to_ddr3_state),             // circ_buf_to_ddr3 current state
-    .enable_sm_state(enable_sm_state),                   // enable_sm current state
+    .enable_sm_state(enable_sm_state[8:0]),                   // enable_sm current state
     .adc_acq_sm_idle(adc_acq_sm_idle),                   // ADC acquisition state machine is idle (used for front panel LED status)
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0])

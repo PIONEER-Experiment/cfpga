@@ -5,7 +5,7 @@ module enable_sm_selftrig (
     input adc_clk,
     input enable_triggering,    // self triggers enabled and valid.
     input enable_acquisition,   // data acquisition still enabled
-    input ddr3_buffer,          // master's request for which buffer to write to
+    input ddr3_buffer_master,   // master's request for which buffer to write to
     input self_trig,            // self trigger condition has been met
     input reset_clk50,          // synchronously negated reset all of the acquisition logic
     input reset_clk_adc,        // reset everything related to ADC acquisition and storage -- now just reset_clk50 synced to adc_clk
@@ -13,36 +13,44 @@ module enable_sm_selftrig (
     input ddr3_wr_done,         // asserted when the 'ddr3_wr_control' is in the DONE state
     input ddr3_selftrig_wr_active, // enabled whenever we are actively writing a trigger to the DDR3
     input initial_fill_num_wr_clkadc, // when we initialize fill number, also initialize the ddr3_buffer-related variables
+    input write_buffer_empty,   // we know what the next buffer is for writing data when this is zero
     // outputs
+    //output reg current_wr_buf,  // buffer to write to based on master ddr3_buffer flag
+    //output reg current_rd_buf,  // buffer next up for reading based on ddr3 buffer flag and enable_acquisition
     output reg cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
     output reg cbuf_trig_en,    // triggering of new waveforms is enabled for the current DDR3 write buffer
     output reg cbuf_rd_en,      // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     output reg ddr3_wr_en,      // writing of triggered events to memory is enabled
-    output reg [1:0] ddr3_range,// level of the ddr3 range bit.  Two copies because of history of other modes
     output reg trig_pulse,      // a trigger passed while the system is enabled for new triggers
     output reg adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
     output reg ext_done,        // external output indicating acquisition is done
-    output [8:0] enable_sm_state, // enable_sm current state
+    output reg ext_done_latch,  // external output indicating acquisition is done, but latched
+    output [9:0] enable_sm_state, // enable_sm current state
 //    output reg reset_timer,     // triggers reset of the 800 MHz counter used to time stamp events
-    output reg [1:0] ext_done_buffer,                // everything has been written to DDR3 and fill header FIFO
-    output reg range_flip
+    output reg range_flip,
+    output reg write_buffer_wr_en // starting a fill, cache the write buffer to be used
 );
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Sync the enable_acquisition inputs to the ADC clock domain.
-(* ASYNC_REG = "TRUE" *) reg acq_active_sync1, acq_active_sync2;
-always @(posedge adc_clk) begin
-    acq_active_sync1 <= #1 enable_acquisition;
-    acq_active_sync2 <= #1 acq_active_sync1;
-end
+// Sync the enable_acquisition inputs to the ADC clock domain. (Now done in main routine)
+//(* ASYNC_REG = "TRUE" *) reg acq_active_sync1, acq_active_sync2;
+//always @(posedge adc_clk) begin
+//    acq_active_sync1 <= #1 enable_acquisition;
+//    acq_active_sync2 <= #1 acq_active_sync1;
+//end
+wire acq_active_sync2;
+assign acq_active_sync2 = enable_acquisition;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Sync the ddr3_buffer bit
-(* ASYNC_REG = "TRUE" *) reg ddr3_buffer_sync1, ddr3_buffer_sync2;
+(* ASYNC_REG = "TRUE" *)  reg ddr3_buffer_sync1;
+reg ddr3_buffer_sync2;
 always @(posedge adc_clk) begin
-    ddr3_buffer_sync1 <= #1 ddr3_buffer;
+    ddr3_buffer_sync1 <= #1 ddr3_buffer_master;
     ddr3_buffer_sync2 <= #1 ddr3_buffer_sync1;
 end
+wire ddr3_buffer_dbg;
+assign ddr3_buffer_dbg = ddr3_buffer_sync2;
 
 // synchronize 'ddr3_wr_done'
 (* ASYNC_REG = "TRUE" *) reg ddr3_wr_done_sync1, ddr3_wr_done_sync2;
@@ -50,6 +58,8 @@ always @(posedge adc_clk) begin
     ddr3_wr_done_sync1 <= #1 ddr3_wr_done;
     ddr3_wr_done_sync2 <= #1 ddr3_wr_done_sync1;
 end
+wire ddr3_wr_done_dbg;
+assign ddr3_wr_done_dbg = ddr3_wr_done_sync2;
 
 // the self trigger can be maintined for several cycles -- create a pulse when from the signal
 // the signal itself is already in the ADC clock domain
@@ -115,17 +125,18 @@ parameter [3:0]
     IDLE              = 4'd0,  // 001
     ENABLE_WAIT       = 4'd1,  // 002
     BUFFER_FILL_START = 4'd2,  // 004
-    TRIG_ENABLED      = 4'd3,  // 008
-    CBUF_RD_ENABLED   = 4'd4,  // 010
-    CBUF_RD_DONE      = 4'd5,  // 020
-    DDR3_DONE_WAIT    = 4'd6,  // 040
-    DONE1             = 4'd7,  // 080
-    DONE2             = 4'd8;  // 100
+    BUFFER_FILL_AVAIL = 4'd3,  // 008
+    TRIG_ENABLED      = 4'd4,  // 010
+    CBUF_RD_ENABLED   = 4'd5,  // 020
+    CBUF_RD_DONE      = 4'd6,  // 040
+    DDR3_DONE_WAIT    = 4'd7,  // 080
+    DONE1             = 4'd8,  // 100
+    DONE2             = 4'd9;  // 200
    
 // Declare current state and next state variables
-reg [8:0] /* synopsys enum STATE_TYPE */ CS;
-reg [8:0] /* synopsys enum STATE_TYPE */ NS;
-assign enable_sm_state[8:0] = CS[8:0];
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ NS;
+assign enable_sm_state[9:0] = CS[9:0];
 
 //synopsys state_vector CS
 
@@ -157,7 +168,7 @@ always @ (CS or acq_active_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or p
         // Stay in ENABLE_WAIT until the self triggering module is enabled and ready
         CS[ENABLE_WAIT]: begin
         //    if (acq_active_sync2)
-                // a fill of a new buffer is starting, go latch the ddr3 buffer range bit
+                // a fill of a new buffer is starting, push the ddr3 buffer range bit ont the fifo
                 NS[BUFFER_FILL_START] = 1'b1;
         //     else
                 // wait here
@@ -166,10 +177,20 @@ always @ (CS or acq_active_sync2 or cbuf_rd_trig_wait or ddr3_wr_done_sync2 or p
 
         // Stay in the BUFFER_FILL_START state for one clock period.
         CS[BUFFER_FILL_START]: begin
-            //  go enable both the ADC and the DDR3
-            NS[TRIG_ENABLED] = 1'b1;
+            NS[BUFFER_FILL_AVAIL] = 1'b1;
         end
 
+       // Make sure that the new buffer is available in the fifo
+       CS[BUFFER_FILL_AVAIL]: begin
+         //  go enable both the ADC and the DDR3 once we know the correct write buffer
+         if ( ~write_buffer_empty ) begin
+            NS[TRIG_ENABLED] = 1'b1;
+         end
+         else begin
+            NS[BUFFER_FILL_AVAIL] = 1'b1;
+         end
+       end
+       
        // Triggers are accepted during TRIG_ENABLED. Stay in TRIG_ENABLED until either the
        // ENABLE signal from the master has been negated, or a change in ddr3 buffer has
        // been detected. Either signals the end of possible new acquisitions
@@ -238,18 +259,17 @@ end // combinational always block to determine next state
 
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
-reg latch_ddr3_range;
 always @ (posedge adc_clk) begin
     // defaults
     cbuf_wr_en             <= #1 1'b1;        // writing into the circ buf by the ADC is enabled, must extend past final trigger
     cbuf_trig_en           <= #1 1'b0;        // we need to communicate to circ_buf_to_ddr3_sm_selftrig to wrap up for this buffer
     cbuf_rd_en             <= #1 1'b0;        // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     ddr3_wr_en             <= #1 1'b0;        // writing of triggered events to memory is enabled
-    ext_done               <= #1 1'b0;        // total acquisition is done, data is stored in DDR3
+    ext_done               <= #1 1'b0;        // total acquisition is done, data is stored in DDR3, header stored in fifo
     init_pulse_cntr        <= #1 1'b0;        // initialize the pulse duration counter
-    latch_ddr3_range        <= #1 1'b0;        // copy level of the two 'ext_enable' bits into the 'fill_type'
     adc_acq_sm_idle        <= #1 1'b0;        // ADC acquisition state machine is idle (used for front panel LED status)
-//    reset_timer            <= #1 1'b0;                 // reset the 400 MHz trigger time counter
+    write_buffer_wr_en     <= #1 1'b0;        // push the next ddr3_buffer onto the FIFO for use while writing the next fill
+//    reset_timer            <= #1 1'b0;      // reset the 400 MHz trigger time counter
     // next states
     if (NS[IDLE]) begin
         cbuf_wr_en             <= #1 1'b0;        // writing into the circ buf by the ADC is disabled
@@ -263,7 +283,7 @@ always @ (posedge adc_clk) begin
     end
 
     if (NS[BUFFER_FILL_START]) begin
-        latch_ddr3_range        <= #1 1'b1;              // copy the ddr3 buffer range bit into the bits for 'fill_type' in the other modes
+        write_buffer_wr_en     <= #1 1'b1;        // push the next ddr3_buffer onto the FIFO for use while writing the next fill
 //        reset_timer             <= #1 1'b1;
     end
 
@@ -305,30 +325,18 @@ end
 always @(posedge adc_clk) begin
   // zero both on reset
   if ( reset_clk_adc ) begin
-    ext_done_buffer[1:0] <= 2'b00;
+    ext_done_latch <= 1'b0;
   end
-  // zero the buffer to be read out when the range flips
-  else if ( range_flip ) begin
-    ext_done_buffer[~ddr3_buffer] <= 1'b0;
-    ext_done_buffer[ ddr3_buffer] <= ext_done_buffer[ ddr3_buffer];
+  
+   // clear this latch when we are about to start reading
+   if (NS[CBUF_RD_ENABLED]) begin
+    ext_done_latch <= 1'b0;
   end
-  // flag that the last DDR3 writing has been done for the buffer to be read out
-  else if (NS[DONE2] ) begin
-    ext_done_buffer[~ddr3_buffer] <= 1'b1;
-    ext_done_buffer[ ddr3_buffer] <= ext_done_buffer[ ddr3_buffer];
-  end
-  else
-    ext_done_buffer[1:0] <= ext_done_buffer[1:0];
-end
 
-// After we have been enabled, latch the value of the two 'acq_enable' signals in the 'fill_type'
-// register. The fill type does not currently do anything in ASYNC mode, other than getting inserted
-// the fill header. 
-always @(posedge adc_clk) begin
-    if (latch_ddr3_range) begin
-      ddr3_range[1] <= #1 ddr3_buffer_sync2;
-      ddr3_range[0] <= #1 ddr3_buffer_sync2;
-    end
+   // set this latch when cbuf -> ddr3 transition complete for last trigger
+   if (NS[DONE2]) begin
+    ext_done_latch <= 1'b1;
+  end
 end
 
 endmodule

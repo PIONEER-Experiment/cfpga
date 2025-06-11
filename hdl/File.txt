@@ -1,0 +1,8 @@
+amu_E821          0.001165920912  (629)tot  (540)stat  (322)syst  (26)ext  [540 ppb]  [463 ppb]  [276 ppb]  [ 23 ppb]
+amu_E989_Run1     0.001165920506  (539)tot  (506)stat  (185)syst  (26)ext  [463 ppb]  [434 ppb]  [159 ppb]  [ 23 ppb]
+amu_E989_Run23    0.001165920701  (253)tot  (235)stat   (91)syst  (26)ext  [217 ppb]  [201 ppb]  [ 78 ppb]  [ 23 ppb]
+amu_E989_Run456   0.001165920710  (162)tot  (133)stat   (89)syst  (26)ext  [139 ppb]  [114 ppb]  [ 76 ppb]  [ 23 ppb]
+amu_E989          0.001165920705  (148)tot  (114)stat   (91)syst  (26)ext  [127 ppb]  [ 98 ppb]  [ 78 ppb]  [ 23 ppb]
+amu_exp2021       0.001165920678  (410)tot  (371)stat  (173)syst  (26)ext  [352 ppb]  [318 ppb]  [149 ppb]  [ 23 ppb]
+amu_exp2023       0.001165920703  (224)tot  (199)stat  (100)syst  (26)ext  [192 ppb]  [171 ppb]  [ 86 ppb]  [ 23 ppb]
+amu_exp           0.001165920715  (145)tot  (112)stat   (88)syst  (26)ext  [124 ppb]  [ 96 ppb]  [ 75 ppb]  [ 23 ppb]

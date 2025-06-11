@@ -32,8 +32,7 @@ module adc_dat_mux_selftrig (
     input checksum_update,             // update the checksum
     input [41:0] trigger_time,         // the time of the most recent data trigger
     // outputs
-    output reg [131:0] adc_acq_out_dat, // 132-bit: 4-bit tag plus 128-bit header or ADC data
-    output reg checksum_memory_range    // latch the memory buffer for writing the checksum
+    output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
 );
 
 //////////////////////////////////////
@@ -111,7 +110,6 @@ always @(posedge clk) begin
   if (checksum_init) begin
     // set checksum to zero
     checksum[127:0] <= #1 {128{1'b0}};
-    checksum_memory_range <= ddr3_range[0];
   end
   else if (select_fill_hdr && !select_waveform_hdr && !select_dat)
     // XOR the current fill header with the checksum, exclude the 4-bit tag

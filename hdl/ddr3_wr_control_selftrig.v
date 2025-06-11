@@ -28,21 +28,12 @@ module ddr3_wr_control_selftrig (
     // status flag back to the ADC acquisition machine
     output reg ddr3_wr_done,              // asserted when the 'ddr3_wr_control' is in the DONE state (once per waveform, header or checksum)
     input checksum_memory_range,          // latch the memory buffer for writing the checksum
-    input ddr3_buffer,                    // buffer that the next fill will use
     input enable_triggering_ddr3,
     input enable_acquisition_ddr3,
-    // the next batch for debugging and should get eliminated afterwards
-    //input fill_header_fifo_empty,
-    //input fill_header_fifo_rd_en,
-    //input readout_pause_ddr3,
-    //input initial_fill_num_wr,
-    //input [23:0] fill_num,
-    //input evt_cnt_reset,
-    //input rst_from_master,
-    //input app_rdy,
-    //input ddr3_wr_en_sync2,
     //
-    output [12:0] ddr3_wr_ctrl_state,     // current state
+    output [13:0] ddr3_wr_ctrl_state,     // current state
+    output reg write_buffer_rd_en,       // done all writing for fill, read out the write buffer bit from the fifo
+    input write_buffer_empty,
     input acq_done,                      // asserted when the 'adc_acq_sm' is in the DONE state
     output writing_last_fill             // asserted when enable_acquisition_ddr3 deasserts but we haven't finished writing the info from this fill
 );
@@ -64,7 +55,8 @@ parameter [3:0]
     WRITE       = 4'd9,  // 0200
     WRITE_CKSM  = 4'd10, // 0400
     WRITE_HDR   = 4'd11, // 0800
-    DONE        = 4'd12; // 1000
+    DONE1       = 4'd12, // 1000
+    DONE2       = 4'd13; // 1000
 
 // synchronize 'acq_done'
 (* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;
@@ -112,6 +104,17 @@ assign fill_header_wr_dat[151:0] = fill_header_wr_dat_reg[151:0];
 reg [22:0] address_gen;
 reg init_address_gen;   // will be asserted by the state machine
 reg correct_chksum_addr;   // will be asserted by the state machine
+wire address_range_bit;
+assign address_range_bit = ddr3_wr_fifo_dat[24];
+wire [3:0] data_type_tag;
+assign data_type_tag[3:0] = ddr3_wr_fifo_dat[131:128];
+wire checksum_memory_range_dbg;
+sync_2stage checksum_memory_range_sync (
+  .clk(clk),
+  .in(checksum_memory_range),
+  .out(checksum_memory_range_dbg)
+);
+
 always @ (posedge clk) begin
     if (reset )
         // start up with it a '1'. This way, if we have a fill with no waveforms we will put
@@ -129,8 +132,9 @@ always @ (posedge clk) begin
         address_gen[22:0] <= {checksum_memory_range,address_gen[21:0]};
     else if ( !acq_enabled )
         // start up with it a '1'. This way, if we have a fill with no waveforms we will put
-        // the checksum in the correct place.
-        address_gen[22:0] <= {ddr3_buffer,22'd1};
+        // the checksum in the correct place.  The correct_chksum_addr will get it into
+        // the correct buffer afterwards
+        address_gen[22:0] <= {23'd1};
 
 end
 assign ddr3_wr_addr[25:0] = {address_gen[22:0], 3'b0};
@@ -200,8 +204,8 @@ assign address_allow = ~(address_control == 0);
 assign writing_last_fill = ~enable_acquisition_ddr3 & ddr3_wr_fill_in_progress;
 
 // Declare current state and next state variables
-reg [12:0] /* synopsys enum STATE_TYPE */ CS;
-reg [12:0] /* synopsys enum STATE_TYPE */ NS;
+reg [13:0] /* synopsys enum STATE_TYPE */ CS;
+reg [13:0] /* synopsys enum STATE_TYPE */ NS;
 assign ddr3_wr_ctrl_state = CS;
 
 //ddr3_wr_cntrl_ila ddr3_wr_cntrl_ila_inst (
@@ -254,7 +258,7 @@ reg next_header_written;            // assert as soon as the header has finished
 
 always @ (posedge clk) begin
     if (reset ) begin
-        CS <= 13'b0;             // set all state bits to 0
+        CS <= 14'b0;             // set all state bits to 0
         CS[IDLE] <= 1'b1;       // set IDLE state bit to 1
     end
     else
@@ -263,7 +267,7 @@ end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
 always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero or acq_done_sync2)     begin
-    NS = 13'b0;                  // default all bits to zero; will overrride one bit
+    NS = 14'b0;                  // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
 
@@ -376,19 +380,25 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
         // Stay in WRITE_HDR state for one period.
         // Write the original header to the fill_header_fifo
         CS[WRITE_HDR]: begin
-               NS[DONE] = 1'b1;
-        end        
+               NS[DONE1] = 1'b1;
+        end
         
-        // Stay in DONE state until acquisition is finished
+        // Stay in DONE1 for one period
+        // read the current ddr3 buffer out of the FIFO
+        CS[DONE1]: begin
+            NS[DONE2] = 1'b1;
+        end
+        
+        // Stay in DONE2 state until acquisition is finished
         // Write the original header to the fill_header_fifo
-        CS[DONE]: begin
+        CS[DONE2]: begin
             if (acq_done_sync2)
                if ( acq_enabled )
                  NS[WAIT] = 1'b1;
                else
                  NS[IDLE] = 1'b1;
             else
-                NS[DONE] = 1'b1;
+                NS[DONE2] = 1'b1;
         end
 
 
@@ -410,6 +420,7 @@ always @ (posedge clk) begin
         ddr3_wr_sync_err        <= 1'b0;
         fill_header_wr_en       <= 1'b0;
         correct_chksum_addr     <= 1'b0;
+        write_buffer_rd_en      <= 1'b0;
         ddr3_wr_fill_in_progress      <= next_ddr3_wr_fill_in_progress;
         next_ddr3_wr_fill_in_progress <= ddr3_wr_fill_in_progress;
         header_written                <= next_header_written;
@@ -494,7 +505,11 @@ always @ (posedge clk) begin
         header_written <= 1'b1;
     end
 
-    if (NS[DONE]) begin
+    if (NS[DONE1]) begin
+        write_buffer_rd_en      <= 1'b1;
+    end
+    
+    if (NS[DONE2]) begin
         // this fill has been processed when the header has been written and writing confirmation acknowledged
         ddr3_wr_done        <= 1'b1;
     end

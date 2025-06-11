@@ -78,18 +78,44 @@ assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1:2] : 'acq_enable'
 wire enable_triggering;                 // indicates enabled for self triggering
 wire enable_acquisition;                // indicates that data acquisition has not yet completed
-enableControl enableControl(
+enableControl2 enableControl2(
   .clk125(clk125),
   .reset(reset_clk125),
   .master_signal(io[1]),
   .enable_acquisition(enable_acquisition),
   .enable_triggering(enable_triggering)
 );
-
 //assign enable_triggering  = io[1];
 
-wire ddr3_buffer;                       // indicates writing top vs bottom half of DDR3 should switch
-assign ddr3_buffer        = io[2];
+wire enable_acquisition_ddr3;
+sync_2stage enable_acquisition_dsync (
+  .clk(ddr3_domain_clk),
+  .in(enable_acquisition),
+  .out(enable_acquisition_ddr3)
+);
+wire enable_acquisition_adc;
+sync_2stage enable_acquisition_async (
+  .clk(adc_clk),
+  .in(enable_acquisition),
+  .out(enable_acquisition_adc)
+);
+
+wire enable_triggering_ddr3;
+sync_2stage enable_triggering_dsync (
+  .clk(ddr3_domain_clk),
+  .in(enable_triggering),
+  .out(enable_triggering_ddr3)
+);
+wire enable_triggering_adc;
+sync_2stage enable_triggering_async (
+  .clk(adc_clk),
+  .in(enable_triggering),
+  .out(enable_triggering_adc)
+);
+
+
+wire ddr3_buffer_master;                       // indicates writing top vs bottom half of DDR3 should switch
+assign ddr3_buffer_master   = io[2];
 //   io[3]   : 'rst_from_master'
 wire rst_from_master;
 assign rst_from_master = io[3];
@@ -210,7 +236,8 @@ startup_reset startup_reset(
     .reset_clk125(reset_clk125),  // active-high reset output, goes low after startup
     .adc_acq_full_reset(adc_acq_full_reset) // active-high reset output, goes low after startup
 );
-
+// lkg -- let's actually make adc_acq_full_reset an or of the startup reset and the reset from the master
+//        that is yet to be tried
 
 wire rst_from_master_sync;
 sync_2stage rst_from_master_sync_inst (
@@ -286,7 +313,7 @@ assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
 
 wire [25:0] packed_adc_dat;
-wire [ 8:0] enable_sm_state;
+wire [ 9:0] enable_sm_state;
 
 // -- note, we are co-opting the muon_num_waveforms register to pass the self triggering threshold
 //    see note below for command_top instantiation
@@ -308,7 +335,9 @@ sync_2stage #(
   .out(channel_tag_adclk)
 );
 
-wire [1:0] ext_done_buffer;
+wire [1:0] ddr3_range;
+wire write_buffer_empty;
+
 adc_acq_top_selftrig adc_acq_top_selftrig (
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
@@ -323,9 +352,11 @@ adc_acq_top_selftrig adc_acq_top_selftrig (
     .channel_tag(channel_tag_adclk[11:0]),               // stuff about the channel to put in the header
     .initial_fill_num(initial_fill_num[23:0]),           // event number to assign to the first fill
     .initial_fill_num_wr(initial_fill_num_wr),           // write-strobe to store the initial_fill_num
-    .enable_triggering(enable_triggering),               // master FPGA has enabled triggering
-    .enable_acquisition(enable_acquisition),             // master FPGA has enabled triggering
-    .ddr3_buffer(ddr3_buffer),                           // ddr3 buffer for writing
+    .enable_triggering(enable_triggering_adc),           // master FPGA has enabled triggering
+    .enable_acquisition(enable_acquisition_adc),         // master FPGA has enabled triggering
+    .ddr3_buffer_master(ddr3_buffer_master),             // ddr3 buffer for writing, direct from master signal line
+    .ddr3_range(ddr3_range[1:0]),                        // cached ddr3 buffer from fifo, used for writing (some happens after w flips)
+    .write_buffer_empty(write_buffer_empty_adc),         // when deasserted, the buffer to be writing to is available
     .adc_buf_delay_data_reset(adc_buf_delay_data_reset), // use the new delay settings
     .adc_buf_data_delay(adc_buf_data_delay[4:0]),        // 5 delay-tap-bits per line, all lines always all the same
     .ddr3_wr_done(ddr3_wr_done),                         // asserted when the 'ddr3_wr_control' is in the DONE state
@@ -345,13 +376,13 @@ adc_acq_top_selftrig adc_acq_top_selftrig (
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),            // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),               // current data should be stored in the FIFO
     .ext_done(acq_done),                                 // assert external acquisition is done
+    .ext_done_latch(ext_done_latch),
+    .adc_acq_sm_idle(adc_acq_sm_idle),                   // ADC acquisition state machine is idle (used for front panel LED status)
     .circ_to_ddr3_state(circ_to_ddr3_state),             // circ_buf_to_ddr3 current state
     .enable_sm_state(enable_sm_state),                   // enable_sm current state
-    .adc_acq_sm_idle(adc_acq_sm_idle),                   // ADC acquisition state machine is idle (used for front panel LED status)
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0]),
-    .ext_done_buffer(ext_done_buffer),
-    .checksum_memory_range(checksum_memory_range)       // latch the memory buffer for writing the checksum
+    .write_buffer_wr_en(write_buffer_wr_en)              // latch the memory buffer for writing the checksum
 
 );
 
@@ -402,9 +433,10 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),   // input, 132-bit 4-bit tag plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
     .ddr3_wr_sync_err(),                          // synchronization error flag
     .ddr3_wr_done(ddr3_wr_done),                  // asserted when the 'ddr3_wr_control' is in the DONE state
-    .checksum_memory_range(checksum_memory_range),// latch the memory buffer for writing the checksum
-    .ddr3_buffer(ddr3_buffer),                    // buffer for initializing acquisition for next fill
+    .checksum_memory_range(current_ddr3_buffer_ddr3),  // latch the memory buffer for writing the checksum
     .acq_done(acq_done),                          // input, acquisition is done
+    .write_buffer_rd_en(write_buffer_rd_en),      // done all writing for fill, read out the write buffer bit from the fifo
+    .write_buffer_empty(write_buffer_empty),
 
     // reading connections
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
@@ -444,8 +476,44 @@ ddr3_intf_selftrig ddr3_intf_selftrig(
     .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
 
     .xadc_temp(xadc_temp[11:0]),
-    .enable_triggering(enable_triggering),
-    .enable_acquisition(enable_acquisition)
+    .enable_triggering(enable_triggering_ddr3),
+    .enable_acquisition(enable_acquisition_ddr3)
+);
+
+wire idle_clear_write_buffer;
+assign idle_clear_write_buffer = ~enable_acquisition_ddr3 & ~write_buffer_empty;
+wire write_buffer_rd_en_any;
+assign write_buffer_rd_en_any = write_buffer_rd_en | idle_clear_write_buffer;
+
+////////////////////////////////////////////////////////////////////////////
+// Create a FIFO to buffer which DDR3 buffer data gets written to
+wire write_buffer_wr_en;
+wire write_buffer_rd_en;
+
+write_buffer_fifo write_buffer_fifo (
+  .rst(adc_acq_full_reset),        // input wire rst
+  .rd_clk(ddr3_domain_clk),        // input wire rd_clk
+  .wr_clk(adc_clk),                // input wire wr_clk
+  .din(ddr3_buffer_master),        // input wire [0 : 0] din
+  .wr_en(write_buffer_wr_en),      // input wire wr_en
+  .rd_en(write_buffer_rd_en),      // input wire rd_en
+  .dout(current_ddr3_buffer),      // output wire [0 : 0] dout
+  .full(),                         // output wire full
+  .empty(write_buffer_empty)       // output wire empty
+);
+wire current_ddr3_buffer_ddr3;
+sync_2stage debug_buffer_sync (
+  .clk(ddr3_domain_clk),
+  .in(current_ddr3_buffer),
+  .out(current_ddr3_buffer_ddr3)
+);
+assign ddr3_range[1:0] = {current_ddr3_buffer,current_ddr3_buffer};
+
+wire write_buffer_empty_adc;
+sync_2stage write_buffer_sync (
+  .clk(adc_clk),
+  .in(write_buffer_empty),
+  .out(write_buffer_empty_adc)
 );
 
 ////////////////////////////////////////////////////////////////////////////
@@ -567,37 +635,43 @@ all_channels channels(
 assign rx_tdata_swap[31:0] = c0_rx_axi_tdata[0:31];
 
 // synchronize the DDR3 writing status registers
-wire [1:0] ext_done_buffer_sync;
-sync_2stage #(
-  .WIDTH(2)
-) pretrig_sync (
+wire ext_done_sync;
+sync_2stage pretrig_sync (
    .clk(clk125),
-   .in(ext_done_buffer),
-   .out(ext_done_buffer_sync)
+   .in(ext_done_latch),
+   .out(ext_done_sync)
 );
-// ext_done_buffer_sync goes high (for the relevant buffer) when we have written to the FIF
+// ext_done_sync goes high  when we have written to the fill header FIFO
 // It can take up to 7 clk125 cycles before the information appears on the FIFO read side, ie, for
 // buffer empty to deassert.  We are interested in flagging that the FIFO should be ready to read,
 // so want to delay want to make sure that ext_done_buffer_sync gets delayed 5 more clock ticks
-reg [1:0] delay0, delay1, delay2, delay3, delay4;
-reg [1:0] ext_done_buffer_delay;
+reg delay0, delay1, delay2, delay3, delay4;
+reg ext_done_delay;
 always @(posedge clk125) begin
-  delay0                <= ext_done_buffer_sync;
+  delay0                <= ext_done_sync;
   delay1                <= delay0;
   delay2                <= delay1;
   delay3                <= delay2;
   delay4                <= delay3;
-  ext_done_buffer_delay <= delay3;
+  ext_done_delay <= delay3;
 end
 
 wire ddr3_buffer_sync;
 sync_2stage ddr3_buffer_sync_inst (
    .clk(clk125),
-   .in(ddr3_buffer),
-   .out(ddr3_buffer_sync)
+   .in(current_ddr3_buffer),
+   .out(current_ddr3_buffer_sync)
 );
 
-      ///////////////////////////////////////////////////////////////////////////////////
+// for debugging end of run
+wire ext_done_adc;
+sync_2stage debug_sync (
+  .clk(adc_clk),
+  .in(ext_done_delay),
+  .out(ext_done_adc)
+);
+
+///////////////////////////////////////////////////////////////////////////////////
 // Connect the command processor. This will receive commands from the Aurora serial
 // link and process them
 wire [3:0] image_type;
@@ -634,7 +708,7 @@ command_top command_top (
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),      // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
     .enable_reading(enable_reading),                    // output, initialize the address generator and both counters, go
-    .acq_done_latch(ext_done_buffer_delay[~ddr3_buffer_sync]), // input, last self-trigger safely processed (default to 1 in other modes)
+    .acq_done_latch(ext_done_delay),                    // input, last self-trigger safely processed (default to 1 in other modes)
     .reading_done(reading_done),                        // output, reading is complete
 
     // registers to/from the ADC acquisition state machine

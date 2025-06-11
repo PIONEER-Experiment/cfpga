@@ -18,7 +18,8 @@ module self_trigger (
     input [41:0] timing_counter,   // counter of 400 MHz clock ticks
     input signed [11:0] threshold, // threshold for average - pedestal to trigger a trigger pulse.
     input polarity,                // 1 => positive going signal, 0 => negative going
-    input enable,                  // start looking for triggers
+    input enable,                  // start looking for triggers. Global in time.
+    input cbuf_trig_en,            // accept self triggers.  Local in time. Controlled by enable_sm_selftrig
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
@@ -92,7 +93,7 @@ always @(posedge clk ) begin
      ped_buffer1 <= ped_buffer0;
      ped_buffer3 <= ped_buffer1;
      ped_buffer2 <= ped_buffer3;
-     local_trigger_reg <= local_trigger_wire;
+     local_trigger_reg <= local_trigger_wire & cbuf_trig_en;
      local_trigger     <= local_trigger_reg;
      local_trigger_reg2    <= local_trigger_reg;
      local_trigger_reg3    <= local_trigger_reg2;

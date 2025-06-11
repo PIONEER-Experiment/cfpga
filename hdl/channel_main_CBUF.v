@@ -264,7 +264,7 @@ assign adc_in_p = {adc_d11p, adc_d10p, adc_d9p, adc_d8p, adc_d7p, adc_d6p, adc_d
 assign adc_in_n = {adc_d11n, adc_d10n, adc_d9n, adc_d8n, adc_d7n, adc_d6n, adc_d5n, adc_d4n, adc_d3n, adc_d2n, adc_d1n, adc_d0n};
 
 wire [25:0] packed_adc_dat;
-wire [ 8:0] enable_sm_state;
+wire [ 9:0] enable_sm_state;
 
 adc_acq_top_cbuf adc_acq_top_cbuf (
     // inputs
@@ -610,7 +610,7 @@ command_top command_top (
     // other state machine states
     .adc_acq_state(19'd0),
     .circ_to_ddr3_state(circ_to_ddr3_state),
-    .enable_sm_state(enable_sm_state),
+    .enable_sm_state(enable_sm_state[8:0]),
     .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
     .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state),
 

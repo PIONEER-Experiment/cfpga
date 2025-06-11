@@ -63,7 +63,7 @@ module register_block64(
     input [18:0] adc_acq_state,
     input [18:0] circ_to_ddr3_state,
     input [ 9:0] cc_rd_fill_state,
-    input [ 8:0] enable_sm_state,
+    input [ 9:0] enable_sm_state,
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [12:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -287,7 +287,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h22)) rdbk_reg[31:0] <= {22'd0,cc_rd_fill_state[9:0]};
         if (rd_en && (reg_num[5:0] == 6'h23)) rdbk_reg[31:0] <= {29'd0,ddr3_rd_ctrl_state[2:0]};
         if (rd_en && (reg_num[5:0] == 6'h24)) rdbk_reg[31:0] <= {19'd0,ddr3_wr_ctrl_state[12:0]};
-        if (rd_en && (reg_num[5:0] == 6'h25)) rdbk_reg[31:0] <= {23'd0,enable_sm_state[8:0]};
+        if (rd_en && (reg_num[5:0] == 6'h25)) rdbk_reg[31:0] <= {22'd0,enable_sm_state[9:0]};
         if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= reg38_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // reg39_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= 32'd0;

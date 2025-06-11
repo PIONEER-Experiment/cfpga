@@ -87,7 +87,7 @@ module command_top (
     //other state machine states
     input [18:0] adc_acq_state,
     input [18:0] circ_to_ddr3_state,
-    input [ 8:0] enable_sm_state,
+    input [ 9:0] enable_sm_state,
 
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [12:0] ddr3_wr_ctrl_state            // write control current state
