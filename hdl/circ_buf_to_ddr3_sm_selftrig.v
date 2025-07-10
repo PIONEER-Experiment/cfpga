@@ -15,8 +15,8 @@ module circ_buf_to_ddr3_sm_selftrig (
   output reg inc_circ_buf_rd_addr,  // increment the circular buffer address
   output reg latch_circ_buf_dat,    // save the current 32-bit data word from the circular buffer
   output reg select_fill_hdr,       // selects fill header from the MUX
-  output reg select_dat,            // selects data from the MUX
-  output reg select_max,            // select max from MUX
+  (* mark_debug = "true" *) output reg select_dat,            // selects data from the MUX
+  (* mark_debug = "true" *)   output reg select_max,            // select max from MUX
   output reg select_waveform_hdr,   // selects waveform header
   output reg select_checksum,       // selects checksum, send the checksum to the FIFO
   output reg checksum_update,       // update the checksum
@@ -32,7 +32,7 @@ module circ_buf_to_ddr3_sm_selftrig (
   output reg waveform_cntr_en,      // will be enabled once after each waveform
   output reg ddr3_selftrig_wr_active, // we are in a state where we are actively writing to the ddr3
   output reg fill_cntr_en,          // will be enabled once per fill
-  output [18:0] circ_to_ddr3_state  // current state
+  (* mark_debug = "true" *) output [18:0] circ_to_ddr3_state  // current state
 );
 
 

@@ -132,7 +132,7 @@ always @(posedge adc_clk) begin
     if (save_start_adr) begin
         waveform_start_adr[21: 0] <= #1 burst_adr[21:0];
         waveform_start_adr[22:22] <= #1 ddr3_range[0];
-        max_value_short <= 12'b0; //reset max value of waveform to 0 when waveform is initialized
+        max_val_short <= 12'b0; //reset max value of waveform to 0 when waveform is initialized
     end
 end
 // add '1' to the final address to get the total count
