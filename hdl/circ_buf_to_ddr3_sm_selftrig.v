@@ -16,6 +16,7 @@ module circ_buf_to_ddr3_sm_selftrig (
   output reg latch_circ_buf_dat,    // save the current 32-bit data word from the circular buffer
   output reg select_fill_hdr,       // selects fill header from the MUX
   output reg select_dat,            // selects data from the MUX
+  output reg select_max,            // select max from MUX
   output reg select_waveform_hdr,   // selects waveform header
   output reg select_checksum,       // selects checksum, send the checksum to the FIFO
   output reg checksum_update,       // update the checksum
@@ -68,6 +69,7 @@ parameter [4:0]
     LOOP4           = 5'd9,   // 00200
     WAVEFORM_DONE1  = 5'd10,  // 00400
     WAVEFORM_DONE2  = 5'd11,  // 00800
+    WAVEFORM_DONE3  = 5'd19,  // IS THIS RELEVANT????????????????
     NO_TRIGGER      = 5'd12,  // 01000
     FILL_DONE1      = 5'd13,  // 02000
     FILL_DONE2      = 5'd14,  // 04000
@@ -185,8 +187,14 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
         end
 
         // Stay in WAVEFORM_DONE2 state for one period.
-        // Then go wait for another trigger or for the end of the fill
+        
          CS[WAVEFORM_DONE2]: begin
+               NS[WAVEFORM_DONE3] = 1'b1;
+      end
+
+        // Stay in WAVEFORM_DONE3 state for one period.
+        // Then go wait for another trigger or for the end of the fill
+         CS[WAVEFORM_DONE3]: begin
                NS[TRIG_WAIT] = 1'b1;
       end
  
@@ -199,7 +207,9 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
 
     // The fill is over. We need to build the 'fill header' and then use its value
     // to update the checksum. Then we write the checksum, and finally write the fill header.
+      
          // Stay in FILL_DONE1 state for one period.
+
         CS[FILL_DONE1]: begin
                 NS[FILL_DONE2] = 1'b1;
         end
@@ -209,13 +219,10 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
                 NS[FILL_DONE3] = 1'b1;
         end
 
+         
+
          // Stay in FILL_DONE3 state for one period.
         CS[FILL_DONE3]: begin
-                NS[FILL_DONE4] = 1'b1;
-        end
-
-         // Stay in FILL_DONE4 state for one period.
-        CS[FILL_DONE4]: begin
                 NS[DDR3_WRITE_WAIT] = 1'b1;
         end
 
@@ -258,6 +265,7 @@ always @ (posedge adc_clk) begin
     select_fill_hdr          <= #1 1'b0;  // selects fill header from the MUX
     select_waveform_hdr      <= #1 1'b0;  // selects waveform header
     select_dat               <= #1 1'b0;  // selects data from the MUX
+    select_max               <= #1 1'b0;  // selects data from the MUX
     select_checksum          <= #1 1'b0;  // selects checksum, send the checksum to the FIFO
     immed_adc_acq_out_valid  <= #1 1'b0;  // current output from the MUX should be stored in the FIFO
     start_dlyd_adc_acq_out_valid <= #1 1'b0; // prepare for current output from the MUX should be stored in the FIFO
@@ -387,10 +395,22 @@ always @ (posedge adc_clk) begin
       select_dat            <= #1 1'b1;
    end
 
+   if (NS[WAVEFORM_DONE3]) begin
+      // signal the mux to output the max
+      select_max        <= #1 1'b1;
+      // write the checksum to the FIFO
+      immed_adc_acq_out_valid    <= #1 1'b1;
+      // increment the next burst address
+      burst_adr_cntr_en     <= #1 1'b1;
+      
+    end
+
     if (NS[NO_TRIGGER]) begin
       // latch the last DDR3 address,  for a fill it may be the total count
       save_last_adr          <= #1 1'b1;
     end
+
+   
 
     if (NS[FILL_DONE1]) begin
       // signal the mux to use the fill header in the checksum calculation

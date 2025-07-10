@@ -4,7 +4,7 @@
 // Create a mux that will supply one of the following to the DDR3 write FIFO:
 //  1) fill header
 //  2) waveform header
-//  3) ADC data
+//  3) ADC data (last oone is the maximum)
 //  4) checksum 
 // All bit ordering for the headers and the ADC data is done in this mux
 
@@ -14,6 +14,7 @@ module adc_dat_mux_selftrig (
     input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
+    input [11:0] wf_max_,              // maximum of ADC samples in 1 waveform
     input [11:0] channel_tag,          // stuff about the channel to put in the header
     input [1:0]  ddr3_range,           // level of the ddr3 range bit.  Two copies because of history of other modes
     input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
@@ -27,6 +28,7 @@ module adc_dat_mux_selftrig (
     input select_fill_hdr,             // selects fill header
     input select_waveform_hdr,         // selects waveform header
     input select_dat,                  // selects data
+    input select_max,                  // selects maximum of waveform
     input select_checksum,             // selects checksum
     input checksum_init,               // initialize the checksum
     input checksum_update,             // update the checksum
@@ -99,6 +101,13 @@ assign data[127:124] = {dat3_[25], dat3_[25], dat3_[25], dat3_[25]}; // 7 sample
 // tag = '3' for data
 assign data[131:128] = 4'd3;
 
+//////////////////////////////////////////
+// assemble waveform maximum
+wire [131:0] wf_max;
+assign wf_max[ 11:  0] = wf_max_[11:0];           // maximum of waveform ADC samples
+assign wf_max[127:12] = 116'b0;
+assign wf_max[131:128] = 4'd3; // tag 3 for data (we just append this as the last WF data)    
+
 /////////////////////////////
 // create a checksum register
 reg [127:0] checksum;
@@ -138,6 +147,10 @@ always @(posedge clk) begin
   if (select_dat) begin
     // connect the data to the output
     adc_acq_out_dat[131:0] <= #1 data[131:0];
+  end
+  if (select_max) begin
+    // connect the wf maximum to the output
+    adc_acq_out_dat[131:0] <= #1 wf_max[131:0];
   end
   if (select_checksum) begin
     // connect the checksum to the output
