@@ -46,6 +46,8 @@ sync_2stage initial_fill_num_wr_sync_inst (
 // Subtract the pre-trigger count from the trigger address coming out of the FIFO. The FIFO is in
 // FWFT mode, but beware of latency from when 'trig_addr_rd_en' is asserted until the subtracted value is valid.
 reg [15:0] circ_buf_start_addr;
+(* mark_debug = "true" *) reg signed [11:0] max_val_short;
+
 always @(posedge adc_clk) begin
     circ_buf_start_addr[15:0] <= #1 circ_buf_trig_addr[15:0] - async_pre_trig[15:0];
 end          
@@ -53,12 +55,24 @@ end
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // connect a counter to generate the circular buffer 'read' address
 always @(posedge adc_clk) begin
-    if (init_circ_buf_rd_addr)
+    if (init_circ_buf_rd_addr) begin
         // initialize the counter with the start of the buffer area to be saved
         circ_buf_rd_addr[15:0] <= #1 circ_buf_start_addr[15:0];
-    else if (inc_circ_buf_rd_addr)
+        max_val_short <= 12'b0;
+    end
+
+    else if (inc_circ_buf_rd_addr || latch_circ_buf_dat) begin
         // increment the address
-        circ_buf_rd_addr[15:0] <= #1 circ_buf_rd_addr[15:0] + 1;
+        if (inc_circ_buf_rd_addr && latch_circ_buf_dat) begin
+            circ_buf_rd_addr[15:0] <= #1 circ_buf_rd_addr[15:0] + 1;
+            max_val_short <= (max_sample > max_val_short) ? max_sample : max_val_short;
+        end
+        else if (latch_circ_buf_dat)
+            max_val_short <= (max_sample > max_val_short) ? max_sample : max_val_short;
+        else if (inc_circ_buf_rd_addr)
+            circ_buf_rd_addr[15:0] <= #1 circ_buf_rd_addr[15:0] + 1;
+
+    end
     else
         // leave the address unchanged
         circ_buf_rd_addr[15:0] <= #1 circ_buf_rd_addr[15:0];
@@ -67,8 +81,10 @@ end
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // connect 4 registers that will hold 4 consecutive values from the circular buffer. They will be filled
 // like a wide shift register.
-reg [25:0] circ_buf_dat_reg3_, circ_buf_dat_reg2_, circ_buf_dat_reg1_, circ_buf_dat_reg0_;
-reg [11:0] max_val_short;
+(* mark_debug = "true" *) reg [25:0] circ_buf_dat_reg3_, circ_buf_dat_reg2_, circ_buf_dat_reg1_, circ_buf_dat_reg0_;
+wire signed [11:0] sample_a = circ_buf_rd_dat[12:1];
+wire signed [11:0] sample_b = circ_buf_rd_dat[25:14];
+(* mark_debug = "true" *) wire signed [11:0] max_sample = (sample_a > sample_b) ? sample_a : sample_b;
 always @(posedge adc_clk) begin
     
     if (latch_circ_buf_dat) begin
@@ -76,8 +92,10 @@ always @(posedge adc_clk) begin
         circ_buf_dat_reg2_[25:0] <= #1 circ_buf_dat_reg3_[25:0];
         circ_buf_dat_reg1_[25:0] <= #1 circ_buf_dat_reg2_[25:0];
         circ_buf_dat_reg0_[25:0] <= #1 circ_buf_dat_reg1_[25:0];
-        max_val_short <= #1 ((circ_buf_rd_dat[12:1] > circ_buf_rd_dat[25:14] ? circ_buf_rd_dat[12:1] : circ_buf_rd_dat[25:14]) > max_val_short) ?
-        (circ_buf_rd_dat[12:1] > circ_buf_rd_dat[25:14] ? circ_buf_rd_dat[12:1] : circ_buf_rd_dat[25:14]) :  max_val_short; //compute max value of new samples and update current max value of waveform if needed
+       
+
+            
+        
     end
 end
 
@@ -132,7 +150,7 @@ always @(posedge adc_clk) begin
     if (save_start_adr) begin
         waveform_start_adr[21: 0] <= #1 burst_adr[21:0];
         waveform_start_adr[22:22] <= #1 ddr3_range[0];
-        max_val_short <= 12'b0; //reset max value of waveform to 0 when waveform is initialized
+        
     end
 end
 // add '1' to the final address to get the total count
