@@ -11,14 +11,14 @@ module circ_buf_to_ddr3_sm_selftrig (
   // outputs
   output reg cbuf_rd_trig_wait,     // waiting for another trigger or the negation of 'cbuf_rd_en'
   output reg burst_adr_cntr_init,   // initialize counter to '1'
-  output reg init_circ_buf_rd_addr, // initialize the counter with the start of the buffer area to be saved
+  (* mark_debug = "true" *) output reg init_circ_buf_rd_addr, // initialize the counter with the start of the buffer area to be saved
   output reg inc_circ_buf_rd_addr,  // increment the circular buffer address
-  output reg latch_circ_buf_dat,    // save the current 32-bit data word from the circular buffer
+  (* mark_debug = "true" *) output reg latch_circ_buf_dat,    // save the current 32-bit data word from the circular buffer
   output reg select_fill_hdr,       // selects fill header from the MUX
   (* mark_debug = "true" *) output reg select_dat,            // selects data from the MUX
   (* mark_debug = "true" *)   output reg select_max,            // select max from MUX
-  output reg select_waveform_hdr,   // selects waveform header
-  output reg select_checksum,       // selects checksum, send the checksum to the FIFO
+  (* mark_debug = "true" *) output reg select_waveform_hdr,   // selects waveform header
+  (* mark_debug = "true" *) output reg select_checksum,       // selects checksum, send the checksum to the FIFO
   output reg checksum_update,       // update the checksum
   output reg checksum_init,         // initialize the checksum
   output reg adc_acq_out_valid,     // current output from the MUX should be stored in the FIFO
@@ -39,7 +39,7 @@ module circ_buf_to_ddr3_sm_selftrig (
 // Leave the comments containing "synopsys" in your HDL code.
 
 // delay the 'adc_acq_out_valid' signal to allow for the memory reading delay
-reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
+(* mark_debug = "true" *) reg immed_adc_acq_out_valid, dlyd_adc_acq_out_valid, start_dlyd_adc_acq_out_valid;
 reg delay2, delay1, delay0;
 always @ (posedge adc_clk) begin
   adc_acq_out_valid <= #1 immed_adc_acq_out_valid | dlyd_adc_acq_out_valid;
@@ -69,7 +69,7 @@ parameter [4:0]
     LOOP4           = 5'd9,   // 00200
     WAVEFORM_DONE1  = 5'd10,  // 00400
     WAVEFORM_DONE2  = 5'd11,  // 00800
-    WAVEFORM_DONE3  = 5'd19,  // IS THIS RELEVANT????????????????
+    WAVEFORM_DONE3  = 5'd19,  // 80000
     NO_TRIGGER      = 5'd12,  // 01000
     FILL_DONE1      = 5'd13,  // 02000
     FILL_DONE2      = 5'd14,  // 04000
@@ -79,8 +79,8 @@ parameter [4:0]
     DONE            = 5'd18;  // 40000
     
 // Declare current state and next state variables
-reg [18:0] /* synopsys enum STATE_TYPE */ CS;
-reg [18:0] /* synopsys enum STATE_TYPE */ NS;
+(* mark_debug = "true" *) reg [18:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [18:0] /* synopsys enum STATE_TYPE */ NS;
 assign circ_to_ddr3_state = CS;
 //synopsys state_vector CS
  
@@ -189,7 +189,7 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
         // Stay in WAVEFORM_DONE2 state for one period.
         
          CS[WAVEFORM_DONE2]: begin
-               NS[WAVEFORM_DONE3] = 1'b1;
+              NS[WAVEFORM_DONE3] = 1'b1;
       end
 
         // Stay in WAVEFORM_DONE3 state for one period.
@@ -306,6 +306,7 @@ always @ (posedge adc_clk) begin
       cbuf_rd_trig_wait    <= #1 1'b1;  // waiting for another trigger or the negation of 'cbuf_rd_en'
       // indicate that writing is not active, so that it is safe to read, until we find something in the trig_fifo
       ddr3_selftrig_wr_active <= #1 !trig_fifo_empty;
+      select_max <= #1 1'b1 ;
     end
 
     if (NS[WAVEFORM_INIT1]) begin
@@ -397,11 +398,10 @@ always @ (posedge adc_clk) begin
 
    if (NS[WAVEFORM_DONE3]) begin
       // signal the mux to output the max
-      select_max        <= #1 1'b1;
+      //select_max        <= #1 1'b1;
       // write the checksum to the FIFO
-      immed_adc_acq_out_valid    <= #1 1'b1;
-      // increment the next burst address
-      burst_adr_cntr_en     <= #1 1'b1;
+      //immed_adc_acq_out_valid    <= #1 1'b1;
+      
       
     end
 
@@ -434,6 +434,7 @@ always @ (posedge adc_clk) begin
     end
 
     if (NS[FILL_DONE4]) begin
+      
     end
 
     if (NS[DDR3_WRITE_WAIT]) begin

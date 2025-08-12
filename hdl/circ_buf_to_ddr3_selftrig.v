@@ -123,6 +123,7 @@ adc_dat_mux_selftrig adc_dat_mux_selftrig (
     .select_fill_hdr(adc_mux_fill_hdr_sel),        // selects fill header
     .select_waveform_hdr(adc_mux_wfm_hdr_sel),     // selects waveform header
     .select_checksum(adc_mux_checksum_select),     // selects checksum, send the checksum to the FIFO
+    .select_max(adc_mux_max_select),
     .checksum_init(checksum_init),                 // initialize the checksum
     .checksum_update(adc_mux_checksum_update),     // update the checksum
     .trigger_time(trigger_time[41:0]),             // triggers reset of the 800 MHz counter used to time stamp events
@@ -222,6 +223,7 @@ circ_buf_to_ddr3_sm_selftrig circ_buf_to_ddr3_sm_selftrig (
     .inc_circ_buf_rd_addr(inc_circ_buf_rd_addr),   // increment the address
     .latch_circ_buf_dat(latch_circ_buf_dat),       // save the current 32-bit data word from the circular buffer
     .select_dat(adc_mux_dat_sel),                  // selects data
+    .select_max(adc_mux_max_select),
     .select_fill_hdr(adc_mux_fill_hdr_sel),        // selects fill header
     .select_waveform_hdr(adc_mux_wfm_hdr_sel),     // selects waveform header
     .select_checksum(adc_mux_checksum_select),     // selects checksum, send the checksum to the FIFO
