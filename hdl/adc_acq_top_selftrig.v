@@ -76,7 +76,7 @@ end
 // or whether it gets reset for each waveform.
 reg dummy_dat_reset_mode;
 always @(posedge adc_clk) begin
-    // channel_tag[4] = 0 -> free-run, 1 -> reset every waveform
+	    // channel_tag[4] = 0 -> free-run, 1 -> reset every waveform
     if (channel_tag[4]) 
         dummy_dat_reset_mode <= #1 1'b1;
     else

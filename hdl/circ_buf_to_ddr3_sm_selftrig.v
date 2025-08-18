@@ -70,6 +70,8 @@ parameter [4:0]
     WAVEFORM_DONE1  = 5'd10,  // 00400
     WAVEFORM_DONE2  = 5'd11,  // 00800
     WAVEFORM_DONE3  = 5'd19,  // 80000
+    WAVEFORM_DONE4  = 5'd20,  // 100000
+
     NO_TRIGGER      = 5'd12,  // 01000
     FILL_DONE1      = 5'd13,  // 02000
     FILL_DONE2      = 5'd14,  // 04000
@@ -79,15 +81,15 @@ parameter [4:0]
     DONE            = 5'd18;  // 40000
     
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [18:0] /* synopsys enum STATE_TYPE */ CS;
-(* mark_debug = "true" *) reg [18:0] /* synopsys enum STATE_TYPE */ NS;
+(* mark_debug = "true" *) reg [20:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [20:0] /* synopsys enum STATE_TYPE */ NS;
 assign circ_to_ddr3_state = CS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge adc_clk) begin
     if (reset_clk_adc) begin
-        CS <= #1 {18{1'b0}}; // set all state bits to 0
+        CS <= #1 {21{1'b0}}; // set all state bits to 0
         CS[IDLE] <= #1 1'b1; // set IDLE state bit to 1
     end
     else
@@ -96,7 +98,7 @@ end
 
 // combinational always block to determine next state (use blocking [=] assignments) 
 always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero ) begin
-    NS = {18{1'b0}}; // default all bits to zero; will overrride one bit
+    NS = {21{1'b0}}; //   default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
 
@@ -195,6 +197,10 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
         // Stay in WAVEFORM_DONE3 state for one period.
         // Then go wait for another trigger or for the end of the fill
          CS[WAVEFORM_DONE3]: begin
+               NS[WAVEFORM_DONE4] = 1'b1;
+      end
+
+        CS[WAVEFORM_DONE4]: begin
                NS[TRIG_WAIT] = 1'b1;
       end
  
@@ -398,9 +404,14 @@ always @ (posedge adc_clk) begin
 
    if (NS[WAVEFORM_DONE3]) begin
       // signal the mux to output the max
-      //select_max        <= #1 1'b1;
+      select_max        <= #1 1'b1;
+      
+      
+    end
+
+    if (NS[WAVEFORM_DONE4]) begin
       // write the checksum to the FIFO
-      //immed_adc_acq_out_valid    <= #1 1'b1;
+      immed_adc_acq_out_valid    <= #1 1'b1;
       
       
     end

@@ -10,31 +10,31 @@
 
 module adc_dat_mux_selftrig (
     // inputs
-    input [25:0] dat3_,                // a pair of ADC samples and a pair of over-range bits
-    input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
-    input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
-    input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
-    input [11:0] wf_max_,              // maximum of ADC samples in 1 waveform
+    (* mark_debug = "true" *) input [25:0] dat3_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [25:0] dat2_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
+    (* mark_debug = "true" *) input [11:0] wf_max_,              // maximum of ADC samples in 1 waveform
     input [11:0] channel_tag,          // stuff about the channel to put in the header
     input [1:0]  ddr3_range,           // level of the ddr3 range bit.  Two copies because of history of other modes
-    input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
+    (* mark_debug = "true" *) input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
     input [22:0] waveform_start_adr,   // first DDR3 memory location for this waveform
     input [23:0] fill_num,             // fill number for this fill
-    input [22:0] current_waveform_num, // the current waveform number, to be used in header
+    (* mark_debug = "true" *) input [22:0] current_waveform_num, // the current waveform number, to be used in header
     input [3:0] xadc_alarms,
     input clk,
     input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    input select_fill_hdr,             // selects fill header
-    input select_waveform_hdr,         // selects waveform header
-    input select_dat,                  // selects data
-    input select_max,                  // selects maximum of waveform
+    (* mark_debug = "true" *) input select_fill_hdr,             // selects fill header
+    (* mark_debug = "true" *)input select_waveform_hdr,         // selects waveform header
+    (* mark_debug = "true" *)input select_dat,                  // selects data
+    (* mark_debug = "true" *) input select_max,                  // selects maximum of waveform
     input select_checksum,             // selects checksum
     input checksum_init,               // initialize the checksum
     input checksum_update,             // update the checksum
-    input [41:0] trigger_time,         // the time of the most recent data trigger
+    (* mark_debug = "true" *) input [41:0] trigger_time,         // the time of the most recent data trigger
     // outputs
-    output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
+    (* mark_debug = "true" *) output reg [131:0] adc_acq_out_dat // 132-bit: 4-bit tag plus 128-bit header or ADC data
 );
 
 //////////////////////////////////////
@@ -106,7 +106,7 @@ assign data[131:128] = 4'd3;
 wire [131:0] wf_max;
 assign wf_max[ 11:  0] = wf_max_[11:0];           // maximum of waveform ADC samples
 assign wf_max[127:12] = 116'b0;
-assign wf_max[131:128] = 4'd3; // tag 3 for data (we just append this as the last WF data)    
+assign wf_max[131:128] = 4'd5; // tag 3 for data (we just append this as the last WF data)    
 
 /////////////////////////////
 // create a checksum register
