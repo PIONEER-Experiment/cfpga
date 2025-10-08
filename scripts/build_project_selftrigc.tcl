@@ -23,6 +23,7 @@ set obj [get_filesets sources_1]
 add_files -norecurse -fileset $obj [glob $origin_dir/ip/*/*.xci]
 add_files -norecurse -fileset $obj [glob $origin_dir/hdl/*.txt]
 add_files -norecurse -fileset $obj [glob $origin_dir/hdl/*.v]
+add_files -norecurse -fileset $obj [glob $origin_dir/hdl/*.sv]
 # uncomment the following line if using VDHL source files
 # add_files -norecurse -fileset $obj [glob $origin_dir/hdl/*.vhd]
 
@@ -41,6 +42,13 @@ foreach file [glob $origin_dir/hdl/*.txt] {
 	set_property "file_type" "Verilog Header" $file_obj
 }
 
+foreach file [glob $origin_dir/hdl/*.sv] {
+    set file [file normalize $file]
+	  set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+	  set_property "file_type" "SystemVerilog" $file_obj
+}
+                                   
+                                   
 # uncomment the following lines if using VDHL source files
 # foreach file [glob $origin_dir/hdl/*.vhd] {
 #     set file [file normalize $file]

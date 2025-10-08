@@ -11,7 +11,7 @@ module adc_fill_cntr (
     input init,                     // initialize when programmed
     input enable,                   // will be enabled once per fill
     // outputs
-   output reg [23:0] fill_num       // fill number for this fill
+    output reg [23:0] fill_num       // fill number for this fill
 );
 
 // sync 'init' to this clock

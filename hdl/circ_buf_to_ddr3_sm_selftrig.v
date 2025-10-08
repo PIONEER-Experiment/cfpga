@@ -50,7 +50,7 @@ always @ (posedge adc_clk) begin
 end
 
 // create a flag to indicate whether or not a trigger was seen
-reg got_trig;
+(* mark_debug = "true" *) reg got_trig;
 
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
@@ -76,7 +76,7 @@ parameter [4:0]
     DONE            = 5'd18;  // 40000
     
 // Declare current state and next state variables
-reg [18:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [18:0] /* synopsys enum STATE_TYPE */ CS;
 reg [18:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  

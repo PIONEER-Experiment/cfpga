@@ -17,34 +17,41 @@ module adc_dat_mux_selftrigc (
     input [11:0] channel_tag,          // stuff about the channel to put in the header
     input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
     input [22:0] waveform_start_adr,   // first DDR3 memory location for this waveform
-    input [22:0] current_waveform_num, // the current waveform number, to be used in header
+(* mark_debug = "true" *) input [22:0] current_waveform_num, // the current waveform number, to be used in header
     input [22:0] fill_addr,            // first DDR3 memory location for this fill
     input [23:0] fill_num,             // fill number for this fill
     input [3:0] xadc_alarms,
     input clk,
     input [13:0] async_num_bursts,     // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,       // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
-    input select_fill_hdr,             // selects fill header
+    input latch_fill_num,              // latch the fill number to be used in the header
+(* mark_debug = "true" *) input select_fill_hdr,             // selects fill header
     input select_waveform_hdr,         // selects waveform header
     input select_dat,                  // selects data
-    input select_checksum,             // selects checksum
+(* mark_debug = "true" *) input select_checksum,             // selects checksum
     input checksum_init,               // initialize the checksum
     input checksum_update,             // update the checksum
     input [41:0] trigger_time,         // the time of the most recent data trigger
     // outputs
-    output reg [131:0] adc_acq_out_dat  // 132-bit: 4-bit tag plus 128-bit header or ADC data
+(* mark_debug = "true" *) output reg [131:0] adc_acq_out_dat  // 132-bit: 4-bit tag plus 128-bit header or ADC data
 );
 
-//////////////////////////////////////
+reg [23:0] fill_num_latched;
+(* mark_debug = "true" *) wire [3:0] fill_num_short;
+assign fill_num_short[3:0] = fill_num_latched[3:0];
+wire [4:0] wfm_num_short;
+assign wfm_num_short[4:0] = current_waveform_num[4:0];
+
+////////////////////////////////////// 
 // assemble the selftrig mode fill header
 wire [131:0] fill_header;
-assign fill_header[ 23:  0] = fill_num[23:0];             // 24-bit fill number from register R0, incremented each fill
-assign fill_header[ 25: 24] = 2'b00;                      //  2-bit fill type from pins "ACQ_ENABLE[1:0]"
+assign fill_header[ 23:  0] = fill_num_latched[23:0];     // 24-bit fill number from register R0, incremented each fill
+assign fill_header[ 25: 24] = 2'b00;                      //  2-bit unused
 assign fill_header[     26] = 1'b0;                       //  1-bit fill header format: sync/cbuf/selftrig=0, async=1
 assign fill_header[ 49: 27] = num_fill_bursts[22:0];      // 23-bit final burst count covering all headers, waveforms, checksum
 assign fill_header[ 52: 50] = 3'b000;                     //  3-bit to shift burst address to memory address
-assign fill_header[ 75: 53] = fill_addr[22:0];            // 14-bit value for number of bursts per trigger from register R20
-assign fill_header[ 98: 76] = current_waveform_num[22:0]; // 23-bit final waveform (trigger) count
+assign fill_header[ 75: 53] = fill_addr[22:0];            // 23-bit value for starting DDR3 burst address of fill
+assign fill_header[ 98: 76] = current_waveform_num[22:0]; // 23-bit final waveform (trigger) count    5800c0000000001ddf800000100006d5
 assign fill_header[102: 99] = async_pre_trig[15:12];      //  4-bit MSB value for number of pre-trigger ADC pairs from register R21
 assign fill_header[109:103] = 7'd0;                       //  7-bit unused
 assign fill_header[121:110] = channel_tag[11:0];          // 12-bit channel tag
@@ -103,10 +110,18 @@ assign data[131:128] = 4'd3;
 
 /////////////////////////////
 // create a checksum register
-reg [127:0] checksum;
+(* mark_debug = "true" *) reg [127:0] checksum;
 wire [3:0] checksum_tag;
 // tag = '4' for checksum
 assign checksum_tag[3:0] = 4'd4;
+
+///////////////////////////////////////////////////////////////////////
+// latch the fill number so that we don't stick the new one in the header    
+always @(posedge clk) begin
+  if (latch_fill_num) begin
+    fill_num_latched[23:0] <= fill_num[23:0];
+  end
+end
 
 always @(posedge clk) begin
   if (checksum_init) begin

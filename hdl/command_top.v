@@ -32,7 +32,7 @@ module command_top (
     // interface to the ADC data memory and header FIFO
     input  fill_header_fifo_empty,              // input, a header is available when not asserted
     output fill_header_fifo_rd_en,              // output, remove the current data from the FIFO
-    output fill_address_fifo_rd_en,             // remove the address for the fill just read from the FIFO
+    //output fill_address_fifo_rd_en,             // remove the address for the fill just read from the FIFO
     input  [151:0] fill_header_fifo_out,        // input, data at the head of the FIFO
     output [ 22:0] ddr3_rd_start_addr,          // the address of the first requested 128-bit burst
     output [ 23:0] ddr3_rd_burst_cnt,           // input, the number of bursts to read
@@ -83,7 +83,15 @@ module command_top (
 
     // status signals
     output command_sm_idle,
-    input [3:0] image_type
+    input [3:0] image_type,
+
+    //other state machine states
+     input [18:0] adc_acq_state,
+     input [18:0] circ_to_ddr3_state,
+     input [ 9:0] enable_sm_state,
+
+     input [ 2:0] ddr3_rd_ctrl_state,           // read control current state
+     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
 
     wire ser_num_le, command_le;
@@ -374,7 +382,7 @@ module command_top (
     
     wire reg_num_le;
     assign reg_num_le = rd_reg_sm_reg_num_le || wr_reg_sm_reg_num_le;
-    register_block register_block (
+    register_block64 register_block64 (
         // clocks and reset
         .clk50(clk50),                                                 // 50 MHz buffered clock 
         .reset_clk50(reset_clk50),                                     // active-high reset output, goes low after startup
@@ -424,7 +432,14 @@ module command_top (
         .genreg_wr_data(genreg_wr_data[31:0]),
         .genreg_rd_data(genreg_rd_data[31:0]),
         .map_data_integrity(map_data_integrity[31:0]),
-        .image_type(image_type)
+        .image_type(image_type),
+        //state machine states
+        .adc_acq_state(adc_acq_state),
+        .circ_to_ddr3_state(circ_to_ddr3_state),
+        .enable_sm_state(enable_sm_state),
+        .cc_rd_fill_state(cc_rd_fill_state),
+        .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
+        .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -449,7 +464,6 @@ module command_top (
         // interface to the header FIFO
         .fill_header_fifo_empty(fill_header_fifo_empty),     // a header is available when not asserted
         .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // remove the current data from the FIFO
-        .fill_address_fifo_rd_en(fill_address_fifo_rd_en),   // we've read this fill, remove it from FIFO
         .fill_header_fifo_out(fill_header_fifo_out[151:0]),     // data at the head of the FIFO
         .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
         .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),

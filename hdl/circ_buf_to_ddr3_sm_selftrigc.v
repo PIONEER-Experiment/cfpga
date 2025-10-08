@@ -7,6 +7,7 @@ module circ_buf_to_ddr3_sm_selftrigc (
   input cbuf_rd_en,          // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
   input cbuf_trig_en,          // triggering of new waveforms is enabled
   input trig_fifo_empty,        // if not empty then process a waveform
+  input enable_acquisition,        // capturing and reading out data is enabled
   input burst_cntr_zero,              // all sample bursts have been saved
   // outputs
   output reg cbuf_rd_trig_wait,     // waiting for another trigger or the negation of 'cbuf_rd_en'
@@ -30,7 +31,10 @@ module circ_buf_to_ddr3_sm_selftrigc (
   output reg waveform_cntr_init,    // initialize when triggered
   output reg waveform_cntr_en,      // will be enabled once after each waveform
   output reg ddr3_selftrig_wr_active, // we are in a state where we are actively writing to the ddr3
-  output reg fill_cntr_en          // will be enabled once per fill
+  output reg fill_cntr_en,         // will be enabled once per fill
+  output reg latch_fill_num,        // latch the fill number to be used in fill header / checksum
+  output reg address_cntr_en,       // increment the ddr3 address so that we can track the starting address for the next fill
+  output [18:0] circ_to_ddr3_state  // current state
 );
 
 
@@ -76,14 +80,16 @@ parameter [4:0]
     DONE            = 5'd18;  // 40000
     
 // Declare current state and next state variables
-reg [18:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [18:0] /* synopsys enum STATE_TYPE */ CS;
 reg [18:0] /* synopsys enum STATE_TYPE */ NS;
+assign circ_to_ddr3_state[18:0] = CS;
+//assign circ_to_ddr3_state[19] = 1'b0;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge adc_clk) begin
     if (reset_clk_adc) begin
-        CS <= #1 {18{1'b0}}; // set all state bits to 0
+        CS <= #1 {19{1'b0}}; // set all state bits to 0
         CS[IDLE] <= #1 1'b1; // set IDLE state bit to 1
     end
     else
@@ -91,8 +97,8 @@ always @ (posedge adc_clk) begin
 end
 
 // combinational always block to determine next state (use blocking [=] assignments) 
-always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero ) begin
-    NS = {18{1'b0}}; // default all bits to zero; will overrride one bit
+always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero or enable_acquisition ) begin
+    NS = {19{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
 
@@ -100,13 +106,13 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
         CS[IDLE]: begin
             if (cbuf_rd_en)
               // we have transitioned to 'enabled', so initialize a new fill
-                NS[FILL_INIT1] = 1'b1;
+              NS[FILL_INIT1] = 1'b1;
             else
-                NS[IDLE] = 1'b1;
-       end
+              NS[IDLE] = 1'b1;
+            end
 
-    // We use 1 state to initialize for a new fill.
-    // This happens once per 'trig_enabled' transition
+        // We use 1 state to initialize for a new fill.
+        // This happens once per 'trig_enabled' transition
         // Stay in FILL_INIT1 state for one period. 
         CS[FILL_INIT1]: begin
                 NS[TRIG_WAIT] = 1'b1;
@@ -115,19 +121,22 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
        // Stay in TRIG_WAIT until either we have been triggered (the trigger FIFO is not empty),
        // or the fill has ended (enabled negated). 
         CS[TRIG_WAIT]: begin
-           if (!trig_fifo_empty)
+          if ( !enable_acquisition )
+            // the run has ended, go to IDLE and wait for a new run
+            NS[IDLE] = 1'b1;
+          else if (!trig_fifo_empty)
             // a trigger has occurred, so go process it.
             // This branch has top priority, so that we always process all accepted triggers.
-                NS[WAVEFORM_INIT1] = 1'b1;
+            NS[WAVEFORM_INIT1] = 1'b1;
           else if (!cbuf_trig_en && got_trig)
-                // the fill is over, and we had at least 1 trigger, so go handle the fill header and checksum
-                NS[FILL_DONE1] = 1'b1;
+            // the fill is over, and we had at least 1 trigger, so go handle the fill header and checksum
+            NS[FILL_DONE1] = 1'b1;
           else if (!cbuf_trig_en && !got_trig)
-                // the fill is over, but there were no triggers, so go clean up and end
-                NS[NO_TRIGGER] = 1'b1;
-           else
-        // wait here
-              NS[TRIG_WAIT] = 1'b1;
+            // the fill is over, but there were no triggers, so go clean up and end
+            NS[NO_TRIGGER] = 1'b1;
+          else
+            // wait here
+            NS[TRIG_WAIT] = 1'b1;
         end
 
     // We use 3 states to initialize for each new waveform.
@@ -273,6 +282,9 @@ always @ (posedge adc_clk) begin
     burst_adr_cntr_en        <= #1 1'b0;  // increment the next starting address
     fill_cntr_en             <= #1 1'b0;  // will be enabled once per fill
     ddr3_selftrig_wr_active  <= #1 1'b1;  // most of the states involve writing
+    latch_fill_num           <= #1 1'b0;  // used to latch the fill number for use in the fill header/checksum
+    address_cntr_en          <= #1 1'b0;
+
 
     // next states
     if (NS[IDLE]) begin
@@ -290,6 +302,8 @@ always @ (posedge adc_clk) begin
       waveform_cntr_init      <= #1 1'b1;
       // indicate that writing to DDR3 is not active, so that it is safe to read
       ddr3_selftrig_wr_active <= #1 1'b0;
+      // latch this fill number
+      latch_fill_num       <= #1 1'b1;
     end
 
     if (NS[TRIG_WAIT]) begin
@@ -323,6 +337,8 @@ always @ (posedge adc_clk) begin
       burst_adr_cntr_en     <= #1 1'b1;
       // increment the circular buffer address
       inc_circ_buf_rd_addr    <= #1 1'b1;
+      // increment the next fill address
+      address_cntr_en          <= 1'b1;
    end
 
     if (NS[LOOP1]) begin
@@ -367,6 +383,8 @@ always @ (posedge adc_clk) begin
       start_dlyd_adc_acq_out_valid       <= #1 1'b1;
       // increment the next burst address
       burst_adr_cntr_en     <= #1 1'b1;
+      // increment the next fill address
+      address_cntr_en          <= 1'b1;
     end
 
     if (NS[WAVEFORM_DONE1]) begin
@@ -402,6 +420,8 @@ always @ (posedge adc_clk) begin
       immed_adc_acq_out_valid    <= #1 1'b1;
       // increment the next burst address
       burst_adr_cntr_en     <= #1 1'b1;
+      // increment the next fill address
+      address_cntr_en          <= 1'b1;
     end
 
     if (NS[FILL_DONE3]) begin
@@ -409,6 +429,9 @@ always @ (posedge adc_clk) begin
       select_fill_hdr           <= #1 1'b1;
       // write the fill header to the FIFO
       immed_adc_acq_out_valid        <= #1 1'b1;
+      // increment the next fill address.  This keeps the burst counter in sync 
+      // with the writing starting at position 1
+      address_cntr_en          <= 1'b1;
     end
 
     if (NS[FILL_DONE4]) begin

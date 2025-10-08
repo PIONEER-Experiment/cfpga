@@ -34,7 +34,7 @@ module one_channel(
   input gt_qpllrefclk_quad2,          // input
   output gt0_qpllreset,                // output
   // status
-  output [7:0] debug,
+//  output [7:0] debug,
   output channel_up
  );
 
@@ -272,15 +272,15 @@ module one_channel(
 //  assign lane_up_reduce_i  = &lane_up_r2;
 //  assign rst_cc_module_i   = !lane_up_reduce_i;
 
-  // debug outputs
-  assign   debug[0] =  channel_up;                 // 
-  assign   debug[1] =  lane_up;                    // 
-  assign   debug[2] =  frame_err;                   // 
-  assign   debug[3] =  hard_err;                   // 
-  assign   debug[4] =  soft_err;                   // 
-  assign   debug[5] =  clk50;             // 
-  assign   debug[6] =  clk50_reset;               // gt_refclk; // the gt clock in v2023.2 causes constaints and placing issues
-  assign   debug[7] =  aurora_user_clk;           // 
+//  // debug outputs
+//  assign   debug[0] =  channel_up;                 // 
+//  assign   debug[1] =  lane_up;                    // 
+//  assign   debug[2] =  frame_err;                   // 
+//  assign   debug[3] =  hard_err;                   // 
+//  assign   debug[4] =  soft_err;                   // 
+//  assign   debug[5] =  clk50;             // 
+//  assign   debug[6] =  clk50_reset;               // gt_refclk; // the gt clock in v2023.2 causes constaints and placing issues
+//  assign   debug[7] =  aurora_user_clk;           // 
    
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // connect the programming interface

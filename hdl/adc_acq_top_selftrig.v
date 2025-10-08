@@ -30,7 +30,7 @@ module adc_acq_top_selftrig (
     output self_trig,                          // self-triggering conditions have been met
     output ddr3_wr_en,                         // writing of triggered events to memory is enabled - asserted for triggers
     output cbuf_rd_en,                         // we have enabled storing of events -- asserted when not switching fill buffers
-    output ddr3_selftrig_wr_active,            // we are not actively writing to
+    output ddr3_selftrig_wr_active,            //  we are in a state where we are actively writing to the ddr3
     output [ 64:0] adc_buf_current_data_delay, // 13 lines *5 bits/line, current tap settings
     output [ 23:0] fill_num,                   // fill number for this fill
     output [131:0] adc_acq_out_dat,            // 132-bit 4-bit tag plus 128-bit header or ADC data
@@ -109,7 +109,7 @@ sync_2stage #(
    .in(async_num_bursts),
    .out(async_num_bursts_adcclk)
 );
-wire initial_fill_num_wr_clkadc;
+(* mark_debug = "true" *) wire initial_fill_num_wr_clkadc;
 sync_2stage init_fill_num_sync (
    .clk(adc_clk),
    .in(initial_fill_num_wr),
@@ -279,7 +279,7 @@ circ_buf_to_ddr3_selftrig circ_buf_to_ddr3_selftrig(
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),      // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),         // current data should be stored in the FIFO
     .current_waveform_num(current_waveform_num[22:0]),
-    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),// will be enabled whenever we do not need active writing to the DDR3
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),//  we are in a state where we are actively writing to the ddr3
     .checksum_memory_range(checksum_memory_range)    // latch the memory buffer for writing the checksum
 );
 

@@ -32,7 +32,11 @@ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks adc_
 # A wildcard is used in the hierarchy path to support both the normal and the ASYNC project
 #set_false_path -from [get_pins */adc_acq_full_reset*] -to [all_registers]
 set_false_path -from [get_cells -hierarchical -filter {NAME =~ *adc_acq_full_reset*}]
-set_false_path -from [get_cells -hierarchical -filter {NAME =~ *register_block/reg14__reg[*]}]
+set_false_path -from [get_cells -hierarchical -filter {NAME =~ *register_block64/reg14__reg[*]}]
+
+
+
+
 
 
 

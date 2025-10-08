@@ -8,7 +8,7 @@ module circ_buf_to_ddr3_selftrigc (
     input cbuf_rd_en,                 // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     input cbuf_trig_en,               // triggering of new waveforms is enabled
     input [11:0] channel_tag,         // stuff about the channel to put in the header
-    input [23:0] initial_fill_num,    // event number to assign to the first fill
+(* mark_debug = "true" *) input [23:0] initial_fill_num,    // event number to assign to the first fill
     input initial_fill_num_wr,        // write-strobe to store the initial_fill_num
     input [13:0] async_num_bursts,    // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,      // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
@@ -17,7 +17,10 @@ module circ_buf_to_ddr3_selftrigc (
     input trig_fifo_empty,            // no triggers available when asserted
     input [22:0] fill_address,        // latched starting address for a fill
     input [41:0] trigger_time,        // the time of the most recent data trigger
+    input init_ddr3_addr,             // a new run has started
     input [3:0] xadc_alarms,
+    input enable_acquisition,         // capturing and reading out data is enabled
+
 
     // outputs
     output cbuf_rd_trig_wait,    // waiting for another trigger or the negation of 'cbuf_rd_en'    
@@ -27,12 +30,16 @@ module circ_buf_to_ddr3_selftrigc (
     output [131:0] adc_acq_out_dat,     // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,           // current data should be stored in the FIFO
     output [22:0] current_waveform_num,
-    output ddr3_selftrig_wr_active      // enabled whenever we are actively writing a trigger to the DDR3
+    output ddr3_selftrig_wr_active,     // enabled whenever we are actively writing a trigger to the DDR3
+    output fill_cntr_en,                // increment the fill counter
+    output address_cntr_en,             // increment the ddr3 address so that we can track the starting address for the next fill
+    output [18:0] circ_to_ddr3_state    // current state
 );
 
-wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
-reg  [22:0] waveform_start_adr; // DDR3 burst memory location (3 LSBs=0) for a waveform
-reg  [22:0] num_fill_bursts;    // total number of bursts in a fill
+(* mark_debug = "true" *) wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
+wire [22:0] burst_cnt_fill;       // Number of bursts stored during this fill
+reg  [22:0] waveform_start_adr;   // DDR3 burst memory location (3 LSBs=0) for a waveform
+reg  [22:0] num_fill_bursts;      // total number of bursts in a fill
 
 wire initial_fill_num_wr_sync;
 sync_2stage initial_fill_num_wr_sync_inst (
@@ -95,6 +102,7 @@ adc_dat_mux_selftrigc adc_dat_mux_selftrigc (
     .async_pre_trig(async_pre_trig[15:0]),         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .xadc_alarms(xadc_alarms[3:0]),
     .clk(adc_clk),
+    .latch_fill_num(latch_fill_num),               // latch the fill number to be used in the header
     .select_dat(adc_mux_dat_sel),                  // selects data
     .select_fill_hdr(adc_mux_fill_hdr_sel),        // selects fill header
     .select_waveform_hdr(adc_mux_wfm_hdr_sel),     // selects waveform header
@@ -112,25 +120,27 @@ adc_dat_mux_selftrigc adc_dat_mux_selftrigc (
 // Its content will be put in the waveform headers.
 // It will increment every time data is written to the FIFO
 wire burst_adr_cntr_en;
-burst_address_cntr_ASYNC burst_address_cntr_ASYNC (
+burst_address_cntr_selftrigc burst_address_cntr_selftrigc (
     // inputs
     .clk(adc_clk),
-    .init(burst_adr_cntr_init), // initialize to '1' at the start of a fill
-    .enable(burst_adr_cntr_en), // increment
+    .init_fill(burst_adr_cntr_init), // initialize to '1' at the start of a fill
+    .init_run(init_ddr3_addr),       // initialize to '1' at the start of a run
+    .enable(burst_adr_cntr_en),      // increment
     // outputs
-    .burst_adr(burst_adr[22:0]) // current DDR3 burst memory location
+    .burst_adr(burst_adr[22:0]),     // current DDR3 burst memory location
+    .burst_cnt_fill(burst_cnt_fill[22:0])
 );
-// latch the start address for a waveform
+// latch the start address for a waveform (not for the fill header)
 wire save_start_adr;
 always @(posedge adc_clk) begin
     if (save_start_adr) begin
         waveform_start_adr[22: 0] <= #1 burst_adr[22:0];
     end
 end
-// add '1' to the final address to get the total count
+// add '1' to the final count to get the total count
 always @(posedge adc_clk) begin
     if (save_last_adr)
-        num_fill_bursts[22:0] <= #1 burst_adr[22:0] + 1;
+        num_fill_bursts[22:0] <= #1 burst_cnt_fill[22:0] + 1;
 end
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,6 +194,8 @@ circ_buf_to_ddr3_sm_selftrigc circ_buf_to_ddr3_sm_selftrigc (
     .trig_fifo_empty(trig_fifo_empty),             // if not empty then process a waveform
     .reset_clk_adc(reset_clk_adc),                 // either 'ext_reset' or 'reset_clk50' is asserted
     .burst_cntr_zero(burst_cntr_zero),             // all sample bursts have been saved
+    .enable_acquisition(enable_acquisition),       // capturing and reading out data is enabled
+
     // outputs
     .cbuf_rd_trig_wait(cbuf_rd_trig_wait),         // waiting for another trigger or the negation of 'cbuf_rd_en'
     .burst_adr_cntr_init(burst_adr_cntr_init),     // initialize counter to '1'
@@ -204,9 +216,12 @@ circ_buf_to_ddr3_sm_selftrigc circ_buf_to_ddr3_sm_selftrigc (
     .burst_cntr_init(burst_cntr_init),             // initialize when triggered
     .burst_cntr_en(burst_cntr_en),                 // will be enabled once per burst
     .fill_cntr_en(fill_cntr_en),                   // will be enabled once per fill
+    .latch_fill_num(latch_fill_num),               // latch the fill number to be used in fill header / checksum
     .waveform_cntr_init(waveform_cntr_init),       // initialize when triggered
     .waveform_cntr_en(waveform_cntr_en),           // will be enabled once after each waveform
-    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active) // will be enabled whenever we need active writing to the DDR3
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), // will be enabled whenever we need active writing to the DDR3
+    .address_cntr_en(address_cntr_en),             // increment the ddr3 address so that we can track the starting address for the next fill
+    .circ_to_ddr3_state(circ_to_ddr3_state)
 );
 
 endmodule

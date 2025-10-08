@@ -10,7 +10,7 @@ module adc_address_cntr (
     input init,                   // initialize to zero when the fill number is written
     input enable,                 // will be enabled at the end of a fill
     // outputs
-    output reg [22:0] burst_start_adr   // first DDR3 burst memory location for this fill
+(* mark_debug = "true" *) output reg [22:0] burst_start_adr   // first DDR3 burst memory location for this fill
 );
 
 always @(posedge clk) begin

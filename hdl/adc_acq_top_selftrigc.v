@@ -17,6 +17,7 @@ module adc_acq_top_selftrigc (
     input [23:0] initial_fill_num,  // event number to assign to the first fill
     input initial_fill_num_wr,      // write-strobe to store the initial_fill_num
     input enable_triggering,        // master FPGA has enabled triggering
+    input enable_acquisition,       // master FPGA has enabled acquisition
     input adc_buf_delay_data_reset, // use the new delay settings
     input [4:0] adc_buf_data_delay, // 5 delay-tap-bits per line, all lines always all the same
     input ddr3_wr_done,             // asserted when the 'ddr3_wr_control' is in the DONE state
@@ -36,18 +37,22 @@ module adc_acq_top_selftrigc (
     output [131:0] adc_acq_out_dat,            // 132-bit 4-bit tag plus 128-bit header or ADC data
     output adc_acq_out_valid,                  // current data should be stored in the FIFO
     output ext_done,                           // external output indicating acquisition is done
-    output ext_done_pulse,                     // 1 cycle pulse from above
+    output reg ext_done_pulse,                     // 1 cycle pulse from above
     output latch_fill_address,                 // one-cycle pulse from ext_done signal or enable_triggering
     output adc_acq_sm_idle,                    // ADC acquisition state machine is idle (used for front panel LED status)
+    output [ 18:0] circ_to_ddr3_state,         // circ_buf_to_ddr3 current state
+    output [  9:0] enable_sm_state,            // enable_sm current state
     output [ 22:0] current_waveform_num,       // the current waveform number, to be used in header
-    output [ 25:0] packed_adc_dat              // two samples, with over-range bits, packed in one wide-word
+    output [ 25:0] packed_adc_dat,             // two samples, with over-range bits, packed in one wide-word
                                                // bit[0]      = first overrange
                                                // bits[11:1]  = first ADC sample
                                                // bit[12]     = second overrange
                                                // bits[25:13] = second ADC sample
+(* mark_debug = "true" *) output [22:0] burst_start_adr, // starting address of fill
+    output [41:0] timestamp
 );
 
-wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
+//wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
 wire [25:0] circ_buf_wr_dat;    // data to write to the circular buffer
 wire [15:0] circ_buf_wr_addr;    // address to write to the circular buffer
 wire [25:0] circ_buf_rd_dat;    // data read from the circular buffer
@@ -133,17 +138,19 @@ adc_address_cntr adc_address_cntr (
 // this gets used to put the address on the fill_address_fifo, and to latch the fill_address for
 // the fill header.  Also create a pulse from the enable_triggering signal, since we want to capture
 // the address for the first fill
-reg ext_done_pulse, ext_done_reg1, ext_done_reg2;
+//(* mark_debug = "true" *) reg ext_done_pulse;
+reg ext_done_reg1, ext_done_reg2;
 always @(posedge adc_clk) begin
   ext_done_reg1  <= ext_done;
   ext_done_reg2  <= ext_done_reg1;
   ext_done_pulse <= ext_done & ext_done_reg1 & !ext_done_reg2; // ext_done must last at least 2 clock ticks
 end
-reg enable_reg1, enable_reg2, enable_pulse;
+reg enable_reg1, enable_reg2;
+(* mark_debug = "true" *) reg enable_pulse;
 always @(posedge adc_clk) begin
   enable_reg1  <= enable_triggering;
   enable_reg2  <= enable_reg1;
-  enable_pulse <= enable_triggering & enable_reg1 & !enable_reg2; // ext_done must last at least 2 clock ticks
+  enable_pulse <= enable_triggering & enable_reg1 & !enable_reg2; // enable_triggering must last at least 2 clock ticks
 end
 assign latch_fill_address = ext_done_pulse | enable_pulse;
 
@@ -165,14 +172,14 @@ enable_sm_selftrigc enable_sm_selftrigc (
     // inputs
     .adc_clk(adc_clk),                       // run the sm in this clock domain
     .enable_triggering(enable_triggering),   // a run has started and enabled triggers
-    .ddr3_buffer(ddr3_buffer),               // which buffer to write to
+    .enable_acquisition(enable_acquisition), // data acquisition has not yet ended -- decoupled from triggering to avoid end of run timing issues
     .self_trig(self_trig),                   // self trigger to start collecting data
-    .reset_clk50(reset_clk50),               // synchronously negated
     .reset_clk_adc(adc_acq_full_reset),      // synchronously negated
     .cbuf_rd_trig_wait(cbuf_rd_trig_wait),   // waiting for another trigger or the negation of 'cbuf_rd_en'
     .ddr3_wr_done(ddr3_wr_done),             // asserted when the 'ddr3_wr_control' is in the DONE state
-    .initial_fill_num_wr_clkadc(initial_fill_num_wr_clkadc), // when we initialize fill number, also initialize the ddr3_buffer-related variables
+    .initial_fill_num_wr_clkadc(initial_fill_num_wr_clkadc), // when we initialize fill number, also initialize other needed variables
     .new_fill(new_fill),
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), //  we are in a state where we are actively writing to the ddr3
     // outputs
     .cbuf_wr_en(cbuf_wr_en),                 // writing into the circ buf by the ADC is enabled, must extend past final trigger
     .cbuf_trig_en(cbuf_trig_en),             // triggering of new waveforms is enabled
@@ -180,7 +187,9 @@ enable_sm_selftrigc enable_sm_selftrigc (
     .ddr3_wr_en(ddr3_wr_en),                 // writing of triggered events to memory is enabled
     .trig_pulse(trig_pulse),                 // a trigger passed while the system is enabled for new triggers
     .adc_acq_sm_idle(adc_acq_sm_idle),       // ADC acquisition state machine is idle (used for front panel LED status)
-    .ext_done(ext_done)                      // assert external acquisition is done
+    .init_ddr3_addr(init_ddr3_addr),         // initialize the ddr3 address for this run
+    .ext_done(ext_done),                     // assert external acquisition is done
+    .enable_sm_state(enable_sm_state)
 );
 
 
@@ -220,7 +229,7 @@ adc_to_circ_buf_ASYNC adc_to_circ_buf_ASYNC (
 // Self-trigger module
 // A trigger will be established when a pulse exceeds a set threshold above a
 // running-average pedestal
-wire [41:0] timestamp;
+//wire [41:0] timestamp;
 self_trigger self_trigger(
     .clk(adc_clk),
     .rst(adc_acq_full_reset),
@@ -229,6 +238,7 @@ self_trigger self_trigger(
     .threshold(selftrig_threshold),           // threshold for average - pedestal to trigger a trigger pulse
     .polarity(selftrig_polarity),             // 1 => positive going signal, 0 => negative going
     .enable(enable_triggering),               // start looking for triggers
+    .cbuf_trig_en(cbuf_trig_en),              // accept self triggers, local in time, from enable_sm_selftrig 
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid
     .trigger(self_trig),                      // a trigger has been found
     .timestamp(timestamp)                     // latched time_counter value when the trigger fires
@@ -281,12 +291,6 @@ trigger_time_fifo trigger_time_fifo (
   .empty()                          // we'll assume everything in lockstep with above
 );
 
-sync_2stage et_adc_inst (
-  .clk(adc_clk),
-  .in(enable_triggering),
-  .out(enable_triggering_adc)
-);
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a module that moves data from the circular buffer to the DDR3 'write' FIFO.
 circ_buf_to_ddr3_selftrigc circ_buf_to_ddr3_selftrigc(
@@ -306,6 +310,8 @@ circ_buf_to_ddr3_selftrigc circ_buf_to_ddr3_selftrigc(
     .fill_address(fill_address[22:0]),             // latched starting address for a fill
     .trigger_time(trigger_time[41:0]),             // the time of the most recent data trigger
     .xadc_alarms(xadc_alarms[3:0]),
+    .enable_acquisition(enable_acquisition),       // capturing and reading out data is enabled
+    .init_ddr3_addr(init_ddr3_addr),               // initialize the ddr3 address for this run
     // outputs
     .cbuf_rd_trig_wait(cbuf_rd_trig_wait),         // waiting for another trigger or the negation of 'cbuf_rd_en'
     .trig_addr_rd_en(trig_addr_rd_en),             // read a trigger address from the FIFO
@@ -314,7 +320,10 @@ circ_buf_to_ddr3_selftrigc circ_buf_to_ddr3_selftrigc(
     .adc_acq_out_dat(adc_acq_out_dat[131:0]),      // 132-bit 4-bit tag plus 128-bit header or ADC data
     .adc_acq_out_valid(adc_acq_out_valid),         // current data should be stored in the FIFO
     .current_waveform_num(current_waveform_num[22:0]),
-    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active) // will be enabled whenever we do not need active writing to the DDR3
+    .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), //  we are in a state where we are actively writing to the ddr3
+    .fill_cntr_en(fill_cntr_en),
+    .address_cntr_en(address_cntr_en),             // increment the ddr3 address so that we can track the starting address for the next fill
+    .circ_to_ddr3_state(circ_to_ddr3_state)
 );
 
 endmodule

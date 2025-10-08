@@ -13,18 +13,19 @@ module ddr3_rd_control (
   input enable_reading,               // input, initialize the address generator and both counters, go
   output reading_done,                // output, reading is complete
   // 'read' ports to memory
-  input app_rd_data_end,          // input, last data cycle
-  input app_rd_data_valid,        // input, memory data is valid
+  input app_rd_data_end,              // input, last data cycle
+(* mark_debug = "true" *) input app_rd_data_valid,            // input, memory data is valid
   //input [127:0] app_rd_data,        // input, memory data
   // 'read' ports to address controller
-  input rd_app_rdy,            // input, increment the 'read' address
-  output [25:0] ddr3_rd_addr,        // output, next 'read' address
-  output rd_app_en,              // output, request to perform a 'read'
+  input rd_app_rdy,                   // input, increment the 'read' address
+(* mark_debug = "true" *) output [25:0] ddr3_rd_addr,         // output, next 'read' address
+(* mark_debug = "true" *) output rd_app_en,                   // output, request to perform a 'read'
   // ports to the 'read' fifo
-  output ddr3_rd_fifo_wr_en,             // data is valid, so put it in the READ FIFO
+(* mark_debug = "true" *) output ddr3_rd_fifo_wr_en,          // data is valid, so put it in the READ FIFO
   //output [127:0] ddr3_rd_fifo_input_dat, // output, memory data
-  input ddr3_rd_fifo_almost_full,        // there is not much room left
-  output ddr3_rd_fifo_input_tlast       // the last burst for this fill
+  input ddr3_rd_fifo_almost_full,     // there is not much room left
+  output ddr3_rd_fifo_input_tlast,    // the last burst for this fill
+  output [2:0] ddr3_rd_ctrl_state     // read control state
 );
 
 // just pass the DDR3 data thru to the FIFO
@@ -104,6 +105,7 @@ parameter [1:0]
 // Declare current state and next state variables
 reg [2:0] /* synopsys enum STATE_TYPE */ CS;
 reg [2:0] /* synopsys enum STATE_TYPE */ NS;
+assign ddr3_rd_ctrl_state = CS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
