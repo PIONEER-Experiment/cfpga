@@ -39,12 +39,12 @@ module ddr3_wr_control_selftrigc (
 );
 
 // 
-(* mark_debug = "true" *) reg [4:0] fill_number_dwc;
+(* mark_debug = "true" *) reg [19:0] fill_number_dwc;
 always @ (posedge clk) begin
   if (reset)
-    fill_number_dwc[4:0] <= 5'd0;
+    fill_number_dwc[19:0] <= 5'd0;
   else if (fill_header_wr_en)
-    fill_number_dwc[4:0] = fill_number_dwc[4:0] + 1;
+    fill_number_dwc[19:0] = fill_number_dwc[19:0] + 1;
 end
 
 // Leave the comments containing "synopsys" in your HDL code.

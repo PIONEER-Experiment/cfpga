@@ -53,6 +53,14 @@ always @ (posedge adc_clk) begin
   delay0 <= #1 start_dlyd_adc_acq_out_valid;
 end
 
+(* mark_debug = "true" *) reg [19:0] chksum_counter;
+always @ (posedge adc_clk) begin
+  if ( reset_clk_adc )
+    chksum_counter <= 20'd0;
+  else if ( select_checksum )
+    chksum_counter = chksum_counter + 1;
+end
+
 // create a flag to indicate whether or not a trigger was seen
 reg got_trig;
 

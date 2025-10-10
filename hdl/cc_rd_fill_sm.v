@@ -91,13 +91,13 @@ always @(posedge clk) begin
 end
 
 // keep track of fill number we are reading
-reg [7:0] fill_no_rd_ddr3;
+(* mark_debug = "true" *) reg [19:0] fill_no_rd_ddr3;
 reg new_fill_seen;
 always @(posedge clk) begin
   if ( reset )
-    fill_no_rd_ddr3[7:0] <= 0;
+    fill_no_rd_ddr3[19:0] <= 0;
   else if ( new_fill_seen )
-    fill_no_rd_ddr3[7:0] <= fill_no_rd_ddr3[7:0] + 1;
+    fill_no_rd_ddr3[19:0] <= fill_no_rd_ddr3[19:0] + 1;
 end
 
 // State machine for executing the 'rd_fill' command
