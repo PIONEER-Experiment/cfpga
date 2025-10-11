@@ -8,6 +8,7 @@
 project/
 project_async/
 project_selftrig/
+project_selftrigc/
 project_cbuf/
 ip/*/**/
 ip_debug/*/**/
