@@ -109,7 +109,7 @@ sync_2stage #(
    .in(async_num_bursts),
    .out(async_num_bursts_adcclk)
 );
-(* mark_debug = "true" *) wire initial_fill_num_wr_clkadc;
+wire initial_fill_num_wr_clkadc;
 sync_2stage init_fill_num_sync (
    .clk(adc_clk),
    .in(initial_fill_num_wr),

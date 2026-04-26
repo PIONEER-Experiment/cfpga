@@ -8,7 +8,7 @@ module circ_buf_to_ddr3_selftrigc (
     input cbuf_rd_en,                 // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     input cbuf_trig_en,               // triggering of new waveforms is enabled
     input [11:0] channel_tag,         // stuff about the channel to put in the header
-(* mark_debug = "true" *) input [23:0] initial_fill_num,    // event number to assign to the first fill
+    input [23:0] initial_fill_num,    // event number to assign to the first fill
     input initial_fill_num_wr,        // write-strobe to store the initial_fill_num
     input [13:0] async_num_bursts,    // number of 8-sample bursts in an ASYNC waveform
     input [15:0] async_pre_trig,      // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
@@ -36,7 +36,7 @@ module circ_buf_to_ddr3_selftrigc (
     output [18:0] circ_to_ddr3_state    // current state
 );
 
-(* mark_debug = "true" *) wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
+wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
 wire [22:0] burst_cnt_fill;       // Number of bursts stored during this fill
 reg  [22:0] waveform_start_adr;   // DDR3 burst memory location (3 LSBs=0) for a waveform
 reg  [22:0] num_fill_bursts;      // total number of bursts in a fill

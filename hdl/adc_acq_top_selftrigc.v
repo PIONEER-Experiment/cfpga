@@ -48,7 +48,7 @@ module adc_acq_top_selftrigc (
                                                // bits[11:1]  = first ADC sample
                                                // bit[12]     = second overrange
                                                // bits[25:13] = second ADC sample
-(* mark_debug = "true" *) output [22:0] burst_start_adr, // starting address of fill
+    output [22:0] burst_start_adr, // starting address of fill
     output [41:0] timestamp
 );
 
@@ -138,7 +138,6 @@ adc_address_cntr adc_address_cntr (
 // this gets used to put the address on the fill_address_fifo, and to latch the fill_address for
 // the fill header.  Also create a pulse from the enable_triggering signal, since we want to capture
 // the address for the first fill
-//(* mark_debug = "true" *) reg ext_done_pulse;
 reg ext_done_reg1, ext_done_reg2;
 always @(posedge adc_clk) begin
   ext_done_reg1  <= ext_done;
@@ -146,7 +145,7 @@ always @(posedge adc_clk) begin
   ext_done_pulse <= ext_done & ext_done_reg1 & !ext_done_reg2; // ext_done must last at least 2 clock ticks
 end
 reg enable_reg1, enable_reg2;
-(* mark_debug = "true" *) reg enable_pulse;
+reg enable_pulse;
 always @(posedge adc_clk) begin
   enable_reg1  <= enable_triggering;
   enable_reg2  <= enable_reg1;

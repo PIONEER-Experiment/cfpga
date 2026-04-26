@@ -381,6 +381,7 @@ module command_top (
     );
     
     wire reg_num_le;
+    wire [9:0] cc_rd_fill_state;
     assign reg_num_le = rd_reg_sm_reg_num_le || wr_reg_sm_reg_num_le;
     register_block64 register_block64 (
         // clocks and reset
@@ -450,7 +451,8 @@ module command_top (
         // state machine control
         .run_sm(run_cc_rd_fill),                                // run this state machine
         .sm_running(cc_rd_fill_running),                        // we are running
-        .sm_done(cc_rd_fill_done),                             // we are finished
+        .sm_done(cc_rd_fill_done),                              // we are finished
+        .cc_rd_fill_state(cc_rd_fill_state),                    // state
         // RX FIFO - this sm does not get anything from the RX FIFO
         // TX FIFO
         .tx_tvalid(rd_fill_sm_tx_tvalid),                     // the data we are presenting is valid

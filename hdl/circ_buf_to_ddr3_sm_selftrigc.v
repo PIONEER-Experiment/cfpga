@@ -53,7 +53,7 @@ always @ (posedge adc_clk) begin
   delay0 <= #1 start_dlyd_adc_acq_out_valid;
 end
 
-(* mark_debug = "true" *) reg [19:0] chksum_counter;
+reg [19:0] chksum_counter;
 always @ (posedge adc_clk) begin
   if ( reset_clk_adc )
     chksum_counter <= 20'd0;
@@ -88,7 +88,7 @@ parameter [4:0]
     DONE            = 5'd18;  // 40000
     
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [18:0] /* synopsys enum STATE_TYPE */ CS;
+reg [18:0] /* synopsys enum STATE_TYPE */ CS;
 reg [18:0] /* synopsys enum STATE_TYPE */ NS;
 assign circ_to_ddr3_state[18:0] = CS;
 //assign circ_to_ddr3_state[19] = 1'b0;

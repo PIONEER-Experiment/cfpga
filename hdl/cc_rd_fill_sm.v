@@ -28,8 +28,10 @@ module cc_rd_fill_sm (
   input run_sm,                           // run this state machine
   output reg sm_running,                  // we are running
   output reg sm_done,                     // we are finished
+  output [9:0] cc_rd_fill_state,
 
-(* mark_debug = "true" *) output reg tx_tvalid,                   // the data we are presenting is valid
+
+  output reg tx_tvalid,                   // the data we are presenting is valid
   output reg tx_tlast,                    // this is the final word in the frame
   input tx_tready,                        // signal that the TX fifo has accepted the data
 
@@ -46,8 +48,8 @@ module cc_rd_fill_sm (
   input en_fixed_ddr3_start_addr,
 
   // interface to the DDR3 memory
-(* mark_debug = "true" *) output reg [22:0] ddr3_rd_start_addr,   // the address of the first requested 128-bit burst
-(* mark_debug = "true" *) output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
+  output reg [22:0] ddr3_rd_start_addr,   // the address of the first requested 128-bit burst
+  output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
   output reg enable_reading,              // start the 'ddr3_rd_control'
   input reading_done,                     // reading is complete
   input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
@@ -60,7 +62,9 @@ module cc_rd_fill_sm (
 );
 
 // Synchronize  'reading_done'.
-(* ASYNC_REG = "TRUE" *) reg reading_done_sync1, reading_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg reading_done_sync1;
+(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg reading_done_sync2;
+
 always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;
@@ -91,7 +95,7 @@ always @(posedge clk) begin
 end
 
 // keep track of fill number we are reading
-(* mark_debug = "true" *) reg [19:0] fill_no_rd_ddr3;
+reg [19:0] fill_no_rd_ddr3;
 reg new_fill_seen;
 always @(posedge clk) begin
   if ( reset )
@@ -118,8 +122,9 @@ parameter [3:0]
     DONE                 = 4'd9;  // 200
                 
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
+assign cc_rd_fill_state = CS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

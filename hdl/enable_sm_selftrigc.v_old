@@ -31,7 +31,7 @@ always @(posedge adc_clk) begin
     ddr3_wr_done_sync1 <= #1 ddr3_wr_done;
     ddr3_wr_done_sync2 <= #1 ddr3_wr_done_sync1;
 end
-(* mark_debug = "true" *) wire ddr3_wr_done_sync2_debug;
+wire ddr3_wr_done_sync2_debug;
 assign ddr3_wr_done_sync2_debug = ddr3_wr_done_sync2;
 
 // the self trigger can be maintined for several cycles -- create a pulse when from the signal
@@ -96,8 +96,8 @@ parameter [3:0]
     DONE2             = 4'd9;  // 200
    
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
-(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ NS;
+reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 assign enable_sm_state[9:0] = CS[9:0];
 
 //synopsys state_vector CS

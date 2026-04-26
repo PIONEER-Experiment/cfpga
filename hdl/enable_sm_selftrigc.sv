@@ -32,7 +32,7 @@ always_ff @(posedge adc_clk) begin
   ddr3_wr_done_sync1 <= ddr3_wr_done;
   ddr3_wr_done_sync2 <= ddr3_wr_done_sync1;
 end
-(* mark_debug = "true" *) wire ddr3_wr_done_sync2_debug;
+wire ddr3_wr_done_sync2_debug;
 assign ddr3_wr_done_sync2_debug = ddr3_wr_done_sync2;
 
 // =========================================================================
@@ -95,8 +95,8 @@ typedef enum logic [10:0] {
 //(* fsm_encoding = "one-hot", fsm_safe_state = "default_state" *)
 (* fsm_encoding = "one-hot" *)
 
-(* mark_debug = "true" *) state_t CS;
-(* mark_debug = "true" *) state_t NS;
+state_t CS;
+state_t NS;
 
 assign enable_sm_state = CS;
 

@@ -26,7 +26,7 @@ module ddr3_addr_control(
   // 'memory' ports
   output [26:0] app_addr,	
   output [2:0] app_cmd,
-(* mark_debug = "true" *) output app_en,					// strobe for 'app_addr' and 'app_cmd'
+output app_en,					// strobe for 'app_addr' and 'app_cmd'
   input app_rdy					// the memory is accepting an address and command
 );
 

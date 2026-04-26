@@ -482,7 +482,7 @@ all_channels channels(
     // serial I/O pins
     .c0_rxp(c0_rx), .c0_rxn(c0_rx_N),                // receive from channel 0 FPGA
     .c0_txp(c0_tx), .c0_txn(c0_tx_N),                // transmit to channel 0 FPGA
-    .debug(debug[7:0]),
+    //.debug(debug[7:0]),
     .channel_up(aurora_channel_up)
 );
 
@@ -527,6 +527,7 @@ command_top command_top (
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
     .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go
     .reading_done(reading_done),                        // output, reading is complete
+    .acq_done_latch(1'b1),                              // needed for self triggering.  All other modes should just assert
 
     // registers to/from the ADC acquisition state machine
     .fill_num(fill_num[23:0]),                                     // fill number for this fill

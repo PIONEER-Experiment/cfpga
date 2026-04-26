@@ -21,7 +21,7 @@ module channel_main_selftrigc (
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
   output acq_trig,              // to master, asserted active-hi when a self trigger achieved, C0_TRIG on schematic
-(* mark_debug = "true" *) output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
+  output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   // lkg -- stc -- need master to switch reset from io[3] to io[2]
   input  [2:0] io,              // input connections to the master FPGA
   // lkg -- stc -- for the following, we will use the io[3] line that has now become an output rather than in input (or maybe not)
@@ -83,8 +83,8 @@ assign readout_pause = io[0];           // stop sending fill data to the Aurora
 
 
 //   io[1] : 'acq_enable'
-(* mark_debug = "true" *) wire enable_triggering;                 // indicates enabled for self triggering
-(* mark_debug = "true" *) wire enable_acquisition;                // indicates that data acquisition has not yet completed
+wire enable_triggering;                 // indicates enabled for self triggering
+wire enable_acquisition;                // indicates that data acquisition has not yet completed
 enableControl2 enableControl2(
   .clk125(clk125),
   .reset(reset_clk125),
@@ -92,9 +92,9 @@ enableControl2 enableControl2(
   .enable_acquisition(enable_acquisition),
   .enable_triggering(enable_triggering)
 );
-(* mark_debug = "true" *) wire master_enable_125;
-(* mark_debug = "true" *) wire master_enable_ddr3;
-(* mark_debug = "true" *) wire master_enable_adc;
+wire master_enable_125;
+wire master_enable_ddr3;
+wire master_enable_adc;
 assign master_enable  = io[1];
 sync_2stage me_ddr3 (
   .clk(ddr3_domain_clk),
@@ -112,47 +112,47 @@ sync_2stage me_adc (
   .out(master_enable_adc)
 );
 
-(* mark_debug = "true" *) wire [8:0] debugw;
+wire [8:0] debugw;
 sync_2stage #(.WIDTH(9)) debug_sync (
   .clk(ddr3_domain_clk),
   .in(debug),
   .out(debugw)
 );
 
-(* mark_debug = "true" *) wire [8:0] debuga;
+wire [8:0] debuga;
 sync_2stage #(.WIDTH(9)) debug_synca (
   .clk(adc_clk),
   .in(debug),
   .out(debuga)
 );
 
-(* mark_debug = "true" *) wire [8:0] debug_125;
+wire [8:0] debug_125;
 sync_2stage #(.WIDTH(9)) debug_syncb (
   .clk(clk125),
   .in(debug),
   .out(debug_125)
 );
 
-(* mark_debug = "true" *) wire enable_acquisition_ddr3;
+wire enable_acquisition_ddr3;
 sync_2stage enable_acquisition_dsync (
   .clk(ddr3_domain_clk),
   .in(enable_acquisition),
   .out(enable_acquisition_ddr3)
 );
-(* mark_debug = "true" *) wire enable_acquisition_adc;
+wire enable_acquisition_adc;
 sync_2stage enable_acquisition_async (
   .clk(adc_clk),
   .in(enable_acquisition),
   .out(enable_acquisition_adc)
 );
 
-(* mark_debug = "true" *) wire enable_triggering_ddr3;
+wire enable_triggering_ddr3;
 sync_2stage enable_triggering_dsync (
   .clk(ddr3_domain_clk),
   .in(enable_triggering),
   .out(enable_triggering_ddr3)
 );
-(* mark_debug = "true" *) wire enable_triggering_adc;
+wire enable_triggering_adc;
 sync_2stage enable_triggering_async (
   .clk(adc_clk),
   .in(enable_triggering),
@@ -163,7 +163,7 @@ sync_2stage enable_triggering_async (
 wire rst_from_master;
 assign rst_from_master = io[2];
 
-(* mark_debug = "true" *) wire new_fill;
+wire new_fill;
 sync_2stage new_fill_sync (
   .clk(adc_clk),
   .in(io3),
@@ -189,7 +189,7 @@ wire [21:0] ped_waveform_gap;           // idle time between waveforms
 wire [13:0] async_num_bursts;           // number of 8-sample bursts in an ASYNC waveform
 wire [15:0] async_pre_trig;             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
 
-(* mark_debug = "true" *) wire adc_acq_out_valid;
+wire adc_acq_out_valid;
 wire [131:0] ddr3_wr_fifo_dat;          // 132-bit 4-bit tag plus header or ADC data from 'ddr3_write_fifo'
 wire [127:0] ddr3_rd_dat;               // 128-bit header or ADC data from DDR3 memory
 wire [23:0] fill_num;                   // fill number for this fill
@@ -232,7 +232,6 @@ wire command_sm_idle;
 // state machine states
 wire [18:0] adc_acq_state;
 wire [18:0] circ_to_ddr3_state;
-wire [ 9:0] cc_rd_fill_state;
 wire [ 2:0] ddr3_rd_ctrl_state;            // read control current state
 wire [16:0] ddr3_wr_ctrl_state;            // write control current state
 
@@ -401,7 +400,7 @@ wire initial_fill_num_wr_adc;
 wire ddr3_wr_done_adc;
 wire ddr3_wr_en_ddr3;
 wire cbuf_rd_en_ddr3;
-(* mark_debug = "true" *) wire [22:0] fill_address_ddr3;
+wire [22:0] fill_address_ddr3;
 adc_acq_top_selftrigc adc_acq_top_selftrigc (
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
@@ -470,7 +469,7 @@ sync_2stage st_sync (
 // Create a FIFO to buffer the fill address between the ADC block and the DDR3 block
 // Reset it when there is a full reset or when we are starting over -- flagged
 // by the event count reset
-(* mark_debug = "true" *) wire fill_address_fifo_empty;
+wire fill_address_fifo_empty;
 wire fill_address_fifo_full;
 fill_address_fifo fill_burst_address_fifo (
   .rst(dwf_reset),                         // input wire rst
@@ -514,7 +513,7 @@ wire [22:0] fixed_ddr3_start_addr;
 wire en_fixed_ddr3_start_addr;
 
 wire enable_reading;
-(* mark_debug = "true" *) wire enable_reading_ddr3;
+wire enable_reading_ddr3;
 wire reading_done;
 
 sync_2stage er_sync (
@@ -840,7 +839,7 @@ command_top command_top (
     .circ_to_ddr3_state(circ_to_ddr3_state),
     .enable_sm_state(enable_sm_state),
     .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
-    .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state)
+    .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state),
 );
 
 // sync initial fill number and strobe into adc clock world

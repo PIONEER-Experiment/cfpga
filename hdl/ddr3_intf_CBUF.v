@@ -46,7 +46,9 @@ module ddr3_intf_cbuf(
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
     output app_rdy,                             // output, PHY calibration is done
-    input [11:0] xadc_temp
+    input [11:0] xadc_temp,
+    output [ 2:0] ddr3_rd_ctrl_state,
+    output [16:0] ddr3_wr_ctrl_state
 );
 
 //synchronize the 'reset' signal
@@ -148,7 +150,8 @@ ddr3_rd_control ddr3_rd_control (
     .ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),                // data is valid, so put it in the READ FIFO    
     //.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
-    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)     // the last burst for this fill 
+    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast),    // the last burst for this fill
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state)
 );
 
 ////////////////////////////////////////////////////////////////////////////

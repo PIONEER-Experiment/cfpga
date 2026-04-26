@@ -95,7 +95,7 @@ always @(posedge ddr3_domain_clk) begin
     ddr3_wr_en_sync1 <= ddr3_wr_en;
     ddr3_wr_en_sync2 <= ddr3_wr_en_sync1;
 end
-(* mark_debug = "true" *) wire ddr3_wr_en_dbg;
+wire ddr3_wr_en_dbg;
 assign ddr3_wr_en_dbg = ddr3_wr_en_sync2;
 
 //synchronize the 'cbuf_rd_en' signal
@@ -110,7 +110,7 @@ wire [25:0] ddr3_rd_addr;
 wire [151:0] fill_header_wr_dat;
 wire [26:0] app_addr;
 wire [2:0] app_cmd;
-(* mark_debug = "true" *) wire [127:0] ddr3_rd_dat;
+wire [127:0] ddr3_rd_dat;
 wire [127:0] ddr3_wr_dat;
 
 // just pass the DDR3 data thru to the FIFO

@@ -18,12 +18,12 @@ module self_trigger (
     input [41:0] timing_counter,   // counter of 400 MHz clock ticks
     input signed [11:0] threshold, // threshold for average - pedestal to trigger a trigger pulse.
     input polarity,                // 1 => positive going signal, 0 => negative going
-(* mark_debug = "true" *) input enable,                  // start looking for triggers. Global in time.
-(* mark_debug = "true" *) input cbuf_trig_en,            // accept self triggers.  Local in time. Controlled by enable_sm_selftrig
+    input enable,                  // start looking for triggers. Global in time.
+    input cbuf_trig_en,            // accept self triggers.  Local in time. Controlled by enable_sm_selftrig
     // outputs
-(* mark_debug = "true" *) output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
+    output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
-(* mark_debug = "true" *) output reg trigger
+    output reg trigger
 );
 
 // add two stages of pipelining
@@ -67,7 +67,7 @@ wire local_trigger_wire;
 assign local_trigger_wire = self_trig_ready ? polarity ? signal_average > (threshold + ped_buffer2) : ped_buffer2 > (threshold + signal_average) : 0;
 
 reg local_trigger_reg, local_trigger_reg2, local_trigger_reg3, local_trigger_reg4;
-(* mark_debug = "true" *) reg local_trigger_reg5;
+reg local_trigger_reg5;
 reg local_trigger;
 always @(posedge clk ) begin
   if (rst) begin

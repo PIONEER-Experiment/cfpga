@@ -77,7 +77,7 @@ parameter STARTUP_LOAD       = 3'b100;
 parameter STARTUP_WRITE      = 3'b101;
 parameter STARTUP_DONE       = 3'b110;
 
-reg [2:0] startup_state = STARTUP_IDLE;
+(* fsm_safe_state = "default_state" *) reg [2:0] startup_state = STARTUP_IDLE;
 
 // the default ADC registers based on header text file values
 reg [23:0] default_reg;
@@ -198,6 +198,8 @@ begin
 
             startup_state <= STARTUP_DONE;
         end
+        
+        default: startup_state <= STARTUP_IDLE;
     endcase
 end
 

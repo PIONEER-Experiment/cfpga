@@ -54,8 +54,8 @@ module enableControl2 (
     //(* fsm_encoding = "one-hot" *)
 
     // Declare current state and next state variables
-(* mark_debug = "true" *)    state_t CS;
-(* mark_debug = "true" *)    state_t NS;
+    state_t CS;
+    state_t NS;
     
     // sequential always block for state transitions (use non-blocking [<=] assignments)
     // Reset the sm whenever we get to the end of a frame

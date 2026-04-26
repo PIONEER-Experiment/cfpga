@@ -138,6 +138,12 @@ wire aurora_channel_up;
 wire adc_acq_sm_idle;
 wire command_sm_idle;
 
+// state machine states
+wire [18:0] adc_acq_state;
+wire [18:0] circ_to_ddr3_state;
+wire [ 2:0] ddr3_rd_ctrl_state;            // read control current state
+wire [16:0] ddr3_wr_ctrl_state;            // write control current state
+
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
 // Connect an input buffer and a global clock buffer to the 50 MHz clock
@@ -365,6 +371,9 @@ ddr3_intf_cbuf ddr3_intf_cbuf(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
+     // states
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),            // read control current state
+    .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
     .xadc_temp(xadc_temp[11:0])
 );
 
@@ -515,7 +524,7 @@ all_channels channels(
     // serial I/O pins
     .c0_rxp(c0_rx), .c0_rxn(c0_rx_N),                // receive from channel 0 FPGA
     .c0_txp(c0_tx), .c0_txn(c0_tx_N),                // transmit to channel 0 FPGA
-    .debug(debug[7:0]),
+    //.debug(debug[7:0]),
     .channel_up(aurora_channel_up)
 );
 
@@ -560,6 +569,7 @@ command_top command_top (
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),        // input, the number of bursts to read
     .enable_reading(enable_reading),                    // input, initialize the address generator and both counters, go
     .reading_done(reading_done),                        // output, reading is complete
+    .acq_done_latch(1'b1),                              // needed for self triggering.  All other modes should just assert
 
     // registers to/from the ADC acquisition state machine
     .fill_num(fill_num[23:0]),                                     // fill number for this fill
@@ -583,8 +593,11 @@ command_top command_top (
     .ped_waveform_gap(ped_waveform_gap[21:0]),                  // idle time between waveforms
     .async_num_bursts(async_num_bursts[13:0]),                  // number of 8-sample bursts in an ASYNC waveform
     .async_pre_trig(async_pre_trig[15:0]),                      // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
+    .selftrig_threshold(),
+    .selftrig_polarity(),
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(23'd0),
+    .read_fill_done(),
 
     .xadc_temp(xadc_temp[15:0]),
     .xadc_vccint(xadc_vccint[15:0]),
@@ -601,7 +614,14 @@ command_top command_top (
     
     // status signals
     .command_sm_idle(command_sm_idle),
-    .image_type(image_type)
+    .image_type(image_type),
+
+    // dummy machine states for now
+    .adc_acq_state(19'b0),
+    .circ_to_ddr3_state(19'b0),
+    .enable_sm_state(10'b0),
+    .ddr3_rd_ctrl_state(3'b0),
+    .ddr3_wr_ctrl_state(17'b0)
 );
 
 
