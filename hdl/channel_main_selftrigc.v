@@ -85,6 +85,7 @@ assign readout_pause = io[0];           // stop sending fill data to the Aurora
 //   io[1] : 'acq_enable'
 wire enable_triggering;                 // indicates enabled for self triggering
 wire enable_acquisition;                // indicates that data acquisition has not yet completed
+wire master_enable_125;
 enableControl2 enableControl2(
   .clk125(clk125),
   .reset(reset_clk125),
@@ -92,7 +93,6 @@ enableControl2 enableControl2(
   .enable_acquisition(enable_acquisition),
   .enable_triggering(enable_triggering)
 );
-wire master_enable_125;
 wire master_enable_ddr3;
 wire master_enable_adc;
 assign master_enable  = io[1];
@@ -483,7 +483,8 @@ fill_address_fifo fill_burst_address_fifo (
   .empty(fill_address_fifo_empty)          // data is available when this is not asserted
 );
 
-//
+// probably good to get this working for real
+assign high_water_warning = 1'b0;
 //assign high_water_mark = 20'h10000;
 //assign high_water_warning = fill_address_fifo_empty ? 0 :
 //                            unread_fill_address_sync < fill_burst_address_sync ? 0 :
@@ -839,7 +840,7 @@ command_top command_top (
     .circ_to_ddr3_state(circ_to_ddr3_state),
     .enable_sm_state(enable_sm_state),
     .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
-    .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state),
+    .ddr3_wr_ctrl_state (ddr3_wr_ctrl_state)
 );
 
 // sync initial fill number and strobe into adc clock world

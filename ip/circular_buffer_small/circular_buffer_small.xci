@@ -155,7 +155,7 @@
         "C_DISABLE_WARN_BHV_RANGE": [ { "value": "0", "resolve_type": "generated", "format": "long", "usage": "all" } ],
         "C_COUNT_36K_BRAM": [ { "value": "4", "resolve_type": "generated", "usage": "all" } ],
         "C_COUNT_18K_BRAM": [ { "value": "0", "resolve_type": "generated", "usage": "all" } ],
-        "C_EST_POWER_SUMMARY": [ { "value": "Estimated Power for IP     :     8.72275 mW", "resolve_type": "generated", "usage": "all" } ]
+        "C_EST_POWER_SUMMARY": [ { "value": "Estimated Power for IP     :     34.891 mW", "resolve_type": "generated", "usage": "all" } ]
       },
       "project_parameters": {
         "ARCHITECTURE": [ { "value": "kintex7" } ],

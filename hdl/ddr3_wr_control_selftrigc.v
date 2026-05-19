@@ -51,24 +51,24 @@ end
 
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
-parameter [3:0]
-    IDLE             = 4'd0,  // 00001
-    INIT_ALL         = 4'd1,  // 00002
-    WAIT             = 4'd2,  // 00004
-    TST_TAG          = 4'd3,  // 00008
-    SYNC_ERR         = 4'd4,  // 00010
-    INIT_FILL        = 4'd5,  // 00020
-    WRITE_FILL       = 4'd6,  // 00040
-    INIT_WFM         = 4'd7,  // 00080
-    INIT_CKSM        = 4'd8,  // 00100
-    WRITE            = 4'd9,  // 00200
-    WRITE_CKSM       = 4'd10, // 00400
-    WRITE_HDR        = 4'd11, // 00800
-    FINISH           = 4'd12, // 01000
-    CLR_FILL_ADR     = 4'd13, // 02000 
-    FILL_DONE        = 4'd14, // 04000
-    WAIT_FILL_ADR    = 4'd15, // 08000
-    SET_FILL_ADR     = 4'd16; // 20000
+parameter [4:0]
+    IDLE             = 5'd0,  // 00001
+    INIT_ALL         = 5'd1,  // 00002
+    WAIT             = 5'd2,  // 00004
+    TST_TAG          = 5'd3,  // 00008
+    SYNC_ERR         = 5'd4,  // 00010
+    INIT_FILL        = 5'd5,  // 00020
+    WRITE_FILL       = 5'd6,  // 00040
+    INIT_WFM         = 5'd7,  // 00080
+    INIT_CKSM        = 5'd8,  // 00100
+    WRITE            = 5'd9,  // 00200
+    WRITE_CKSM       = 5'd10, // 00400
+    WRITE_HDR        = 5'd11, // 00800
+    FINISH           = 5'd12, // 01000
+    CLR_FILL_ADR     = 5'd13, // 02000 
+    FILL_DONE        = 5'd14, // 04000
+    WAIT_FILL_ADR    = 5'd15, // 08000
+    SET_FILL_ADR     = 5'd16; // 20000
 
 // synchronize 'acq_done'
 (* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;
