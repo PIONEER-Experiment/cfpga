@@ -10,11 +10,12 @@ module adc_acq_sm (
     input acq_enable1,                  // indicates enabled for triggers, and fill type
     input acq_trig,                     // trigger the logic to start collecting data
     input reset_clk50,                  // reset from internal logic, synched to CLK50
+    input adc_acq_full_reset,           // reset everything related to ADC acquisition and storage -- now just reset_clk50 synced to adc_clk
     input burst_cntr_zero,              // all sample bursts have been saved
-    input waveform_gap_zero,   			// the idle time has elapsed
-    input last_waveform,  				// all waveforms have been saved
+    input waveform_gap_zero,            // the idle time has elapsed
+    input last_waveform,                // all waveforms have been saved
     input ddr3_wr_done,                 // asserted when the 'ddr3_wr_control' is in the DONE state
-	input dummy_dat_reset_mode,			// channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
+    input dummy_dat_reset_mode,         // channel_tag[4] = 0 -> free-run,  1 -> reset every waveform
     // outputs
     output reg [1:0] fill_type,         // determine which burst count to use
     output reg fill_type_mux_en,
@@ -33,7 +34,6 @@ module adc_acq_sm (
     output reg waveform_gap_cntr_init,  // initialize after previous waveform stored
     output reg waveform_gap_cntr_en,    // enable after each initialization
     output reg adc_acq_out_valid,       // current data should be stored in the FIFO
-    output reg adc_acq_full_reset,      // reset everything related to ADC acquisition and storage
     output reg acq_done,                // acquisition is done
     output reg sm_idle                  // signal that this state machine is idle (used for front panel LED status)
 );      
@@ -60,16 +60,16 @@ always @(posedge clk) begin
     acq_trig_sync4 <= acq_trig_sync3;
 end
 
-// sync and combine the external ACQ_RESET and the internal RESET_CLK50
-reg reset_clk50_sync1, reset_clk50_sync2; 
-always @(posedge clk) begin
-    reset_clk50_sync1 <= reset_clk50;
-    reset_clk50_sync2 <= reset_clk50_sync1;
-    adc_acq_full_reset <= reset_clk50_sync2;
-end
+// // sync and combine the external ACQ_RESET and the internal RESET_CLK50
+// reg reset_clk50_sync1, reset_clk50_sync2;
+// always @(posedge clk) begin
+//     reset_clk50_sync1 <= reset_clk50;
+//     reset_clk50_sync2 <= reset_clk50_sync1;
+//     adc_acq_full_reset <= reset_clk50_sync2;
+// end
 
 // synchronize 'ddr3_wr_done'
-reg ddr3_wr_done_sync1, ddr3_wr_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg ddr3_wr_done_sync1, ddr3_wr_done_sync2;
 always @ (posedge clk) begin
     ddr3_wr_done_sync1 <= ddr3_wr_done;
     ddr3_wr_done_sync2 <= ddr3_wr_done_sync1;

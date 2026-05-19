@@ -54,7 +54,7 @@ module ddr3_intf_ASYNC(
 // end fast simulation mods    
 
 //synchronize the 'reset' signal
-reg reset_sync1, reset_sync2;
+(* ASYNC_REG = "TRUE" *) reg reset_sync1, reset_sync2;
 always @(posedge sysclk) begin
     reset_sync1 <= reset_clk50;
     reset_sync2 <= reset_sync1;
@@ -62,7 +62,7 @@ end
 assign reset_ddr3_clk = reset_sync2;
 
 //synchronize the 'ddr3_wr_en' signal
-reg ddr3_wr_en_sync1, ddr3_wr_en_sync2;
+(* ASYNC_REG = "TRUE" *) reg ddr3_wr_en_sync1, ddr3_wr_en_sync2;
 always @(posedge ddr3_domain_clk) begin
     ddr3_wr_en_sync1 <= ddr3_wr_en;
     ddr3_wr_en_sync2 <= ddr3_wr_en_sync1;
@@ -225,7 +225,8 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     .app_zq_req(1'b0),                              // input, request a ZQ calibration
     .app_zq_ack(),                                  // output, a ZQ calibration has been requested
     .init_calib_complete(init_calib_complete),      // output, PHY calibration is done
-    .device_temp_i(xadc_temp[11:0])                 // input, temperature measured by XADC
+    .device_temp_i(xadc_temp[11:0]),                // input, temperature measured by XADC
+    .device_temp()                                  // output,
     // Debug Ports
     // .ddr3_ila_basic(ddr3_ila_basic),
     // .ddr3_ila_wrpath(ddr3_ila_wrpath),

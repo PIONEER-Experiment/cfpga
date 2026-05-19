@@ -22,41 +22,49 @@
 // 2) Response Code (RC) equals the bitwise inverse of the CC
 
 module cc_rd_fill_sm (
-    input clk,                                // local clock
-    input reset,                            // active-high
+  input clk,                                 // local clock
+  input reset,                               // active-high
 
-    input run_sm,                               // run this state machine
-    output reg sm_running,                    // we are running
-    output reg sm_done,                        // we are finished
+  input run_sm,                           // run this state machine
+  output reg sm_running,                  // we are running
+  output reg sm_done,                     // we are finished
+  output [9:0] cc_rd_fill_state,
 
-    output reg tx_tvalid,                    // the data we are presenting is valid
-    output reg tx_tlast,                       // this is the final word in the frame
-    input tx_tready,                         // signal that the TX fifo has accepted the data
 
-    output reg send_csn,                    // send the CSN
-    output reg send_cmd,                    // send the CC
-    output reg send_inv_cmd,                // send the inverse CC
+  output reg tx_tvalid,                   // the data we are presenting is valid
+  output reg tx_tlast,                    // this is the final word in the frame
+  input tx_tready,                        // signal that the TX fifo has accepted the data
 
-    // interface to the header FIFO
-    input fill_header_fifo_empty,            // a header is available when not asserted
-    output reg fill_header_fifo_rd_en,        // remove the current data from the FIFO
-    input [151:0] fill_header_fifo_out,        // data at the head of the FIFO
-    input [22:0] fixed_ddr3_start_addr,
-    input en_fixed_ddr3_start_addr,
+  output reg send_csn,                    // send the CSN
+  output reg send_cmd,                    // send the CC
+  output reg send_inv_cmd,                // send the inverse CC
 
-    // interface to the DDR3 memory
-    output reg [22:0] ddr3_rd_start_addr,    // the address of the first requested 128-bit burst
-    output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
-    output reg enable_reading,                 // start the 'ddr3_rd_control'
-    input reading_done,                       // reading is complete
-    
-    // interface to the AXIS 2:1 MUX
-    output reg use_ddr3_data,                // the data source is the DDR3 memory
-    input aurora_ddr3_accept                // DDR3 data has been accepted by the Aurora
+  // interface to the header FIFO
+  input fill_header_fifo_empty,           // a header is available when not asserted
+  output reg fill_header_fifo_rd_en,      // remove the current data from the FIFO
+  //output reg fill_address_fifo_rd_en,     // remove the address for the fill just read from the FIFO
+  input [151:0] fill_header_fifo_out,     // data at the head of the FIFO
+  input [22:0] fixed_ddr3_start_addr,
+  input en_fixed_ddr3_start_addr,
+
+  // interface to the DDR3 memory
+  output reg [22:0] ddr3_rd_start_addr,   // the address of the first requested 128-bit burst
+  output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
+  output reg enable_reading,              // start the 'ddr3_rd_control'
+  input reading_done,                     // reading is complete
+  input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
+
+// interface to the AXIS 2:1 MUX
+  output reg use_ddr3_data,                // the data source is the DDR3 memory
+  input aurora_ddr3_accept,                // DDR3 data has been accepted by the Aurora
+// for debugging
+  input initial_fill_num_wr                // tells the debugging event counter to reset to zero
 );
 
 // Synchronize  'reading_done'.
-reg reading_done_sync1, reading_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg reading_done_sync1;
+(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg reading_done_sync2;
+
 always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;
@@ -73,7 +81,27 @@ reg error_found;
 reg [25:0] ddr3_words_to_send;
 reg all_ddr3_words_sent;
 always @(posedge clk) begin
-    all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 25'b0);
+    all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 26'b0);
+end
+
+// latch and clear the acq_done to avoid timing issues
+reg acq_done_local;
+reg clear_acq_done;
+always @(posedge clk) begin
+  if ( acq_done_latch )
+    acq_done_local <= 1'b1;
+  else if ( clear_acq_done )
+    acq_done_local <= 1'b0;
+end
+
+// keep track of fill number we are reading
+reg [19:0] fill_no_rd_ddr3;
+reg new_fill_seen;
+always @(posedge clk) begin
+  if ( reset )
+    fill_no_rd_ddr3[19:0] <= 0;
+  else if ( new_fill_seen )
+    fill_no_rd_ddr3[19:0] <= fill_no_rd_ddr3[19:0] + 1;
 end
 
 // State machine for executing the 'rd_fill' command
@@ -82,20 +110,21 @@ end
 // Declare the symbolic names for states for the state machine
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [3:0]
-    IDLE                = 4'd0,
-    CHK_FIFO_EMPTY        = 4'd1,
-    ERROR1                = 4'd2,
-    GET_FIFO_HDR        = 4'd3,
-    ECHO_CSN1            = 4'd4,
-    ECHO_CSN2            = 4'd5,
-    ECHO_CC1            = 4'd6,
-    ECHO_CC2            = 4'd7,
-    GET_DDR3_DATA        = 4'd8,
-    DONE                = 4'd9;
+    IDLE                 = 4'd0,  // 001
+    CHK_FIFO_EMPTY       = 4'd1,  // 002
+    ERROR1               = 4'd2,  // 004
+    GET_FIFO_HDR         = 4'd3,  // 008
+    ECHO_CSN1            = 4'd4,  // 010
+    ECHO_CSN2            = 4'd5,  // 020
+    ECHO_CC1             = 4'd6,  // 040
+    ECHO_CC2             = 4'd7,  // 080
+    GET_DDR3_DATA        = 4'd8,  // 100
+    DONE                 = 4'd9;  // 200
                 
 // Declare current state and next state variables
 reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
+assign cc_rd_fill_state = CS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
@@ -108,8 +137,8 @@ always @ (posedge clk) begin
     else CS <= NS;          // set state bits to next state
 end
 
-// combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent) begin
+// combinational always block to determine next state  (use blocking [=] assignments)
+always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or acq_done_latch or run_sm or acq_done_local ) begin
     NS = 10'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
@@ -117,15 +146,26 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         // We will be in the IDLE state whenever the command dispatcher does not enable us.
         // Once enabled, immediately start working. Assert 'sm_running'
         CS[IDLE]: begin
-            // Prepare to get and check trigger number.
-            NS[CHK_FIFO_EMPTY] = 1'b1;
+            if ( run_sm ) begin
+              // Prepare to get and check trigger number.
+              NS[CHK_FIFO_EMPTY] = 1'b1;
+            end
+            else begin
+              // explicitly set NS[IDLE] when not running so that sm_running logic below works properly
+              NS[IDLE] = 1'b1;
+            end
         end
 
         // We enter the CHK_FIFO_EMPTY state after we have been started.
         // There should be a complete header in the FIFO. If nothing is there, then we flag an error
         CS[CHK_FIFO_EMPTY]: begin
+//            if ( !acq_done_latch ) begin
+            if ( !acq_done_local ) begin
+               // the DDR3 writing and header fifo should be ready for us -- wait here
+               NS[CHK_FIFO_EMPTY] = 1'b1;
+            end
             // See if there is something in the header FIFO
-            if (fill_header_fifo_empty)
+            else if (fill_header_fifo_empty)
                 // We were asked for a fill, but nothing there, so go flag an error.
                 // We need to somehow resync.
                 NS[ERROR1] = 1'b1;
@@ -220,22 +260,27 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
     endcase
 end // combinational always block to determine next state
 
+
 ///////////////////////////////////////////////////////////////////////////
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
+reg [11:0] header_address;
 always @ (posedge clk) begin
     // defaults
-    sm_running                <= 1'b1;    // negate this when IDLE
-    sm_done                    <= 1'b0;
-    fill_header_fifo_rd_en    <= 1'b0;
-    enable_reading            <= 1'b0;
-    tx_tvalid                <= 1'b0;
+    sm_running              <= 1'b1;    // negate this when IDLE
+    sm_done                 <= 1'b0;
+    fill_header_fifo_rd_en  <= 1'b0;
+    //fill_address_fifo_rd_en <= 1'b0;
+    enable_reading          <= 1'b0;
+    tx_tvalid               <= 1'b0;
     tx_tlast                <= 1'b0;
     send_csn                <= 1'b0;
     send_cmd                <= 1'b0;
     send_inv_cmd            <= 1'b0;
-    use_ddr3_data            <= 1'b0;
-    
+    use_ddr3_data           <= 1'b0;
+    clear_acq_done          <= 1'b0;
+    new_fill_seen           <= 1'b0;
+
     // next states
     if (NS[IDLE]) begin
         sm_running <= 1'b0;    // negate this when IDLE
@@ -248,24 +293,34 @@ always @ (posedge clk) begin
     end
 
     if (NS[ERROR1]) begin
+      clear_acq_done          <= 1'b1;
     end
 
     if (NS[GET_FIFO_HDR]) begin
-        // load the address pointer
-        if (en_fixed_ddr3_start_addr) // if fixed start address is enabled
-            ddr3_rd_start_addr[22:0] <= fixed_ddr3_start_addr[22:0];
-        else if ( fill_header_fifo_out[26] ) // if async mode
-            ddr3_rd_start_addr[22:0] <= 23'd0;
-        else // sync or cbuf mode
+      // load the address pointer
+      if (en_fixed_ddr3_start_addr) // if fixed start address is enabled
+          ddr3_rd_start_addr[22:0] <= fixed_ddr3_start_addr[22:0];
+      else if ( fill_header_fifo_out[26] ) // if async mode
+          ddr3_rd_start_addr[22:0] <= 23'd0;
+      else if ( fill_header_fifo_out[123] ) begin  // if selftrig
+          if ( fill_header_fifo_out[124] )   // circular buffer mode)
             ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[75:53];
+          else                               // two-buffer mode
+            ddr3_rd_start_addr[22:0] <= {fill_header_fifo_out[24],22'd0};
+      end
+      else // sync or cbuf mode
+          ddr3_rd_start_addr[22:0] <= fill_header_fifo_out[75:53];
 
-        // load the burst counter from the high 24 bits of 'fill_header_fifo_out'.
-        // It already accounts for all headers and trailers
-        ddr3_rd_burst_cnt[23:0] <= fill_header_fifo_out[151:128];
-        // load the words_to_send counter - these are 32-bit words, so left-shift the burst count
-        ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
-        // remove the word from the FIFO head
-        fill_header_fifo_rd_en <= 1'b1;
+      // load the burst counter from the high 24 bits of 'fill_header_fifo_out'.
+      // It already accounts for all headers and trailers
+      ddr3_rd_burst_cnt[23:0] <= fill_header_fifo_out[151:128];
+      // load the words_to_send counter - these are 32-bit words, so left-shift the burst count
+      ddr3_words_to_send[25:0] <= {fill_header_fifo_out[151:128], 2'b0};
+      // remove the word from the FIFO head
+      fill_header_fifo_rd_en <= 1'b1;
+      header_address         <= fill_header_fifo_out[11:0];
+      clear_acq_done         <= 1'b1;
+      new_fill_seen          <= 1'b1;
     end
 
     if (NS[ECHO_CSN1]) begin
@@ -315,6 +370,8 @@ always @ (posedge clk) begin
         end
         // notify calling logic that we are done
         sm_done <= 1'b1;
+        // we've finished reading this fill, so clear its address from the FIFO for the high water mark calculation
+        //fill_address_fifo_rd_en <= 1'b1;
     end
 end
 

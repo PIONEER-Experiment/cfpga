@@ -11,7 +11,7 @@
 // as a useful reference, here's the syntax to mark signals for debug:
 // (* mark_debug = "true" *) 
 
-module adc_ddr3_top_async(
+module adc_ddr3_top_cbuf(
   // Utility
   input clk50,
   input clk125,

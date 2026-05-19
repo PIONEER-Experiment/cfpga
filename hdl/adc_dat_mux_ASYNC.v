@@ -39,7 +39,7 @@ module adc_dat_mux_ASYNC (
 wire [131:0] fill_header;
 assign fill_header[ 23:  0] = fill_num[23:0];             // 24-bit fill number from register R0, incremented each fill
 assign fill_header[ 25: 24] = fill_type[1:0];             //  2-bit fill type from pins "ACQ_ENABLE[1:0]"
-assign fill_header[     26] = 1'b1;                       //  1-bit fill header format: sync=0, async=1
+assign fill_header[     26] = 1'b1;                       //  1-bit fill header format: async=1, all other modes = 0
 assign fill_header[ 49: 27] = num_fill_bursts[22:0];      // 23-bit final burst count covering all headers, waveforms, checksum
 assign fill_header[ 63: 50] = async_num_bursts[13:0];     // 14-bit value for number of bursts per trigger from register R20
 assign fill_header[ 75: 64] = async_pre_trig[11:0];       // 12-bit LSB value for number of pre-trigger ADC pairs from register R21
@@ -47,7 +47,9 @@ assign fill_header[ 98: 76] = current_waveform_num[22:0]; // 23-bit final wavefo
 assign fill_header[102: 99] = async_pre_trig[15:12];      //  4-bit MSB value for number of pre-trigger ADC pairs from register R21
 assign fill_header[109:103] = 7'd0;                       //  7-bit unused
 assign fill_header[121:110] = channel_tag[11:0];          // 12-bit channel tag
-assign fill_header[125:122] = 4'd0;                       //  4-bit unused
+assign fill_header[122:122] = 1'd0;                       //  1-bit cbuf=1, all other modes = 0
+assign fill_header[123:123] = 1'd0;                       //  1-bit self triggered = 1, all other modes = 0
+assign fill_header[125:124] = 2'd0;                       //  2-bit unused
 assign fill_header[127:126] = 2'b01;                      //  2-bit header tag; this pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
 assign fill_header[131:128] = 4'd1;                       //  4-bit burst contents tag, tag = '1' for fill header
 

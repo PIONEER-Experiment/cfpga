@@ -46,18 +46,20 @@ module ddr3_intf_cbuf(
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
     output app_rdy,                             // output, PHY calibration is done
-    input [11:0] xadc_temp
+    input [11:0] xadc_temp,
+    output [ 2:0] ddr3_rd_ctrl_state,
+    output [16:0] ddr3_wr_ctrl_state
 );
 
 //synchronize the 'reset' signal
-reg reset_sync1, reset_sync2;
+(* ASYNC_REG = "TRUE" *) reg reset_sync1, reset_sync2;
 always @(posedge sysclk) begin
     reset_sync1 <= reset;
     reset_sync2 <= reset_sync1;
 end
 
 //synchronize the 'acq_enabled' signal
-reg acq_enabled_sync1, acq_enabled_sync2;
+(* ASYNC_REG = "TRUE" *) reg acq_enabled_sync1, acq_enabled_sync2;
 always @(posedge ddr3_domain_clk) begin
     acq_enabled_sync1 <= acq_enabled;
     acq_enabled_sync2 <= acq_enabled_sync1;
@@ -148,7 +150,8 @@ ddr3_rd_control ddr3_rd_control (
     .ddr3_rd_fifo_wr_en(ddr3_rd_fifo_wr_en),                // data is valid, so put it in the READ FIFO    
     //.ddr3_rd_fifo_input_dat(ddr3_rd_fifo_input_dat[127:0]), // output, memory data
     .ddr3_rd_fifo_almost_full(ddr3_rd_fifo_almost_full),    // there is not much room left    
-    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast)     // the last burst for this fill 
+    .ddr3_rd_fifo_input_tlast(ddr3_rd_fifo_input_tlast),    // the last burst for this fill
+    .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state)
 );
 
 ////////////////////////////////////////////////////////////////////////////
@@ -215,8 +218,9 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     .app_zq_req(1'b0),                              // input, request a ZQ calibration
     .app_zq_ack(),                                  // output, a ZQ calibration has been requested
     .init_calib_complete(init_calib_complete),      // output, PHY calibration is done
-    .device_temp_i(xadc_temp[11:0])                 // input, temperature measured by XADC
-    // Debug Ports
+    .device_temp_i(xadc_temp[11:0]),                // input, temperature measured by XADC
+    .device_temp()                                  // output,
+   // Debug Ports
     // .ddr3_ila_basic(ddr3_ila_basic),
     // .ddr3_ila_wrpath(ddr3_ila_wrpath),
     // .ddr3_ila_rdpath(ddr3_ila_rdpath),

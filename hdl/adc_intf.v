@@ -5,8 +5,9 @@ module adc_intf(
     input clk,
     input reset,
     input [31:0] data_in,
-    output reg [31:0] data_out,
-    output sclk,
+    output [31:0] data_out,
+    input slow_clk,
+    input sclk,
     output sdio,
     input sdi,
     output reg sdenb,
@@ -16,35 +17,43 @@ module adc_intf(
 );
 
 
+reg resetS;
+reg [31:0] data_inS;
+
 //*************************************************************************
 // static assignments
 //*************************************************************************
-assign sclk = slow_clk_180;
+// assign sclk = slow_clk_180;  // lkg 03/04/24  -- now generate using clock wizard
 assign sresetb = ~data_inS[2]; // active-low reset to ADS5401
 assign enable = 1'b1;   	   // active-high enable to ADS5401
 
 
 //*************************************************************************
 // generate a low speed clock (6.25 MHz / 160 ns)
+// lkg 03/04/24  -- now generate using clock wizard.  That ckock is 125 ns / 8 MHz
 //*************************************************************************
-reg [2:0] clk_cnt;
-wire slow_clk;
-wire slow_clk_180;
+// reg [2:0] clk_cnt;
+// wire slow_clk;
+// wire slow_clk_180;
+//
+// always @ (posedge clk)
+// begin
+//     clk_cnt[2:0] <= clk_cnt[2:0] + 1'b1;
+// end
+//
+// assign slow_clk = clk_cnt[2];
+// assign slow_clk_180 = !slow_clk;
 
-always @ (posedge clk)
-begin
-    clk_cnt[2:0] <= clk_cnt[2:0] + 1'b1;
-end 
-
-assign slow_clk = clk_cnt[2];
-assign slow_clk_180 = !slow_clk;
-
+//*************************************************************************
+// declare some registers / wires up front
+//*************************************************************************
+reg startup_finished = 1'b0;        // flag to tell other (non startup) state machines that the startup procedure is finished
+reg [31:0] startup_data_in = 32'd0; // register value which will be written to the ADC
+wire [23:0] payload;
 
 //*************************************************************************
 // synchronize state machine inputs (to the slow clock)
 //*************************************************************************
-reg resetS;
-reg [31:0] data_inS;
 
 always @ (posedge slow_clk)
 begin
@@ -68,7 +77,7 @@ parameter STARTUP_LOAD       = 3'b100;
 parameter STARTUP_WRITE      = 3'b101;
 parameter STARTUP_DONE       = 3'b110;
 
-reg [2:0] startup_state = STARTUP_IDLE;
+(* fsm_safe_state = "default_state" *) reg [2:0] startup_state = STARTUP_IDLE;
 
 // the default ADC registers based on header text file values
 reg [23:0] default_reg;
@@ -96,8 +105,6 @@ begin
 end
 
 reg [15:0] startup_cnt = 16'd0;     // counter to wait >3 ms after power up
-reg [31:0] startup_data_in = 32'd0; // register value which will be written to the ADC
-reg startup_finished = 1'b0;        // flag to tell other state machines that the startup procedure is finished
 reg [15:0] write_cnt = 16'd0;       // counter to wait for writing process to occur after driving the access bit high
 
 always @ (posedge slow_clk)
@@ -191,6 +198,8 @@ begin
 
             startup_state <= STARTUP_DONE;
         end
+        
+        default: startup_state <= STARTUP_IDLE;
     endcase
 end
 
@@ -313,13 +322,21 @@ end
 //*************************************************************************
 // latch to offload the shift register
 //*************************************************************************
-always @ (posedge clk)
+reg [31:0] data_out_slow;
+always @ (posedge slow_clk)
 begin
 	if (sreg_ready)
-		data_out[31:0] <= {8'b00000000,sreg_in[23:0]};
+		data_out_slow[31:0] <= {8'b00000000,sreg_in[23:0]};
 	else
-		data_out[31:0] <= data_out[31:0];
+		data_out_slow[31:0] <= data_out_slow[31:0];
 end
+sync_2stage #(
+     .WIDTH(32)
+) data_out_sync (
+    .clk(clk),
+    .in(data_out_slow),
+    .out(data_out)
+);
 
 
 //*************************************************************************
@@ -349,7 +366,6 @@ wire access;
 assign access = data_inS[0];
 
 // 'payload' is in the SDIO required bit sequence expected by the ADC
-wire [23:0] payload;
 assign payload = {data_inS[1], data_inS[14:8], data_inS[31:16]};
 
 always @ (posedge slow_clk)
@@ -419,7 +435,8 @@ assign debug[7] = clk;
 assign debug[6] = slow_clk;
 assign debug[5] = sreg_strobe;
 assign debug[4] = access;
-assign debug[3] = slow_clk_180;
+//assign debug[3] = slow_clk_180;
+assign debug[3] = sclk;
 assign debug[2] = sdenb;
 assign debug[1] = sreg_out[23];
 assign debug[0] = sdi; 

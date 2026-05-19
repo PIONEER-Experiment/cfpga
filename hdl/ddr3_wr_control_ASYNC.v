@@ -50,7 +50,7 @@ parameter [3:0]
     DONE        = 4'd12;
 
 // synchronize 'acq_done'
-reg acq_done_sync1, acq_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;
 always @ (posedge clk) begin
     acq_done_sync1 <= acq_done;
     acq_done_sync2 <= acq_done_sync1;

@@ -18,7 +18,7 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-module adc_ddr3_top_async_tb1;
+module adc_ddr3_top_cbuf_tb1;
 
     // inputs
     reg [11:0] adc_in_p;          // [11:0] array of ADC 'p' data pins

@@ -20,7 +20,7 @@ module adc_dat_mux (
     input [22:0] burst_start_adr,      // first DDR3 memory location for this fill
     input [23:0] fill_num,             // fill number for this fill
     input [11:0] num_waveforms,	       // number of waveforms to store per trigger
-	input [11:0] current_waveform_num, // the current waveform number, to be used in header
+    input [11:0] current_waveform_num, // the current waveform number, to be used in header
     input [21:0] waveform_gap,	       // idle time between waveforms
     input [3:0] xadc_alarms,
     input clk,
@@ -42,10 +42,11 @@ assign fill_header[     26] = 1'b0;                          //  1-bit fill head
 assign fill_header[ 49: 27] = num_fill_bursts[22:0];         // 23-bit burst count, 
 assign fill_header[ 75: 50] = {burst_start_adr[22:0], 3'd0}; // 23-bit DDR3 burst address, 3 LSBs always zero, 
 assign fill_header[ 87: 76] = num_waveforms[11:0];           // 12-bit number of waveforms to store per trigger
-assign fill_header[109: 88] = waveform_gap[21:0];	          // 22-bit idle time between waveforms
+assign fill_header[109: 88] = waveform_gap[21:0];            // 22-bit idle time between waveforms
 assign fill_header[121:110] = channel_tag[11:0];             // 12-bit channel info
-assign fill_header[122:122] = 1'b0;                          //  1-bit sync = async=0, cbuf=1 flag, if needed
-assign fill_header[125:123] = 3'd0;                          //  unused
+assign fill_header[122:122] = 1'b0;                          //  1-bit cbuf=1, all other modes = 0
+assign fill_header[123:123] = 1'd0;                          //  1-bit self triggered = 1, all other modes = 0
+assign fill_header[125:124] = 2'd0;                          //  2-bit unused
 // make the next 2 bits be a header tag.  This pattern cannot appear in sign-extended data (always 2'b00 or 2'b11).
 assign fill_header[127:126]	= 2'b01;
 // tag = '1' for fill header

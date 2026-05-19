@@ -18,7 +18,7 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-module adc_acq_top_tb1;
+module adc_acq_top_CBUF_tb1;
 
     // inputs
     reg [11:0] adc_in_p;          // [11:0] array of ADC 'p' data pins

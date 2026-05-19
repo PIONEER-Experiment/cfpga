@@ -22,7 +22,7 @@
 // 
 ////////////////////////////////////////////////////////////////////////////////
 
-module simulate_adc_thru_ddr3_ASYNC_tb1;
+module simulate_adc_thru_ddr3_CBUF_tb1;
 
 	// Inputs
 	reg [15:0] channel_tag;

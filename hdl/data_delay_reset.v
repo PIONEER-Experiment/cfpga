@@ -6,11 +6,11 @@
 // delay on the data bus line in the SelectIO Interface Wizard.
 
 module data_delay_reset (
-	input clk,                   // must be 50 MHz or lower clock
-	input reset,                 // start-up reset to initialize SM
-	input [4:0] delay_tap,       // set tap delay from register block
+    input clk,                   // must be 50 MHz or lower clock
+    input reset,                 // start-up reset to initialize SM
+    input [4:0] delay_tap,       // set tap delay from register block
     input [64:0] wiz_delay_tap,  // tap delay from selectio wizard
-	output reg delay_data_reset, // active-high reset
+    output reg delay_data_reset, // active-high reset
     output reg error             // error: tap value not set properly
 );
 
@@ -24,44 +24,44 @@ reg [3:0] counter = 4'b0; // 15 clk cycles max
 reg [3:0] iter = 4'b0;    // 15 checks/attempts max
 
 always @ (posedge clk) begin
-	if (reset) begin
+    if (reset) begin
         delay_data_reset <= 1'b0;
         counter <= 4'b0;
         iter <= 4'b0;
         error <= 1'b0;
         state <= S1;
     end
-	else begin
+    else begin
         case (state)
             // idle
             S1 : begin
                 // delay tap changed!
                 if (curr_delay_tap != delay_tap) begin
-        	    	delay_data_reset <= 1'b1;
+                    delay_data_reset <= 1'b1;
                     error <= 1'b0;
-        		  	state <= S2;
-            	end
+                      state <= S2;
+                end
                 // no delay tap change
                 else begin
-        	     	delay_data_reset <= 1'b0;
-        		 	state <= S1;
-            	end
+                     delay_data_reset <= 1'b0;
+                     state <= S1;
+                end
             end
     
             // active-high reset
             S2 : begin
                 // high for 5 clk cycles
                 if (counter < 4'b0100) begin
-            		delay_data_reset <= 1'b1;
+                    delay_data_reset <= 1'b1;
                     counter <= counter + 1;
-		     	    state <= S2;
-		     	end
-			    else begin
-			    	delay_data_reset <= 1'b0;
+                     state <= S2;
+                 end
+                else begin
+                    delay_data_reset <= 1'b0;
                     counter <= 4'b0;
-		   	    	state <= S3;
-		   	    end
-		    end
+                       state <= S3;
+                   end
+            end
 
             // check tap delay
             S3 : begin
