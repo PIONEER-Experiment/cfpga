@@ -169,6 +169,7 @@ if {[string equal [get_runs -quiet impl_1] ""]} {
 }
 set obj [get_runs impl_1]
 set_property "part" "xc7k70tfbg484-2" $obj
+set_property "steps.opt_design.tcl.post" "[file normalize "$origin_dir/scripts/post_opt_ila_fp.tcl"]" $obj
 set_property "steps.write_bitstream.tcl.pre" "[file normalize "$origin_dir/scripts/get_version.tcl"]" $obj
 set_property "steps.write_bitstream.tcl.post" "[file normalize "$origin_dir/scripts/export_bitstream_selftrigc.tcl"]" $obj
 

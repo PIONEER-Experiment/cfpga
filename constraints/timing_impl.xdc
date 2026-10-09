@@ -7,9 +7,9 @@ set_false_path -from [get_clocks clk_50M_g2_chan_clks] -to [get_clocks xcvr_clk]
 set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {clk_50M_g2_chan_clks clk_200M_g2_chan_clks}]
 set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {clk_8M_g2_chan_clks adc_sdclk_g2_chan_clks}]
 
-
-
-
+set_false_path -to [get_pins \
+    -of_objects [get_nets -hierarchical -quiet -filter {MARK_DEBUG == 1}] \
+    -filter {IS_LEAF == 1 && DIRECTION == IN}]
 
 
 

@@ -132,28 +132,34 @@ always_comb begin
       NS = TRIG_ENABLED;
     end
     
-    // Triggers are accepted during TRIG_ENABLED. Stay in TRIG_ENABLED until either the
-    // ENABLE signal from the master has been negated, or a change in ddr3 buffer has
-    // been detected. Either signals the end of possible new acquisitions
-    // for the current buffer. Go to CBUF_RD_ENABLED to finish writing any triggered
-    // acquisitions to the DDR3 and write the final fill_header.
-    // We should have completed all necessary readout when enable_acquisition deasserts,
-    // so simply go to the idle state once that happens
+    // Triggers are accepted during TRIG_ENABLED. Stay in TRIG_ENABLED until either
+    // enable_acquisition is negated (run end) or a new_fill boundary is detected.
+    // In both cases, go to CBUF_RD_ENABLED to drain any in-flight triggered write
+    // to DDR3 before signalling done. Previously, run-end jumped straight to IDLE,
+    // which could abandon an in-progress DDR3 write; now both paths drain cleanly.
     TRIG_ENABLED: begin
-      if (!enable_acquisition )      NS = IDLE;
-      // a fill of this buffer is ending, so prep the next, write buffer leave the DDR3 asserted.
-      else if ( new_fill_sync2 )     NS = CBUF_RD_ENABLED;
+      // Both run-end and fill-boundary go through the drain sequence.
+      if (!enable_acquisition || new_fill_sync2)  NS = CBUF_RD_ENABLED;
       // filling this buffer  is still active, so stay here
-      else                           NS = TRIG_ENABLED;
+      else                                        NS = TRIG_ENABLED;
     end
     
-    // Stay in CBUF_RD_ENABLED until the 'cbuf_rd_trig_wait' signal from the circular buf
-    // reader has been asserted. This signals that all of the data for the final trigger
-    // has been sent to the DDR3
+    // Stay in CBUF_RD_ENABLED until either:
+    //   (a) cbuf_rd_trig_wait asserts -- the circular buffer reader has finished sending
+    //       all data for the last trigger to the DDR3 (normal fill-boundary or run-end path), or
+    //   (b) enable_acquisition is deasserted AND ddr3_selftrig_wr_active is low -- run-end
+    //       arrived with nothing actively being written, so skip straight to wrap-up (DONE1).
     CBUF_RD_ENABLED: begin
-      // If he final event has been processed, reading done. Otherwise stay here
-      NS = cbuf_rd_trig_wait ? CBUF_RD_DONE : CBUF_RD_ENABLED;
-    end
+      if (cbuf_rd_trig_wait)
+        // Normal path: circular buffer reader has finished sending the last event.
+        NS = CBUF_RD_DONE;
+      else if (!enable_acquisition && !ddr3_selftrig_wr_active)
+        // Run-end escape: no active DDR3 write in progress and no more triggers
+        // will arrive (enable is gone), so nothing left to drain -- skip to wrap-up.
+        NS = DONE1;
+      else
+        NS = CBUF_RD_ENABLED;
+    end    
     
     // When we have sent the final event to the DDR3, we need to send the checksum and the
     // fill header. 

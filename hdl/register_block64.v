@@ -108,37 +108,37 @@ module register_block64(
     
     // write to the writable registers
     always @ (posedge clk) begin
-        if (wr_en && (reg_num[4:0] == 5'h00)) reg0_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h01)) reg1_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h02)) reg2_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h03)) reg3_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h04)) reg4_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h05)) reg5_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h06)) reg6_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h00)) reg0_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h01)) reg1_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h02)) reg2_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h03)) reg3_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h04)) reg4_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h05)) reg5_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h06)) reg6_[31:0] <= rx_data[31:0];
         // R7  is read only
-        if (wr_en && (reg_num[4:0] == 5'h08)) reg8_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h08)) reg8_[31:0] <= rx_data[31:0];
         // R9  is read only
         // R10 is read only
         // R11 is read only
         // R12 is read only
-        if (wr_en && (reg_num[4:0] == 5'h0d)) reg13_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h0e)) reg14_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h0f)) reg15_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h10)) reg16_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h11)) reg17_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h12)) reg18_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h13)) reg19_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h14)) reg20_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h15)) reg21_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h0d)) reg13_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h0e)) reg14_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h0f)) reg15_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h10)) reg16_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h11)) reg17_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h12)) reg18_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h13)) reg19_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h14)) reg20_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h15)) reg21_[31:0] <= rx_data[31:0];
         // R22 is read only
         // R23 is read only
         // R24 is read only
         // R25 is read only
-        if (wr_en && (reg_num[4:0] == 5'h1a)) reg26_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1b)) reg27_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1c)) reg28_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1d)) reg29_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1e)) reg30_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1a)) reg26_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1b)) reg27_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1c)) reg28_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1d)) reg29_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1e)) reg30_[31:0] <= rx_data[31:0];
         // R31 through 37 are read only
         if (wr_en && (reg_num[5:0] == 6'h26)) reg38_[31:0] <= rx_data[31:0];
         if (wr_en && (reg_num[5:0] == 6'h27)) reg39_[31:0] <= rx_data[31:0];
@@ -151,7 +151,7 @@ module register_block64(
     // Send R0 'wr_en' to the ADC acquisition controller
     // fill number will be set back to initial value after a reset
     //wire initial_fill_num_wr_wire;
-    //assign initial_fill_num_wr_wire = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
+    //assign initial_fill_num_wr_wire = ((wr_en && (reg_num[6:0] == 6'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
 
     // R1 - channel tag
     // bits [2:0] from configuration jumpers
@@ -317,7 +317,7 @@ module register_block64(
 
 
         // fill number will be set back to initial value after a reset
-        if ( (wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) begin
+        if ( (wr_en && (reg_num[5:0] == 6'h00)) | reset | cnt_reset) begin
            initial_fill_num_wr <= 1'b1;
         end
         else begin

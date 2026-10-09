@@ -234,8 +234,8 @@ self_trigger self_trigger(
     .rst(adc_acq_full_reset),
     .adcdat(packed_adc_dat),                  // a pair of ADC samples and a pair of over-range bits
     .timing_counter(timing_counter),          // input the 400 MHz clock counter
-    .threshold(selftrig_threshold),           // threshold for average - pedestal to trigger a trigger pulse
-    .polarity(selftrig_polarity),             // 1 => positive going signal, 0 => negative going
+    .threshold_in(selftrig_threshold),        // threshold for average - pedestal to trigger a trigger pulse
+    .polarity_in(selftrig_polarity),          // 1 => positive going signal, 0 => negative going
     .enable(enable_triggering),               // start looking for triggers
     .cbuf_trig_en(cbuf_trig_en),              // accept self triggers, local in time, from enable_sm_selftrig 
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid

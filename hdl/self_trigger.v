@@ -12,16 +12,16 @@
 
 module self_trigger (
     // inputs
-    input clk,                     // the 400 MHz adc/ddr3 clock
-    input rst,                     // reset
-    input [25:0] adcdat,           // a pair of ADC samples and a pair of over-range bits
-    input [41:0] timing_counter,   // counter of 400 MHz clock ticks
-    input signed [11:0] threshold, // threshold for average - pedestal to trigger a trigger pulse.
-    input polarity,                // 1 => positive going signal, 0 => negative going
-    input enable,                  // start looking for triggers. Global in time.
-    input cbuf_trig_en,            // accept self triggers.  Local in time. Controlled by enable_sm_selftrig
+    input clk,                        // the 400 MHz adc/ddr3 clock
+    input rst,                        // reset
+    input [25:0] adcdat,              // a pair of ADC samples and a pair of over-range bits
+    input [41:0] timing_counter,      // counter of 400 MHz clock ticks
+    input signed [11:0] threshold_in, // threshold for average - pedestal to trigger a trigger pulse.
+    input polarity_in,                // 1 => positive going signal, 0 => negative going
+    input enable,                     // start looking for triggers. Global in time.
+    input cbuf_trig_en,               // accept self triggers.  Local in time. Controlled by enable_sm_selftrig
     // outputs
-    output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
+    (* mark_debug = "true" *) output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
     output reg trigger
 );
@@ -43,6 +43,22 @@ always @(posedge clk) begin
   p2_1 <= p1_1;
 end
 
+(* mark_debug = "true" *) wire signed [11:0] threshold;
+sync_2stage #(
+  .WIDTH(12)
+) thresh_sync (
+   .clk(clk),
+   .in(threshold_in),
+   .out(threshold)
+);
+
+(* mark_debug = "true" *) wire polarity;
+sync_2stage polar_sync (
+   .clk(clk),
+   .in(polarity_in),
+   .out(polarity)
+);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // accumulate the sums and test for the trigger condition
 wire signed [13:0] dat0, dat1;
@@ -52,11 +68,11 @@ assign dat1[13:0] = p2_1[13:0];
 // the variables for accumulating and buffering the sums
 reg signed [13:0] input_sum, updating_sum, updating_sum_reg1, updating_sum_reg2;
 reg signed [11:0] ped_buffer1, ped_buffer0, ped_buffer3;
-reg signed [11:0] ped_buffer2;
+(* mark_debug = "true" *) reg signed [11:0] ped_buffer2;  // delayed pedestal estimate used in trigger compare
 reg signed [13:0] sum_buffer0, sum_buffer1;
 
 // the average signal.  4 samples, so bitshift by 2
-wire signed [11:0] signal_average;
+(* mark_debug = "true" *) wire signed [11:0] signal_average;
 assign signal_average[11:0] = updating_sum[13:2];
 reg signed [11:0] dbg_av0, dbg_av1, dbg_av2;
 reg signed [11:0] dbg_av3;
@@ -65,6 +81,23 @@ reg signed [11:0] dbg_av3;
 reg holding_trigger, init_hold_counter;
 wire local_trigger_wire;
 assign local_trigger_wire = self_trig_ready ? polarity ? signal_average > (threshold + ped_buffer2) : ped_buffer2 > (threshold + signal_average) : 0;
+
+// Both polarity conditions simultaneously -- marked for ILA so we can assess which fires
+// regardless of the current polarity register setting.
+// Note: all signals are signed [11:0]; ADC values above 0x800 are negative in this representation.
+// The pedestal comparison must use ped_buffer2, not a hardcoded constant, so that the
+// signed arithmetic cancels correctly (signal_average - ped_buffer2 > threshold).
+(* mark_debug = "true" *) reg pos_trig_cond;  // signal_average > pedestal + threshold
+(* mark_debug = "true" *) reg neg_trig_cond;  // pedestal > signal_average + threshold
+always @(posedge clk) begin
+    pos_trig_cond <= self_trig_ready && enable_sync2 &&
+                     (signal_average > (threshold + ped_buffer2));
+    neg_trig_cond <= self_trig_ready && enable_sync2 &&
+                     (ped_buffer2    > (threshold + signal_average));
+end
+
+// Ungated 1-cycle delayed local_trigger for ILA edge capture (no cbuf_trig_en masking)
+(* mark_debug = "true" *) reg local_trigger_wire_d1;
 
 reg local_trigger_reg, local_trigger_reg2, local_trigger_reg3, local_trigger_reg4;
 reg local_trigger_reg5;
@@ -94,8 +127,9 @@ always @(posedge clk ) begin
      ped_buffer1 <= ped_buffer0;
      ped_buffer3 <= ped_buffer1;
      ped_buffer2 <= ped_buffer3;
-     local_trigger_reg <= local_trigger_wire & cbuf_trig_en;
-     local_trigger     <= local_trigger_reg;
+     local_trigger_reg     <= local_trigger_wire & cbuf_trig_en;
+     local_trigger         <= local_trigger_reg;
+     local_trigger_wire_d1 <= local_trigger_wire; // ungated, ILA edge detect
      local_trigger_reg2    <= local_trigger_wire;
      local_trigger_reg3    <= local_trigger_reg2;
      local_trigger_reg4    <= local_trigger_reg3;
@@ -146,22 +180,32 @@ parameter [2:0]
   PIPE_ADJUST     = 3'd5;
 
 // Declare current state and next state variables
-reg [5:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [5:0] /* synopsys enum STATE_TYPE */ CS;  // self_trigger SM state
 reg [5:0] /* synopsys enum STATE_TYPE */ NS;
 
+(* mark_debug = "true" *) reg [31:0] selftrig_count; // counts accepted triggers; visible in ILA via JTAG
+reg init_stcount, inc_stcount;
+always @(posedge clk) begin
+    if ( rst | init_stcount ) selftrig_count <= 32'd0;
+    else if (inc_stcount) selftrig_count = selftrig_count + 32'd1;
+end
+
+
 // sync the enable signal into the adc clk domain
-(* ASYNC_REG = "TRUE" *) reg enable_sync1, enable_sync2;
+(* ASYNC_REG = "TRUE" *) reg enable_sync1;
+(* ASYNC_REG = "TRUE" *) reg enable_sync2; // synchronized enable_triggering; must be 1 for SM to leave IDLE
+(* mark_debug = "true" *) reg enable_debug;
 always @(posedge clk) begin
     enable_sync1 <= #1 enable;
     enable_sync2 <= #1 enable_sync1;
+    enable_debug <= enable_sync2;
 end
-
 
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
   if ( rst ) begin
-    CS       <= {6{1'b0}}; // set all state bits to 0
-    CS[IDLE] <= 1'b1;      // set IDLE state bit to 1
+    CS             <= {6{1'b0}}; // set all state bits to 0
+    CS[IDLE]       <= 1'b1;      // set IDLE state bit to 1
   end
   else
     CS <=  NS;         // set state bits to next state
@@ -233,9 +277,12 @@ always @ (posedge clk) begin
   self_trig_ready   <= 1'b0;
   init_hold_counter <= 1'b0;
   holding_trigger   <= 1'b0;
+  init_stcount      <= 1'b0;
+  inc_stcount       <= 1'b0;
   
   if (NS[IDLE]) begin
     init_delay_cntr <= 1'b1;
+    init_stcount    <= 1'b1;
   end
 
   if(NS[ACCEPT_TRIGGERS]) begin
@@ -244,11 +291,12 @@ always @ (posedge clk) begin
 
   if(NS[SETUP_HOLD]) begin
     init_hold_counter <= 1'b1;
+    timestamp[41:0]   <= timing_counter[41:0];
+    inc_stcount       <= 1'b1;  // count accepted triggers
   end
 
   if(NS[HOLD_TRIGGER]) begin
     holding_trigger <= 1'b1;
-    timestamp[41:0] <= timing_counter[41:0];
   end
   
 end

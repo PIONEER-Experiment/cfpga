@@ -68,7 +68,8 @@ parameter [4:0]
     CLR_FILL_ADR     = 5'd13, // 02000 
     FILL_DONE        = 5'd14, // 04000
     WAIT_FILL_ADR    = 5'd15, // 08000
-    SET_FILL_ADR     = 5'd16; // 20000
+    SET_FILL_ADR     = 5'd0;  // intentionally map back to IDLE    
+    //SET_FILL_ADR     = 5'd16; // 10000
 
 // synchronize 'acq_done'
 (* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;
@@ -221,9 +222,9 @@ wire addresses_equal;
 assign addresses_equal = (ddr3_wr_addr_burst == fill_address ) ? 1 : 0;
 
 // Declare current state and next state variables
-reg [16:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [16:0] /* synopsys enum STATE_TYPE */ CS;
 reg [16:0] /* synopsys enum STATE_TYPE */ NS;
-assign ddr3_wr_ctrl_state[14:0] = CS[16:0];
+assign ddr3_wr_ctrl_state[16:0] = CS[16:0];
 
 // // debug counter to catch stall state at end of run in WRITE
 // reg [15:0] debug_ctr;
@@ -570,6 +571,9 @@ always @ (posedge clk) begin
     if (NS[SET_FILL_ADR]) begin
       init_address_gen    <= 1'b1;
       // the address of the new fill is available, set the next address to be there
+      //init_total_burst_count   <= 1'b1;              // reset burst count for new fill
+      //ddr3_wr_fill_in_progress <= enable_acquisition_ddr3;
+      //header_written           <= 1'b0;
     end
 
 end
