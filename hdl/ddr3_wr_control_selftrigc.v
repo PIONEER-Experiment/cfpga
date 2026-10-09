@@ -68,8 +68,7 @@ parameter [4:0]
     CLR_FILL_ADR     = 5'd13, // 02000 
     FILL_DONE        = 5'd14, // 04000
     WAIT_FILL_ADR    = 5'd15, // 08000
-    SET_FILL_ADR     = 5'd0;  // intentionally map back to IDLE    
-    //SET_FILL_ADR     = 5'd16; // 10000
+    SET_FILL_ADR     = 5'd16; // 10000
 
 // synchronize 'acq_done'
 (* ASYNC_REG = "TRUE" *) reg acq_done_sync1, acq_done_sync2;
@@ -569,11 +568,12 @@ always @ (posedge clk) begin
     end
     
     if (NS[SET_FILL_ADR]) begin
-      init_address_gen    <= 1'b1;
       // the address of the new fill is available, set the next address to be there
-      //init_total_burst_count   <= 1'b1;              // reset burst count for new fill
-      //ddr3_wr_fill_in_progress <= enable_acquisition_ddr3;
-      //header_written           <= 1'b0;
+      init_address_gen       <= 1'b1;
+      // start the burst count for the new fill at 1 (the fill header).  Without
+      // this the count latched into the next fill header is cumulative over the
+      // run, and cc_rd_fill_sm then tries to read that many bursts back.
+      init_total_burst_count <= 1'b1;
     end
 
 end
