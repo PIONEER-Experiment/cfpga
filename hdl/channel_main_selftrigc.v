@@ -238,6 +238,7 @@ wire [16:0] ddr3_wr_ctrl_state;            // write control current state
 ////////////////////////////////////////////////////////////////////////////
 wire acq_done;
 wire ddr3_selftrig_wr_active;
+wire run_start_reset;   // from adc_acq_top_selftrigc: 160 ns pulse at the start of every run, clears the fill/DDR3 FIFOs
 // Inform the master FPGA that no data transfer to DDR3 is in process
 assign acq_idle = adc_acq_sm_idle || acq_done || !ddr3_selftrig_wr_active;
 
@@ -445,7 +446,8 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0]),
     .burst_start_adr(burst_start_adr[22:0]),                    // starting address of current fill
-    .timestamp(timestamp)
+    .timestamp(timestamp),
+    .run_start_reset(run_start_reset)                            // stretched run-start pulse, clears the fill/DDR3 FIFOs
 
 );
 sync_2stage ddr3_wr_en_sync (
@@ -496,7 +498,7 @@ assign high_water_warning = 1'b0;
 // by the event count reset
 wire dwf_reset;
 wire ddr3_write_fifo_full;
-assign dwf_reset = adc_acq_full_reset | evt_cnt_reset;
+assign dwf_reset = adc_acq_full_reset | evt_cnt_reset | run_start_reset;
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
     .rst(dwf_reset),                // reset at startup or when requested

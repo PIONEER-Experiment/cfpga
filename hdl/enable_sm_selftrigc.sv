@@ -237,7 +237,8 @@ always_ff @(posedge adc_clk) begin
 
     ENABLE_WAIT: begin
       adc_acq_sm_idle <= 1'b1;
-      ext_done        <= 1'b1;
+      // (ext_done deliberately not asserted here: a one-cycle blip of "done" at
+      //  run start only confuses acq_idle / acq_done consumers)
     end
 
     BUFFER_FILL_START: begin

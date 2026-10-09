@@ -49,7 +49,8 @@ module adc_acq_top_selftrigc (
                                                // bit[12]     = second overrange
                                                // bits[25:13] = second ADC sample
     output [22:0] burst_start_adr, // starting address of fill
-    output [41:0] timestamp
+    output [41:0] timestamp,
+    output reg run_start_reset     // stretched init_ddr3_addr: clear the fill-address / DDR3-write / fill-header FIFOs for a new run
 );
 
 //wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
@@ -152,6 +153,28 @@ always @(posedge adc_clk) begin
   enable_pulse <= enable_triggering & enable_reg1 & !enable_reg2; // enable_triggering must last at least 2 clock ticks
 end
 assign latch_fill_address = ext_done_pulse | enable_pulse;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// Stretch init_ddr3_addr (one adc_clk at the start of each run) into a reset long enough for the
+// independent-clock FIFOs in channel_main (>= 3 cycles of the slowest clock involved).  Anything
+// left in fill_address_fifo from the previous run (the run-end ext_done push, or a fill that was
+// never written) would otherwise become the header address of this run's first fill.  The first
+// push after this (enable_pulse) is at least 1 us later, so the FIFOs are well out of reset.
+wire init_ddr3_addr;                          // from enable_sm_selftrigc (also used by circ_buf_to_ddr3)
+reg [5:0] run_start_reset_cntr;
+always @(posedge adc_clk) begin
+  if (init_ddr3_addr) begin
+    run_start_reset_cntr <= 6'd63;           // 64 adc_clk = 160 ns
+    run_start_reset      <= 1'b1;
+  end
+  else if (run_start_reset_cntr != 6'd0) begin
+    run_start_reset_cntr <= run_start_reset_cntr - 6'd1;
+    run_start_reset      <= 1'b1;
+  end
+  else begin
+    run_start_reset      <= 1'b0;
+  end
+end
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //
