@@ -94,6 +94,7 @@ always @(posedge clk) begin
     acq_done_local <= 1'b0;
 end
 
+
 // keep track of fill number we are reading
 reg [19:0] fill_no_rd_ddr3;
 reg new_fill_seen;
@@ -125,6 +126,22 @@ parameter [3:0]
 reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 assign cc_rd_fill_state = CS;
+
+// Timeout for waiting on acq_done in CHK_FIFO_EMPTY.  The command dispatcher
+// blocks on this state machine, so if acquisition never reports done (for
+// example a channel parked with enable_acquisition stuck high) every later
+// command, register reads included, would queue behind us for ever.  After
+// ~8 ms we give up and return the error response instead.
+// The counter reloads whenever we are not running, i.e. between commands.
+reg [19:0] acq_wait_cntr;
+wire acq_wait_timeout;
+assign acq_wait_timeout = (acq_wait_cntr[19:0] == 20'd0);
+always @(posedge clk) begin
+  if ( !run_sm )
+    acq_wait_cntr[19:0] <= 20'hFFFFF;             // ~8.4 ms at 125 MHz
+  else if ( CS[CHK_FIFO_EMPTY] && !acq_wait_timeout )
+    acq_wait_cntr[19:0] <= acq_wait_cntr[19:0] - 1;
+end
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
@@ -138,7 +155,7 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments)
-always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or acq_done_latch or run_sm or acq_done_local ) begin
+always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or acq_done_latch or run_sm or acq_done_local or acq_wait_timeout ) begin
     NS = 10'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
@@ -160,8 +177,9 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         // There should be a complete header in the FIFO. If nothing is there, then we flag an error
         CS[CHK_FIFO_EMPTY]: begin
 //            if ( !acq_done_latch ) begin
-            if ( !acq_done_local ) begin
+            if ( !acq_done_local && !acq_wait_timeout ) begin
                // the DDR3 writing and header fifo should be ready for us -- wait here
+               // (bounded: on timeout we fall through and report an error)
                NS[CHK_FIFO_EMPTY] = 1'b1;
             end
             // See if there is something in the header FIFO
