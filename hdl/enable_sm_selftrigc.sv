@@ -167,11 +167,23 @@ always_comb begin
       NS = DDR3_DONE_WAIT;
     end
     
-    // Stay in DDR3_DONE_WAIT until the DONE signals from the DDR3
-    // has been asserted. This signals that all of the data is in the DDR3
+    // Stay in DDR3_DONE_WAIT until the DONE signal from the DDR3 writer has
+    // been asserted, i.e. the checksum and fill header are in memory.
+    //
+    // Run-end escape: if enable_acquisition dropped while a waveform was in
+    // flight, we arrive here via the cbuf_rd_trig_wait branch, but the reader
+    // (circ_buf_to_ddr3_sm) has gone to IDLE without writing a checksum or
+    // header and the writer (ddr3_wr_control) has gone to IDLE without seeing
+    // one, so ddr3_wr_done can never come.  Once the reader is idle
+    // (ddr3_selftrig_wr_active low) there is nothing left to wait for; go to
+    // DONE1 so ext_done is produced and the machine can return to IDLE.
     DDR3_DONE_WAIT: begin
-      // if everything is in memory, start fill wrap up, else remain here.
-      NS = ddr3_wr_done_sync2 ? DONE1 : DDR3_DONE_WAIT;
+      if (ddr3_wr_done_sync2)
+        NS = DONE1;
+      else if (!enable_acquisition && !ddr3_selftrig_wr_active)
+        NS = DONE1;
+      else
+        NS = DDR3_DONE_WAIT;
     end
     
     // initialize duration counter for asserting ext_done so that the master will see it
