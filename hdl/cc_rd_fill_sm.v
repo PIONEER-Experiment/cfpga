@@ -123,7 +123,7 @@ parameter [3:0]
     DONE                 = 4'd9;  // 200
                 
 // Declare current state and next state variables
-reg [9:0] /* synopsys enum STATE_TYPE */ CS;
+(* mark_debug = "true" *) reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 assign cc_rd_fill_state = CS;
 
