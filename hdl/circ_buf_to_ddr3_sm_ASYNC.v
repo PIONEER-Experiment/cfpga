@@ -71,17 +71,19 @@ parameter [4:0]
     FILL_DONE2      = 5'd14,  // 04000
     FILL_DONE3      = 5'd15,  // 08000
     FILL_DONE4      = 5'd16,  // 10000
-    DONE            = 5'd17;  // 20000
+    DONE            = 5'd17,  // 20000
+    WAVEFORM_INIT4  = 5'd18,  // increment-only, see WAVEFORM_INIT3
+    WAVEFORM_INIT5  = 5'd19;  // increment-only, see WAVEFORM_INIT3
     
 // Declare current state and next state variables
-reg [17:0] /* synopsys enum STATE_TYPE */ CS;
-reg [17:0] /* synopsys enum STATE_TYPE */ NS;
+reg [19:0] /* synopsys enum STATE_TYPE */ CS;
+reg [19:0] /* synopsys enum STATE_TYPE */ NS;
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge adc_clk) begin
     if (reset_clk_adc) begin
-        CS <= #1 {18{1'b0}}; // set all state bits to 0
+        CS <= #1 {20{1'b0}}; // set all state bits to 0
         CS[IDLE] <= #1 1'b1; // set IDLE state bit to 1
     end
     else
@@ -90,7 +92,7 @@ end
 
 // combinational always block to determine next state (use blocking [=] assignments) 
 always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero) begin
-    NS = {18{1'b0}}; // default all bits to zero; will overrride one bit
+    NS = {20{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
 
@@ -142,6 +144,22 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
 
         // Stay in WAVEFORM_INIT3 state for one period. 
         CS[WAVEFORM_INIT3]: begin
+                NS[WAVEFORM_INIT4] = 1'b1;
+        end
+
+        // Two extra increment-only states between WAVEFORM_INIT3 and the first
+        // data state.  The circular-buffer read path is four clocks long
+        // (address register in pipelined_circular_buffer, two-clock BRAM output
+        // register, data register); the original sequence assumed two, so the
+        // first burst of every waveform carried one stale pair and a duplicated
+        // first pair, and the window ended two pairs early (confirmed with dummy
+        // data in run 2035).  Keeping the address running for two more clocks
+        // before the first latch lines the shift register up with the data.
+        CS[WAVEFORM_INIT4]: begin
+                NS[WAVEFORM_INIT5] = 1'b1;
+        end
+
+        CS[WAVEFORM_INIT5]: begin
                 NS[LOOP1] = 1'b1;
         end
 
@@ -307,6 +325,16 @@ always @ (posedge adc_clk) begin
     	// increment the circular buffer address
 	   	inc_circ_buf_rd_addr    <= #1 1'b1;
    end
+
+    if (NS[WAVEFORM_INIT4]) begin
+        // keep the circular buffer read address running (read pipeline is 4 clocks deep)
+        inc_circ_buf_rd_addr    <= #1 1'b1;
+    end
+
+    if (NS[WAVEFORM_INIT5]) begin
+        // keep the circular buffer read address running (read pipeline is 4 clocks deep)
+        inc_circ_buf_rd_addr    <= #1 1'b1;
+    end
 
     if (NS[LOOP1]) begin
     	// save the current 32-bit data word from the circular buffer
