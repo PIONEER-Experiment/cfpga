@@ -34,8 +34,7 @@ module ddr3_wr_control_selftrigc (
     input enable_acquisition_ddr3,
     //
     output [16:0] ddr3_wr_ctrl_state,     // current state
-    input acq_done,                      // asserted when the 'adc_acq_sm' is in the DONE state
-    output writing_last_fill             // asserted when enable_acquisition_ddr3 deasserts but we haven't finished writing the info from this fill
+    input acq_done                       // asserted when the 'adc_acq_sm' is in the DONE state
 );
 
 // 
@@ -221,7 +220,7 @@ wire addresses_equal;
 assign addresses_equal = (ddr3_wr_addr_burst == fill_address ) ? 1 : 0;
 
 // Declare current state and next state variables
-(* mark_debug = "true" *) reg [16:0] /* synopsys enum STATE_TYPE */ CS;
+reg [16:0] /* synopsys enum STATE_TYPE */ CS;
 reg [16:0] /* synopsys enum STATE_TYPE */ NS;
 assign ddr3_wr_ctrl_state[16:0] = CS[16:0];
 
@@ -249,7 +248,6 @@ assign ddr3_wr_ctrl_state[16:0] = CS[16:0];
 //  .probe5(app_wdf_wren),          // input wire [0:0]  probe5
 //  .probe6(app_wdf_rdy),           // input wire [0:0]  probe6
 //  .probe7(app_wdf_end),           // input wire [0:0]  probe7
-//  .probe8(writing_last_fill),     // input wire [0:0]  probe8
 //  .probe9(wr_app_en),             // input wire [0:0]  probe9
 //  .probe10(wr_app_rdy),           // input wire [0:0]  probe10
 //  .probe11(fill_header_wr_dat),   // input wire [151:0]  probe11
@@ -266,9 +264,6 @@ assign ddr3_wr_ctrl_state[16:0] = CS[16:0];
 //  .probe22(evt_cnt_reset),
 //  .probe23(rst_from_master),
 //  .probe24(latch_header),
-//  .probe25(ddr3_wr_fill_in_progress),
-//  .probe26(next_ddr3_wr_fill_in_progress),
-//  .probe27(header_written),
 //  .probe28(acq_done_sync2),
 //  .probe29(address_cntr[3:0]),
 //  .probe30(app_rdy),
@@ -280,11 +275,6 @@ assign ddr3_wr_ctrl_state[16:0] = CS[16:0];
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
-reg ddr3_wr_fill_in_progress;       // asserted when a new fill has started, but the last write (header) has not finished
-reg header_written;                 // assert as soon as the header has finished writing
-reg next_ddr3_wr_fill_in_progress;       // asserted when a new fill has started, but the last write (header) has not finished
-reg next_header_written;                 // assert as soon as the header has finished writing
-
 always @ (posedge clk) begin
     if (reset ) begin
         CS <= 17'b0;             // set all state bits to 0
@@ -295,10 +285,8 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments) 
-always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero or acq_done_sync2 or header_written or ddr3_wr_fill_in_progress or acq_enabled or enable_acquisition_ddr3 or fill_address_fifo_empty )     begin
+always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or address_cntr_zero or acq_done_sync2 or acq_enabled or enable_acquisition_ddr3 or fill_address_fifo_empty )     begin
     NS = 17'b0;                  // default all bits to zero; will overrride one bit
-    next_header_written           <= header_written;
-    next_ddr3_wr_fill_in_progress <= ddr3_wr_fill_in_progress;
     
     case (1'b1) //synopsys full_case parallel_case
 
@@ -313,7 +301,6 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
         // Stay in the INIT_ALL state for 1 clock period.
         // Initialize stuff for a new fill.
         CS[INIT_ALL]: begin
-          next_ddr3_wr_fill_in_progress <= enable_acquisition_ddr3;
           NS[WAIT] = 1'b1;
         end
 
@@ -322,7 +309,6 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
         // in not empty, then the data will be vaild
         // We must also make sure that the fill address has become available
         CS[WAIT]: begin
-          next_ddr3_wr_fill_in_progress <= ~(header_written & acq_done_sync2);
           if ( !enable_acquisition_ddr3 )
             // go to idle between runs
             NS[IDLE]     = 1'b1;
@@ -417,7 +403,6 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
         // Stay in WRITE_HDR state for one period.
         // Write the original header to the fill_header_fifo
         CS[WRITE_HDR]: begin
-          next_header_written <= 1'b1;
           NS[FINISH] = 1'b1;
         end        
         
@@ -476,8 +461,6 @@ always @ (posedge clk) begin
         ddr3_wr_sync_err        <= 1'b0;
         fill_header_wr_en       <= 1'b0;
         fill_address_rd_en      <= 1'b0;
-        ddr3_wr_fill_in_progress <= 1'b0;
-        header_written           <= 1'b0;
 //        debug_ctr_reset          <= 1'b0;
 //        debug_ctr_inc            <= 1'b0;
 
@@ -488,8 +471,6 @@ always @ (posedge clk) begin
     if (NS[INIT_ALL]) begin
        // initialize the total_burst counter to 1 (to include fill header)
        init_total_burst_count	<= 1'b1;
-       ddr3_wr_fill_in_progress      <= enable_acquisition_ddr3;
-       header_written                <= 1'b0;
     end
 
     if (NS[WAIT]) begin
@@ -587,9 +568,6 @@ assign app_wdf_end = (CS[WRITE] || CS[WRITE_CKSM] || CS[WRITE_FILL]) && !ddr3_wr
 
 // if the current data was accepted then bring the next FIFO data to the front 
 assign ddr3_wr_fifo_rd_en   = (CS[WRITE] || CS[WRITE_CKSM] || CS[WRITE_FILL]) && data_accept && !burst_cntr_zero;
-
-// we want to keep writing the last fill's information out, where last is flagged by enable_triggering deasserting
-assign writing_last_fill = ~enable_acquisition_ddr3 & ddr3_wr_fill_in_progress;
 
 
 endmodule

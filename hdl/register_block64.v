@@ -104,7 +104,6 @@ module register_block64(
     reg [31:0] reg20_ = 32'd10;       // async burst count of 10
     reg [31:0] reg21_ = 32'd2;        // async pre-trigger of 2
     reg [31:0] reg38_ = 32'd200;      // self trigger threshold and polarity
-    reg [31:0] reg39_ = 32'd0;        // run in progress
     
     // write to the writable registers
     always @ (posedge clk) begin
@@ -141,7 +140,7 @@ module register_block64(
         if (wr_en && (reg_num[5:0] == 6'h1e)) reg30_[31:0] <= rx_data[31:0];
         // R31 through 37 are read only
         if (wr_en && (reg_num[5:0] == 6'h26)) reg38_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[5:0] == 6'h27)) reg39_[31:0] <= rx_data[31:0];
+        // R39 (0x27) was a 'run in progress' flag that nothing in the firmware consumed; it is now read-only zero
         // R40 through R63 are read only
     end
 
@@ -289,7 +288,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h24)) rdbk_reg[31:0] <= {15'd0,ddr3_wr_ctrl_state[16:0]};
         if (rd_en && (reg_num[5:0] == 6'h25)) rdbk_reg[31:0] <= {22'd0,enable_sm_state[9:0]};
         if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= reg38_[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // reg39_[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // unused (was 'run in progress')
         if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= 32'd0;

@@ -117,7 +117,7 @@ wire [127:0] ddr3_wr_dat;
 assign ddr3_rd_fifo_input_dat[127:0] = ddr3_rd_dat[127:0];
 
 ////////////////////////////////////////////////////////////////
-assign addressing_acq_enabled = writing_last_fill | ddr3_wr_en_sync2;
+assign addressing_acq_enabled = ddr3_wr_en_sync2;
 // Connect the module that manages the address and command ports
 ddr3_addr_control ddr3_addr_control (
     // 'write' ports
@@ -174,8 +174,7 @@ ddr3_wr_control_selftrigc ddr3_wr_control_selftrigc (
     //.app_rdy(app_rdy),
     // done debugging
     .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),        // write control current state
-    .acq_done(acq_done),                            // input, asserted when the 'adc_acq_sm' is in the DONE state
-    .writing_last_fill(writing_last_fill)
+    .acq_done(acq_done)                             // input, asserted when the 'adc_acq_sm' is in the DONE state
  );
 
 ///////////////////////////////////////////////////////////////
