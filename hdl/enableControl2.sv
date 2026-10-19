@@ -66,7 +66,7 @@ module enableControl2 (
     //(* fsm_encoding = "one-hot" *)
 
     // Declare current state and next state variables
-    (* mark_debug = "true" *) state_t CS;
+    state_t CS;
     state_t NS;
     
     // sequential always block for state transitions (use non-blocking [<=] assignments)

@@ -95,7 +95,7 @@ typedef enum logic [10:0] {
 //(* fsm_encoding = "one-hot", fsm_safe_state = "default_state" *)
 (* fsm_encoding = "one-hot" *)
 
-(* mark_debug = "true" *) state_t CS;
+state_t CS;
 state_t NS;
 
 assign enable_sm_state = CS;
