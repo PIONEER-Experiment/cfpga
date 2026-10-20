@@ -25,6 +25,9 @@ module adc_acq_top_selftrigc (
     input [15:0] async_pre_trig,    // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     input [11:0] selftrig_threshold,// the amount by which the sample average must exceed the average pedestal to trigger
     input        selftrig_polarity, // for self-triggering: 0 => negative polarity, 1 => positive
+    input [2:0]  selftrig_sum_log2, // self-triggering: log2 of the number of sample pairs averaged
+    input [5:0]  selftrig_ped_delay,// self-triggering: pedestal delay in 400 MHz clock cycles
+    input        selftrig_ped_bypass,// self-triggering: 1 => no pedestal subtraction
     input [3:0] xadc_alarms,
 
     // outputs
@@ -259,6 +262,9 @@ self_trigger self_trigger(
     .timing_counter(timing_counter),          // input the 400 MHz clock counter
     .threshold_in(selftrig_threshold),        // threshold for average - pedestal to trigger a trigger pulse
     .polarity_in(selftrig_polarity),          // 1 => positive going signal, 0 => negative going
+    .sum_log2_in(selftrig_sum_log2),          // log2 of the number of sample pairs in the running average
+    .ped_delay_in(selftrig_ped_delay),        // pedestal delay in clock cycles
+    .ped_bypass_in(selftrig_ped_bypass),      // 1 => absolute threshold on the running average
     .enable(enable_triggering),               // start looking for triggers
     .cbuf_trig_en(cbuf_trig_en),              // accept self triggers, local in time, from enable_sm_selftrig 
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid

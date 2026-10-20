@@ -64,6 +64,9 @@ module command_top (
     output [15:0] async_pre_trig,             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     output [11:0] selftrig_threshold,         // above-pedestal threshold for self triggering
     output        selftrig_polarity,          // for self-triggering: 0 => negative polarity, 1 => positive
+    output [2:0]  selftrig_sum_log2,          // self-triggering: log2 of the number of sample pairs averaged
+    output [5:0]  selftrig_ped_delay,         // self-triggering: pedestal delay in 400 MHz clock cycles
+    output        selftrig_ped_bypass,        // self-triggering: 1 => no pedestal subtraction
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
     output read_fill_done,                    // read fill state machine finished
@@ -421,6 +424,9 @@ module command_top (
         .async_num_bursts(async_num_bursts[13:0]),                     // number of 8-sample bursts in an ASYNC waveform
         .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
         .selftrig_polarity( selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
+        .selftrig_sum_log2(selftrig_sum_log2[2:0]),                        // self-triggering: averaging window
+        .selftrig_ped_delay(selftrig_ped_delay[5:0]),                      // self-triggering: pedestal delay
+        .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
         .async_pre_trig(async_pre_trig[15:0]),                         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
         .current_waveform_num(current_waveform_num[22:0]),
         // slow control

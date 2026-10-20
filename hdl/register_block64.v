@@ -44,6 +44,9 @@ module register_block64(
     output [15:0] async_pre_trig,            // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     output [11:0] selftrig_threshold,        // above-pedestal threshold for self triggering
     output        selftrig_polarity,         // for self-triggering: 0 => negative polarity, 1 => positive
+    output [2:0]  selftrig_sum_log2,         // self-triggering: log2 of the number of sample pairs averaged
+    output [5:0]  selftrig_ped_delay,        // self-triggering: pedestal delay in 400 MHz clock cycles (1..63)
+    output        selftrig_ped_bypass,       // self-triggering: 1 => no pedestal subtraction
     input  [22:0] current_waveform_num,
  
     // slow control
@@ -104,6 +107,12 @@ module register_block64(
     reg [31:0] reg20_ = 32'd10;       // async burst count of 10
     reg [31:0] reg21_ = 32'd2;        // async pre-trigger of 2
     reg [31:0] reg38_ = 32'd200;      // self trigger threshold and polarity
+    // R40 (0x28): self-trigger running-average window and pedestal
+    //   bits [2:0]  log2 of the number of sample pairs summed (001 = 4 samples)
+    //   bits [8:3]  pedestal delay in 400 MHz clock cycles, 1..63 (000100 = 4)
+    //   bit  [9]    1 = bypass the pedestal subtraction
+    // default 0x21 reproduces the original fixed 4-sample / 4-cycle trigger
+    reg [31:0] reg40_ = 32'h00000021;
     
     // write to the writable registers
     always @ (posedge clk) begin
@@ -140,6 +149,7 @@ module register_block64(
         if (wr_en && (reg_num[5:0] == 6'h1e)) reg30_[31:0] <= rx_data[31:0];
         // R31 through 37 are read only
         if (wr_en && (reg_num[5:0] == 6'h26)) reg38_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h28)) reg40_[31:0] <= rx_data[31:0];
         // R39 (0x27) was a 'run in progress' flag that nothing in the firmware consumed; it is now read-only zero
         // R40 through R63 are read only
     end
@@ -241,6 +251,12 @@ module register_block64(
     // 0 for odd polarity and 1 for even polarity
     assign selftrig_threshold[11:0]    = reg38_[11:0];
     assign selftrig_polarity           = reg38_[12];
+
+    // R40
+    // self-trigger averaging window, pedestal delay and pedestal bypass
+    assign selftrig_sum_log2[2:0]      = reg40_[2:0];
+    assign selftrig_ped_delay[5:0]     = reg40_[8:3];
+    assign selftrig_ped_bypass         = reg40_[9];
     
     reg [31:0] rdbk_reg;
     assign tx_data[31:0] = rdbk_reg[31:0];
@@ -289,7 +305,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h25)) rdbk_reg[31:0] <= {22'd0,enable_sm_state[9:0]};
         if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= reg38_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // unused (was 'run in progress')
-        if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= reg40_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2b)) rdbk_reg[31:0] <= 32'd0;

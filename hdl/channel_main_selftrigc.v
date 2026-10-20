@@ -370,6 +370,9 @@ wire [ 9:0] enable_sm_state;
 // -- note, we are co-opting the muon_num_waveforms register to pass the self triggering threshold
 //    see note below for command_top instantiation
 wire [11:0] selftrig_threshold;
+wire [2:0]  selftrig_sum_log2;
+wire [5:0]  selftrig_ped_delay;
+wire        selftrig_ped_bypass;
 //sync_2stage #(
 //  .WIDTH(12)
 //) selftrig_sync (
@@ -426,6 +429,9 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .async_pre_trig(async_pre_trig[15:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .selftrig_threshold(selftrig_threshold[11:0]),       // the amount by which the sample average must exceed the average pedestal to trigger
     .selftrig_polarity( selftrig_polarity),              // for self-triggering: 0 => negative polarity, 1 => positive
+    .selftrig_sum_log2(selftrig_sum_log2[2:0]),          // self-triggering: log2 of the number of sample pairs averaged
+    .selftrig_ped_delay(selftrig_ped_delay[5:0]),        // self-triggering: pedestal delay in 400 MHz clock cycles
+    .selftrig_ped_bypass(selftrig_ped_bypass),           // self-triggering: 1 => no pedestal subtraction
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
@@ -816,6 +822,9 @@ command_top command_top (
     .async_pre_trig(async_pre_trig[15:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
     .selftrig_polarity(selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
+    .selftrig_sum_log2(selftrig_sum_log2[2:0]),                        // self-triggering: averaging window
+    .selftrig_ped_delay(selftrig_ped_delay[5:0]),                      // self-triggering: pedestal delay
+    .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished
