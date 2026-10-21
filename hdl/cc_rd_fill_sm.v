@@ -131,16 +131,18 @@ assign cc_rd_fill_state = CS;
 // blocks on this state machine, so if acquisition never reports done (for
 // example a channel parked with enable_acquisition stuck high) every later
 // command, register reads included, would queue behind us for ever.  After
-// ~8 ms we give up and return the error response instead.
+// ~4 s we give up and return the error response instead.  The limit is deliberately
+// generous: it only has to catch a channel that will never finish, and a readout that
+// is merely slow (a loaded DAQ server, a large fill) must never trip it.
 // The counter reloads whenever we are not running, i.e. between commands.
-reg [19:0] acq_wait_cntr;
+reg [28:0] acq_wait_cntr;
 wire acq_wait_timeout;
-assign acq_wait_timeout = (acq_wait_cntr[19:0] == 20'd0);
+assign acq_wait_timeout = (acq_wait_cntr[28:0] == 29'd0);
 always @(posedge clk) begin
   if ( !run_sm )
-    acq_wait_cntr[19:0] <= 20'hFFFFF;             // ~8.4 ms at 125 MHz
+    acq_wait_cntr[28:0] <= 29'h1FFFFFFF;          // ~4.3 s at 125 MHz
   else if ( CS[CHK_FIFO_EMPTY] && !acq_wait_timeout )
-    acq_wait_cntr[19:0] <= acq_wait_cntr[19:0] - 1;
+    acq_wait_cntr[28:0] <= acq_wait_cntr[28:0] - 1;
 end
 //synopsys state_vector CS
  

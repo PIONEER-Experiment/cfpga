@@ -206,7 +206,7 @@ end
 wire local_trigger_wire;
 assign local_trigger_wire = self_trig_ready & trig_cond;
 
-reg holding_trigger, init_hold_counter;
+reg holding_trigger, init_hold_counter, init_gap_counter;
 reg local_trigger_reg;
 reg local_trigger;
 always @(posedge clk) begin
@@ -235,7 +235,9 @@ always @(posedge clk) begin
     else if (init_delay_cntr)
       delay_cntr[7:0] <= settle_cycles;  // at least 16 cycles (the old fixed value was 15), more for long windows
     else if (init_hold_counter )
-      delay_cntr[7:0] <= 8'd21;    // hold for 105 ns after detecting trigger so that it lasts several master 40 MHz clock cycles.  (See master's channel_trigger_receiver.)
+      delay_cntr[7:0] <= HOLD_CYCLES;  // keep the trigger line high long enough for the master's 40 MHz receiver
+    else if (init_gap_counter )
+      delay_cntr[7:0] <= GAP_CYCLES;   // and then low long enough that the master sees the end of this trigger before the next
     else if (delay_cntr_zero)
       // if zero then hold there
       delay_cntr[7:0] <= 8'b0;
@@ -243,6 +245,15 @@ always @(posedge clk) begin
       // decrement the counter
       delay_cntr[7:0] <= delay_cntr[7:0] - 1;
 end
+
+// The trigger line is sampled by the master's channel_triggerc_receiver on its 40 MHz clock through
+// a two-stage synchroniser, and that receiver counts one trigger per contiguous high level.  So each
+// trigger must be high for at least two 40 MHz periods, and consecutive triggers must be separated
+// by at least two 40 MHz periods of low, or the master counts fewer triggers than the channel
+// stores waveforms and the readout loses alignment.  Before the gap existed, a pulse that was still
+// over threshold when the hold expired re-triggered after a 7.5 ns low, invisible to the master.
+localparam [7:0] HOLD_CYCLES = 8'd24;   // 60 ns high
+localparam [7:0] GAP_CYCLES  = 8'd24;   // 60 ns low: dead time between consecutive triggers
 
 // state machine to keep track of when trigger becomes reliable
 
@@ -252,11 +263,12 @@ parameter [2:0]
   ACCEPT_TRIGGERS = 3'd2,
   SETUP_HOLD      = 3'd3,
   HOLD_TRIGGER    = 3'd4,
-  PIPE_ADJUST     = 3'd5;
+  PIPE_ADJUST     = 3'd5,
+  TRIG_GAP        = 3'd6;
 
 // Declare current state and next state variables
-reg [5:0] /* synopsys enum STATE_TYPE */ CS;  // self_trigger SM state
-reg [5:0] /* synopsys enum STATE_TYPE */ NS;
+reg [6:0] /* synopsys enum STATE_TYPE */ CS;  // self_trigger SM state
+reg [6:0] /* synopsys enum STATE_TYPE */ NS;
 
 // sync the enable signal into the adc clk domain
 (* ASYNC_REG = "TRUE" *) reg enable_sync1;
@@ -269,15 +281,15 @@ end
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
   if ( rst ) begin
-    CS             <= {6{1'b0}}; // set all state bits to 0
+    CS             <= {7{1'b0}}; // set all state bits to 0
     CS[IDLE]       <= 1'b1;      // set IDLE state bit to 1
   end
   else
     CS <=  NS;         // set state bits to next state
 end
 
-always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger ) begin
-  NS = {6{1'b0}}; // default all bits to zero; will overrride one bit
+always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger or init_gap_counter ) begin
+  NS = {7{1'b0}}; // default all bits to zero; will overrride one bit
 
   case (1'b1) // synopsys full_case parallel_case
 
@@ -318,12 +330,20 @@ always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger ) begin
   end
 
   // hold the trigger line high so that new triggers can't enter (a deadtime)
-  // the length of this should become a parameter
   CS[HOLD_TRIGGER]: begin
     if ( delay_cntr_zero )
-      NS[PIPE_ADJUST] = 1'b1;
+      NS[TRIG_GAP] = 1'b1;
     else
       NS[HOLD_TRIGGER] = 1'b1;
+  end
+
+  // keep the trigger line low for a while so that the master sees the end of this trigger
+  CS[TRIG_GAP]: begin
+    // the gap counter is loaded during the first cycle in this state, so ignore 'zero' until then
+    if ( delay_cntr_zero && !init_gap_counter )
+      NS[PIPE_ADJUST] = 1'b1;
+    else
+      NS[TRIG_GAP] = 1'b1;
   end
 
   // go one more clock cycle to adjust for pipeline delay between the trigger and self_trig_ready
@@ -341,6 +361,7 @@ always @ (posedge clk) begin
   init_delay_cntr   <= 1'b0;
   self_trig_ready   <= 1'b0;
   init_hold_counter <= 1'b0;
+  init_gap_counter  <= 1'b0;
   holding_trigger   <= 1'b0;
 
   if (NS[IDLE]) begin
@@ -358,6 +379,10 @@ always @ (posedge clk) begin
 
   if(NS[HOLD_TRIGGER]) begin
     holding_trigger <= 1'b1;
+  end
+
+  if(NS[TRIG_GAP] && CS[HOLD_TRIGGER]) begin
+    init_gap_counter <= 1'b1;  // load the gap length as we enter TRIG_GAP
   end
 
 end
