@@ -94,7 +94,12 @@ module command_top (
      input [ 9:0] enable_sm_state,
 
      input [ 2:0] ddr3_rd_ctrl_state,           // read control current state
-     input [16:0] ddr3_wr_ctrl_state            // write control current state
+     input [16:0] ddr3_wr_ctrl_state,           // write control current state
+
+     // command-path diagnostics from channel_main (clk125 domain):
+     //   [7] aurora channel_up  [6] readout_pause (synced)  [5] aurora tx tready  [4] aurora tx tvalid
+     //   [3] ddr3 32-bit tvalid [2] ddr3 32-bit tready      [1] aurora rx tvalid  [0] aurora rx tready
+     input [ 7:0] cmd_path_debug
 );
 
     wire ser_num_le, command_le;
@@ -281,6 +286,7 @@ module command_top (
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // connect the state machine that receives and dispatches commands
     // This state machine never drives the transmit FIFO 
+    wire [10:0] command_sm_state;          // command_sm current state, for the diagnostic registers
     command_sm command_sm (
         .clk(clk),                              // local clock
         .reset(reset),
@@ -296,8 +302,32 @@ module command_top (
         // control inputs
         .cmd_sm_running(cmd_sm_running),      // someone is running
         .cmd_sm_done(cmd_sm_done),              // someone is finished
-        .sm_idle(command_sm_idle)             // state machine is idle
+        .sm_idle(command_sm_idle),            // state machine is idle
+        .state(command_sm_state)              // current state, for the diagnostic registers
     );
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Command-path diagnostics (channel registers 0x29 and 0x2A).
+    // 0x29 is the live picture of the command dispatcher, the read-fill state machine and the
+    // Aurora-side handshakes.  0x2A is the same word frozen the cycle before the last reset from the
+    // master took effect, so that after a SYS.RST the state the channel was stuck in can still be read.
+    // The snapshot register is deliberately not reset.
+    (* mark_debug = "true" *) wire [31:0] cmd_path_live;
+    assign cmd_path_live = {command_sm_state[10:0],   // [31:21] command_sm CS (one-hot)
+                            cc_rd_fill_state[9:0],    // [20:11] cc_rd_fill_sm CS (one-hot)
+                            use_ddr3_data,            // [10]    TX mux set to DDR3 data
+                            tx_tvalid,                // [9]     command path presenting a word
+                            tx_tready,                // [8]     command path may send (aurora ready and not paused)
+                            cmd_path_debug[7:0]};     // [7:0]   see the port comment
+    reg  [31:0] cmd_path_live_d = 32'd0;
+    reg  [31:0] cmd_path_snapshot = 32'd0;
+    reg         reset_d = 1'b0;
+    always @(posedge clk) begin
+        cmd_path_live_d <= cmd_path_live;
+        reset_d         <= reset;
+        if (reset && !reset_d)
+            cmd_path_snapshot <= cmd_path_live_d;
+    end
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // connect the state machine that processes the CC_LOOPBACK command
@@ -446,7 +476,9 @@ module command_top (
         .enable_sm_state(enable_sm_state),
         .cc_rd_fill_state(cc_rd_fill_state),
         .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
-        .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state)
+        .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),
+        .cmd_path_live(cmd_path_live),
+        .cmd_path_snapshot(cmd_path_snapshot)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////

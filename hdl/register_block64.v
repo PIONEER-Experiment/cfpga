@@ -67,6 +67,8 @@ module register_block64(
     input [18:0] circ_to_ddr3_state,
     input [ 9:0] cc_rd_fill_state,
     input [ 9:0] enable_sm_state,
+    input [31:0] cmd_path_live,                // R41 (0x29): command-path diagnostics, live
+    input [31:0] cmd_path_snapshot,            // R42 (0x2A): the same, frozen just before the last master reset
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -306,8 +308,8 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= reg38_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // unused (was 'run in progress')
         if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= reg40_[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= cmd_path_live[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= cmd_path_snapshot[31:0];
         if (rd_en && (reg_num[5:0] == 6'h2b)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2c)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2d)) rdbk_reg[31:0] <= 32'd0;

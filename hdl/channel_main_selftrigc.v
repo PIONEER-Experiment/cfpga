@@ -844,6 +844,8 @@ command_top command_top (
     
     // status signals
     .command_sm_idle(command_sm_idle),
+    .cmd_path_debug({aurora_channel_up, readout_pause_sync2, c0_tx_axi_tready, c0_tx_axi_tvalid,
+                     ddr3_32bit_tvalid, ddr3_32bit_tready, c0_rx_axi_tvalid, c0_rx_axi_tready}),
     .image_type(image_type),
 
     // other state machine states
