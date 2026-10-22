@@ -33,14 +33,14 @@ module cc_rd_fill_sm (
 
   output reg tx_tvalid,                   // the data we are presenting is valid
   output reg tx_tlast,                    // this is the final word in the frame
-  input tx_tready,                        // signal that the TX fifo has accepted the data
+  (* mark_debug = "true" *) input tx_tready,                        // signal that the TX fifo has accepted the data
 
   output reg send_csn,                    // send the CSN
   output reg send_cmd,                    // send the CC
   output reg send_inv_cmd,                // send the inverse CC
 
   // interface to the header FIFO
-  input fill_header_fifo_empty,           // a header is available when not asserted
+  (* mark_debug = "true" *) input fill_header_fifo_empty,           // a header is available when not asserted
   output reg fill_header_fifo_rd_en,      // remove the current data from the FIFO
   //output reg fill_address_fifo_rd_en,     // remove the address for the fill just read from the FIFO
   input [151:0] fill_header_fifo_out,     // data at the head of the FIFO
@@ -50,7 +50,7 @@ module cc_rd_fill_sm (
   // interface to the DDR3 memory
   output reg [22:0] ddr3_rd_start_addr,   // the address of the first requested 128-bit burst
   output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
-  output reg enable_reading,              // start the 'ddr3_rd_control'
+  (* mark_debug = "true" *) output reg enable_reading,              // start the 'ddr3_rd_control'
   input reading_done,                     // reading is complete
   input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
 
@@ -74,18 +74,18 @@ end
 reg [127:0] saved_header;
     
 // make a register to hold error status
-reg error_found;
+(* mark_debug = "true" *) reg error_found;
 
 // make a counter to keep track of how many 32-bit DDR3 words still need to
 // be accepted by the Aurora interface
-reg [25:0] ddr3_words_to_send;
+(* mark_debug = "true" *) reg [25:0] ddr3_words_to_send;
 reg all_ddr3_words_sent;
 always @(posedge clk) begin
     all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 26'b0);
 end
 
 // latch and clear the acq_done to avoid timing issues
-reg acq_done_local;
+(* mark_debug = "true" *) reg acq_done_local;
 reg clear_acq_done;
 always @(posedge clk) begin
   if ( acq_done_latch )
