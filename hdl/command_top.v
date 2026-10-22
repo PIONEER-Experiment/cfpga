@@ -99,7 +99,11 @@ module command_top (
      // command-path diagnostics from channel_main (clk125 domain):
      //   [7] aurora channel_up  [6] readout_pause (synced)  [5] aurora tx tready  [4] aurora tx tvalid
      //   [3] ddr3 32-bit tvalid [2] ddr3 32-bit tready      [1] aurora rx tvalid  [0] aurora rx tready
-     input [ 7:0] cmd_path_debug
+     input [ 7:0] cmd_path_debug,
+
+     // DDR3-path diagnostics from channel_main, already synchronised to clk:
+     //   [3] ddr3_selftrig_wr_active  [2] ddr3_wr_en  [1] cbuf_rd_en  [0] ddr3 write FIFO empty
+     input [ 3:0] ddr3_path_debug
 );
 
     wire ser_num_le, command_le;
@@ -329,6 +333,41 @@ module command_top (
             cmd_path_snapshot <= cmd_path_live_d;
     end
 
+    // DDR3-path diagnostics (channel registers 0x2B, 0x2C and 0x2D), frozen at the same reset edge.
+    // 0x2B: the acquisition / DDR3 write / DDR3 read state machines.  0x2C: the circular-buffer
+    // drain state machine and the handshakes the read-fill command depends on.  0x2D is the live
+    // version of 0x2C (the live state machines are already at 0x21, 0x23, 0x24 and 0x25).
+    // The state machines run on the ADC and DDR3 clocks, so the state fields are sampled
+    // asynchronously, as the live registers are; they are read when nothing is moving anyway.
+    (* ASYNC_REG = "TRUE" *) reg reading_done_s1 = 1'b0, reading_done_s2 = 1'b0;
+    always @(posedge clk) begin
+        reading_done_s1 <= reading_done;
+        reading_done_s2 <= reading_done_s1;
+    end
+    wire [31:0] ddr3_path_live_a;
+    wire [31:0] ddr3_path_live_b;
+    assign ddr3_path_live_a = {2'b0,
+                               enable_sm_state[9:0],       // [29:20] enable_sm CS (one-hot)
+                               ddr3_rd_ctrl_state[2:0],    // [19:17] ddr3_rd_control CS
+                               ddr3_wr_ctrl_state[16:0]};  // [16:0]  ddr3_wr_control CS (one-hot)
+    assign ddr3_path_live_b = {circ_to_ddr3_state[18:0],   // [31:13] circ_buf_to_ddr3 CS (one-hot)
+                               5'b0,                       // [12:8]
+                               ddr3_path_debug[3:0],       // [7:4]   see the port comment
+                               acq_done_latch,             // [3]     acquisition reported done (delayed ext_done)
+                               enable_reading,             // [2]     read-fill asked the DDR3 reader to start
+                               reading_done_s2,            // [1]     DDR3 reader reports done
+                               fill_header_fifo_empty};    // [0]     no fill header waiting
+    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0;
+    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0;
+    always @(posedge clk) begin
+        ddr3_path_live_a_d <= ddr3_path_live_a;
+        ddr3_path_live_b_d <= ddr3_path_live_b;
+        if (reset && !reset_d) begin
+            ddr3_path_snap_a <= ddr3_path_live_a_d;
+            ddr3_path_snap_b <= ddr3_path_live_b_d;
+        end
+    end
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // connect the state machine that processes the CC_LOOPBACK command
     cc_loopback_sm cc_loopback_sm (
@@ -478,7 +517,10 @@ module command_top (
         .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
         .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),
         .cmd_path_live(cmd_path_live),
-        .cmd_path_snapshot(cmd_path_snapshot)
+        .cmd_path_snapshot(cmd_path_snapshot),
+        .ddr3_path_snap_a(ddr3_path_snap_a),
+        .ddr3_path_snap_b(ddr3_path_snap_b),
+        .ddr3_path_live_b(ddr3_path_live_b)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////

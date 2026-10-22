@@ -607,6 +607,7 @@ command_top command_top (
     // status signals
     .command_sm_idle(command_sm_idle),
     .cmd_path_debug(8'd0),
+    .ddr3_path_debug(4'd0),
     .image_type(image_type)
 );
 

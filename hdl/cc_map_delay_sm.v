@@ -126,7 +126,11 @@ module cc_map_delay_sm (
             // We enter the ECHO_CSN2 state whenever the TX FIFO is ready to accept the CSN.
             // We stay here for one cycle, during which we assert 'tx_tvalid'.
             CS[ECHO_CSN2] : begin
-                NS[ECHO_CC1] = 1'b1;
+                // hold 'tx_tvalid' until the word is accepted (tx_tready can drop after ECHO_CSN1 sampled it)
+                if (tx_tready)
+                    NS[ECHO_CC1] = 1'b1;
+                else
+                    NS[ECHO_CSN2] = 1'b1;
             end
 
             // We enter the ECHO_CC1 state whenever we have sent the CSN.
@@ -146,8 +150,11 @@ module cc_map_delay_sm (
             // We stay here for one cycle, during which we assert 'tx_tvalid'.
             // If there were any errors, we assert 'tx_tlast' and go to DONE.
             CS[ECHO_CC2] : begin
+                if (!tx_tready)
+                    // not accepted yet, keep presenting the CC
+                    NS[ECHO_CC2] = 1'b1;
                 // Check error state
-                if (error_found)
+                else if (error_found)
                     // There was an error, so assert 'tx_tlast' and go to DONE
                     NS[DONE] = 1'b1;
                 else
@@ -171,8 +178,11 @@ module cc_map_delay_sm (
             // We stay here for one cycle, during which 'tx_tvalid' is asserted to tell the TX FIFO that it is seeing good data.
             // The register data is routed to the TX FIFO.
             CS[XMIT_DELAY2] : begin
-                // We're done
-                NS[DONE] = 1'b1;
+                // We're done once the word has been accepted
+                if (tx_tready)
+                    NS[DONE] = 1'b1;
+                else
+                    NS[XMIT_DELAY2] = 1'b1;
             end
 
             // We enter the DONE state whenever we have finished this command.

@@ -69,6 +69,9 @@ module register_block64(
     input [ 9:0] enable_sm_state,
     input [31:0] cmd_path_live,                // R41 (0x29): command-path diagnostics, live
     input [31:0] cmd_path_snapshot,            // R42 (0x2A): the same, frozen just before the last master reset
+    input [31:0] ddr3_path_snap_a,             // R43 (0x2B): acquisition / DDR3 state machines, frozen before the last reset
+    input [31:0] ddr3_path_snap_b,             // R44 (0x2C): circ-buf drain SM and read-fill handshakes, frozen before the last reset
+    input [31:0] ddr3_path_live_b,             // R45 (0x2D): the same as R44, live
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -310,9 +313,9 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= reg40_[31:0];
         if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= cmd_path_live[31:0];
         if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= cmd_path_snapshot[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h2b)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2c)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2d)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h2b)) rdbk_reg[31:0] <= ddr3_path_snap_a[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2c)) rdbk_reg[31:0] <= ddr3_path_snap_b[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2d)) rdbk_reg[31:0] <= ddr3_path_live_b[31:0];
         if (rd_en && (reg_num[5:0] == 6'h2e)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h2f)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h30)) rdbk_reg[31:0] <= 32'd0;

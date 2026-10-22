@@ -461,6 +461,12 @@ sync_2stage ddr3_wr_en_sync (
   .in(ddr3_wr_en),
   .out(ddr3_wr_en_ddr3)
 );
+// the same signals, synchronised to clk125 for the DDR3-path diagnostic registers (0x2B..0x2D)
+wire [3:0] ddr3_path_debug_clk125;
+sync_2stage ddr3_path_dbg3_sync (.clk(clk125), .in(ddr3_selftrig_wr_active), .out(ddr3_path_debug_clk125[3]));
+sync_2stage ddr3_path_dbg2_sync (.clk(clk125), .in(ddr3_wr_en),              .out(ddr3_path_debug_clk125[2]));
+sync_2stage ddr3_path_dbg1_sync (.clk(clk125), .in(cbuf_rd_en),              .out(ddr3_path_debug_clk125[1]));
+sync_2stage ddr3_path_dbg0_sync (.clk(clk125), .in(ddr3_wr_fifo_empty),      .out(ddr3_path_debug_clk125[0]));
 sync_2stage cbuf_rd_en_sync (
   .clk(ddr3_domain_clk),
   .in(cbuf_rd_en),
@@ -846,6 +852,7 @@ command_top command_top (
     .command_sm_idle(command_sm_idle),
     .cmd_path_debug({aurora_channel_up, readout_pause_sync2, c0_tx_axi_tready, c0_tx_axi_tvalid,
                      ddr3_32bit_tvalid, ddr3_32bit_tready, c0_rx_axi_tvalid, c0_rx_axi_tready}),
+    .ddr3_path_debug(ddr3_path_debug_clk125),
     .image_type(image_type),
 
     // other state machine states

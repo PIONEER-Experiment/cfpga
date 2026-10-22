@@ -207,8 +207,11 @@ module cc_wr_reg_sm (
 			// We enter the ECHO_CSN2 state whenever the TX fifo is ready to accept the CSN.
 			// We stay here for one cycle, during which we assert 'tx_tvalid'
 			CS[ECHO_CSN2]: begin
-				// 
-				NS[ECHO_CC1] = 1'b1;
+				// hold 'tx_tvalid' until the word is accepted (tx_tready can drop after ECHO_CSN1 sampled it)
+				if (tx_tready)
+					NS[ECHO_CC1] = 1'b1;
+				else
+					NS[ECHO_CSN2] = 1'b1;
 			end
 
 			// We enter the ECHO_CC1 state whenever we have sent the CSN
@@ -228,7 +231,10 @@ module cc_wr_reg_sm (
 			// We stay here for one cycle, during which we assert 'tx_tvalid'.
 			// We assert 'tx_tlast' and go to DONE.
 			CS[ECHO_CC2]: begin
+				if (tx_tready)
 					NS[DONE] = 1'b1;
+				else
+					NS[ECHO_CC2] = 1'b1;
 			end
 			
 			// We enter the DONE state whenever we have finished this command.

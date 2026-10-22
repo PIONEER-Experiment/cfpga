@@ -226,9 +226,15 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         end
 
         // We enter the ECHO_CSN2 state whenever the TX FIFO is ready to accept the CSN.
-        // We stay here for one cycle, during which we assert 'tx_tvalid'
+        // 'tx_tvalid' is asserted here, and held until the word is actually accepted:
+        // 'tx_tready' is the Aurora's ready gated by 'readout_pause', and either can drop
+        // in the cycle after ECHO_CSN1 sampled it.  (AXI4-Stream: once TVALID is asserted
+        // it must stay asserted until TREADY.)
         CS[ECHO_CSN2]: begin
-            NS[ECHO_CC1] = 1'b1;
+            if (tx_tready)
+                NS[ECHO_CC1] = 1'b1;
+            else
+                NS[ECHO_CSN2] = 1'b1;
         end
 
         // We enter the ECHO_CC1 state whenever we have sent the CSN
@@ -245,11 +251,14 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         end
 
         // We enter the ECHO_CC2 state whenever the TX FIFO is ready to accept the CC.
-        // We stay here for one cycle, during which we assert 'tx_tvalid'.
+        // 'tx_tvalid' is asserted here and held until the word is accepted (see ECHO_CSN2).
         // If there were any errors, we assert 'tx_tlast' and go to DONE.
         CS[ECHO_CC2]: begin
+            if (!tx_tready)
+                // not accepted yet, keep presenting the CC
+                NS[ECHO_CC2] = 1'b1;
             // Check error state
-            if (error_found)
+            else if (error_found)
                 // there was an error, so assert 'tx_tlast' and go to DONE
                 NS[DONE] = 1'b1;
             else
