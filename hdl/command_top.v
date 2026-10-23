@@ -103,7 +103,12 @@ module command_top (
 
      // DDR3-path diagnostics from channel_main, already synchronised to clk:
      //   [3] ddr3_selftrig_wr_active  [2] ddr3_wr_en  [1] cbuf_rd_en  [0] ddr3 write FIFO empty
-     input [ 3:0] ddr3_path_debug
+     input [ 3:0] ddr3_path_debug,
+     // DDR3 user-interface handshakes, synchronised to clk:
+     //   [4] init_calib_complete  [3] app_rdy  [2] app_wdf_rdy  [1] rd_app_en  [0] read FIFO almost full
+     input [ 4:0] mig_status,
+     // {words received from the Aurora RX [31:16], words accepted by the Aurora TX [15:0]}, free running
+     input [31:0] link_word_counts
 );
 
     wire ser_num_le, command_le;
@@ -351,20 +356,22 @@ module command_top (
                                ddr3_rd_ctrl_state[2:0],    // [19:17] ddr3_rd_control CS
                                ddr3_wr_ctrl_state[16:0]};  // [16:0]  ddr3_wr_control CS (one-hot)
     assign ddr3_path_live_b = {circ_to_ddr3_state[18:0],   // [31:13] circ_buf_to_ddr3 CS (one-hot)
-                               5'b0,                       // [12:8]
+                               mig_status[4:0],            // [12:8]  see the port comment
                                ddr3_path_debug[3:0],       // [7:4]   see the port comment
                                acq_done_latch,             // [3]     acquisition reported done (delayed ext_done)
                                enable_reading,             // [2]     read-fill asked the DDR3 reader to start
                                reading_done_s2,            // [1]     DDR3 reader reports done
                                fill_header_fifo_empty};    // [0]     no fill header waiting
-    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0;
-    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0;
+    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0, link_word_counts_d = 32'd0;
+    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0, link_word_counts_snap = 32'd0;
     always @(posedge clk) begin
         ddr3_path_live_a_d <= ddr3_path_live_a;
         ddr3_path_live_b_d <= ddr3_path_live_b;
+        link_word_counts_d <= link_word_counts;
         if (reset && !reset_d) begin
-            ddr3_path_snap_a <= ddr3_path_live_a_d;
-            ddr3_path_snap_b <= ddr3_path_live_b_d;
+            ddr3_path_snap_a      <= ddr3_path_live_a_d;
+            ddr3_path_snap_b      <= ddr3_path_live_b_d;
+            link_word_counts_snap <= link_word_counts_d;   // 0x2E; 0x2F is the live count
         end
     end
 
@@ -520,7 +527,9 @@ module command_top (
         .cmd_path_snapshot(cmd_path_snapshot),
         .ddr3_path_snap_a(ddr3_path_snap_a),
         .ddr3_path_snap_b(ddr3_path_snap_b),
-        .ddr3_path_live_b(ddr3_path_live_b)
+        .ddr3_path_live_b(ddr3_path_live_b),
+        .link_word_counts_snap(link_word_counts_snap),
+        .link_word_counts(link_word_counts)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////

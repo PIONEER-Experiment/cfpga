@@ -608,6 +608,8 @@ command_top command_top (
     .command_sm_idle(command_sm_idle),
     .cmd_path_debug(8'd0),
     .ddr3_path_debug(4'd0),
+    .mig_status(5'd0),
+    .link_word_counts(32'd0),
     .image_type(image_type)
 );
 

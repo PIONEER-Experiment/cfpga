@@ -607,6 +607,7 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
+    .mig_status(mig_status_ddr3),                        // diagnostics, DDR3 clock domain
      // states
     .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),            // read control current state
     .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
@@ -653,6 +654,19 @@ ddr3_read_data_width_converter ddr3_read_data_width_converter(
     .m_axis_tdata(ddr3_32bit_tx_tdata[31:0]),       // 32-bit
     .m_axis_tlast(ddr3_32bit_tlast)
 );
+
+// DDR3 user-interface handshakes, synchronised to clk125 for the diagnostic registers
+wire [4:0] mig_status_ddr3, mig_status_clk125;
+sync_2stage #(.WIDTH(5)) mig_status_sync (.clk(clk125), .in(mig_status_ddr3), .out(mig_status_clk125));
+
+// Count the words exchanged with the Aurora core, for comparison with the master's per-channel
+// counters after a stuck readout.  Free running, never reset; the command path snapshots them.
+reg [15:0] aurora_tx_word_cnt = 16'd0;
+reg [15:0] aurora_rx_word_cnt = 16'd0;
+always @(posedge clk125) begin
+    if (c0_tx_axi_tvalid && c0_tx_axi_tready) aurora_tx_word_cnt <= aurora_tx_word_cnt + 1;
+    if (c0_rx_axi_tvalid && c0_rx_axi_tready) aurora_rx_word_cnt <= aurora_rx_word_cnt + 1;
+end
 
 // Synchronize  'readout_pause' to 'clk125'.
 (* ASYNC_REG = "TRUE" *) reg readout_pause_sync1, readout_pause_sync2;
@@ -853,6 +867,8 @@ command_top command_top (
     .cmd_path_debug({aurora_channel_up, readout_pause_sync2, c0_tx_axi_tready, c0_tx_axi_tvalid,
                      ddr3_32bit_tvalid, ddr3_32bit_tready, c0_rx_axi_tvalid, c0_rx_axi_tready}),
     .ddr3_path_debug(ddr3_path_debug_clk125),
+    .mig_status(mig_status_clk125),
+    .link_word_counts({aurora_rx_word_cnt, aurora_tx_word_cnt}),
     .image_type(image_type),
 
     // other state machine states

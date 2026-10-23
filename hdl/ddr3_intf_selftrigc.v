@@ -51,6 +51,7 @@ module ddr3_intf_selftrigc(
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
     output app_rdy,                              // output, PHY calibration is done
+    output [4:0] mig_status,                     // diagnostics: {init_calib_complete, app_rdy, app_wdf_rdy, rd_app_en, ddr3_rd_fifo_almost_full}
     // states
     output [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     output [16:0] ddr3_wr_ctrl_state,            // write control current state
@@ -296,5 +297,8 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     // .dbg_po_f_stg23_sel(dbg_po_f_stg23_sel),
     // .dbg_po_f_dec(dbg_po_f_dec),
 );
+
+// DDR3 user-interface handshakes for the diagnostic registers (ddr3_domain_clk; synchronised by the caller)
+assign mig_status[4:0] = {init_calib_complete, app_rdy, app_wdf_rdy, rd_app_en, ddr3_rd_fifo_almost_full};
 
 endmodule
