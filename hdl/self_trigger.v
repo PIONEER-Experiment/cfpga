@@ -141,22 +141,27 @@ end
 // history is a shift register and cannot be cleared.  Until D pairs have been added after a clear,
 // the entry that would drop out of the window was never added in, so it must not be subtracted.
 // 'window_age' counts cycles since the last clear (saturating) and masks the drop term until then.
+// 'window_change' and 'window_filling' are registered so that neither comparison sits in front
+// of the accumulator's adder (timing at 400 MHz); window_filling is computed one cycle ahead so
+// that it still reads "fewer than D pairs accumulated" in the cycle it is used.
 reg [5:0] sum_drop_idx_d;
 reg [6:0] window_age;
-wire      window_filling;
-assign window_filling = (window_age <= {1'b0, sum_drop_idx});   // fewer than D pairs accumulated
+reg       window_change  = 1'b0;
+reg       window_filling = 1'b1;
 always @(posedge clk) begin
   sum_drop_idx_d <= sum_drop_idx;
-  if (rst || (sum_drop_idx != sum_drop_idx_d))
+  window_change  <= (sum_drop_idx != sum_drop_idx_d);
+  if (rst || window_change)
     window_age <= 7'd0;
   else if (window_age != 7'd127)
     window_age <= window_age + 7'd1;
+  window_filling <= rst || window_change || (window_age < {1'b0, sum_drop_idx});
 end
 
 // sliding-window accumulator: 2*MAX_PAIRS samples of 12 bits need 20 bits; use 21 bits signed
 reg signed [20:0] updating_sum_reg1, updating_sum_reg2, updating_sum;
 always @(posedge clk) begin
-  if (rst || (sum_drop_idx != sum_drop_idx_d)) begin
+  if (rst || window_change) begin
     updating_sum_reg1 <= 21'sd0;
     updating_sum_reg2 <= 21'sd0;
     updating_sum      <= 21'sd0;
@@ -195,12 +200,20 @@ end
 // the trigger comparison, done in 14 bits so that threshold + pedestal cannot wrap.
 //   positive polarity: signal > pedestal + threshold
 //   negative polarity: pedestal > signal + threshold
-wire signed [13:0] thr_plus_ped, thr_plus_sig;
-assign thr_plus_ped = threshold + pedestal;
-assign thr_plus_sig = threshold + signal_cmp;
+// Pipelined in two stages: the additions are registered, then compared.  An add followed by
+// a compare is two carry chains back to back, which does not fit in one 400 MHz cycle on
+// this device (the path failed timing in v6.6.5 by 0.1 ns).  Costs one cycle of trigger latency.
+reg signed [13:0] thr_plus_ped, thr_plus_sig;
+reg signed [11:0] pedestal_d, signal_cmp_d;
+always @(posedge clk) begin
+  thr_plus_ped <= threshold + pedestal;
+  thr_plus_sig <= threshold + signal_cmp;
+  pedestal_d   <= pedestal;
+  signal_cmp_d <= signal_cmp;
+end
 reg trig_cond;
 always @(posedge clk) begin
-  trig_cond <= polarity ? (signal_cmp > thr_plus_ped) : (pedestal > thr_plus_sig);
+  trig_cond <= polarity ? (signal_cmp_d > thr_plus_ped) : (pedestal_d > thr_plus_sig);
 end
 
 wire local_trigger_wire;
