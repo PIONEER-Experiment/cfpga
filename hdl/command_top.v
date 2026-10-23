@@ -108,7 +108,9 @@ module command_top (
      //   [4] init_calib_complete  [3] app_rdy  [2] app_wdf_rdy  [1] rd_app_en  [0] read FIFO almost full
      input [ 4:0] mig_status,
      // {words received from the Aurora RX [31:16], words accepted by the Aurora TX [15:0]}, free running
-     input [31:0] link_word_counts
+     input [31:0] link_word_counts,
+     // enable-line decoder diagnostics (enableControl2.diag_word), clk domain
+     input [31:0] enable_diag
 );
 
     wire ser_num_le, command_le;
@@ -362,16 +364,18 @@ module command_top (
                                enable_reading,             // [2]     read-fill asked the DDR3 reader to start
                                reading_done_s2,            // [1]     DDR3 reader reports done
                                fill_header_fifo_empty};    // [0]     no fill header waiting
-    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0, link_word_counts_d = 32'd0;
-    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0, link_word_counts_snap = 32'd0;
+    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0, link_word_counts_d = 32'd0, enable_diag_d = 32'd0;
+    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0, link_word_counts_snap = 32'd0, enable_diag_snap = 32'd0;
     always @(posedge clk) begin
         ddr3_path_live_a_d <= ddr3_path_live_a;
         ddr3_path_live_b_d <= ddr3_path_live_b;
         link_word_counts_d <= link_word_counts;
+        enable_diag_d      <= enable_diag;
         if (reset && !reset_d) begin
             ddr3_path_snap_a      <= ddr3_path_live_a_d;
             ddr3_path_snap_b      <= ddr3_path_live_b_d;
             link_word_counts_snap <= link_word_counts_d;   // 0x2E; 0x2F is the live count
+            enable_diag_snap      <= enable_diag_d;        // 0x30; 0x31 is live
         end
     end
 
@@ -529,7 +533,9 @@ module command_top (
         .ddr3_path_snap_b(ddr3_path_snap_b),
         .ddr3_path_live_b(ddr3_path_live_b),
         .link_word_counts_snap(link_word_counts_snap),
-        .link_word_counts(link_word_counts)
+        .link_word_counts(link_word_counts),
+        .enable_diag_snap(enable_diag_snap),
+        .enable_diag(enable_diag)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////

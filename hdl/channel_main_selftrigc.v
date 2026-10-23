@@ -86,12 +86,14 @@ assign readout_pause = io[0];           // stop sending fill data to the Aurora
 wire enable_triggering;                 // indicates enabled for self triggering
 wire enable_acquisition;                // indicates that data acquisition has not yet completed
 wire master_enable_125;
+wire [31:0] enable_diag;   // enable-line decoder diagnostics for registers 0x30 / 0x31
 enableControl2 enableControl2(
   .clk125(clk125),
   .reset(reset_clk125),
   .master_signal(master_enable_125),
   .enable_acquisition(enable_acquisition),
-  .enable_triggering(enable_triggering)
+  .enable_triggering(enable_triggering),
+  .diag_word(enable_diag)
 );
 wire master_enable_ddr3;
 wire master_enable_adc;
@@ -869,6 +871,7 @@ command_top command_top (
     .ddr3_path_debug(ddr3_path_debug_clk125),
     .mig_status(mig_status_clk125),
     .link_word_counts({aurora_rx_word_cnt, aurora_tx_word_cnt}),
+    .enable_diag(enable_diag),
     .image_type(image_type),
 
     // other state machine states

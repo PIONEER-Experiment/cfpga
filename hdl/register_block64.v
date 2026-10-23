@@ -74,6 +74,8 @@ module register_block64(
     input [31:0] ddr3_path_live_b,             // R45 (0x2D): the same as R44, live
     input [31:0] link_word_counts_snap,        // R46 (0x2E): {Aurora RX words, Aurora TX words} frozen before the last reset
     input [31:0] link_word_counts,             // R47 (0x2F): the same, live
+    input [31:0] enable_diag_snap,             // R48 (0x30): enable-line decoder diagnostics, frozen before the last reset
+    input [31:0] enable_diag,                  // R49 (0x31): the same, live
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -320,8 +322,8 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h2d)) rdbk_reg[31:0] <= ddr3_path_live_b[31:0];
         if (rd_en && (reg_num[5:0] == 6'h2e)) rdbk_reg[31:0] <= link_word_counts_snap[31:0];
         if (rd_en && (reg_num[5:0] == 6'h2f)) rdbk_reg[31:0] <= link_word_counts[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h30)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h31)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h30)) rdbk_reg[31:0] <= enable_diag_snap[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h31)) rdbk_reg[31:0] <= enable_diag[31:0];
         if (rd_en && (reg_num[5:0] == 6'h32)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h33)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h34)) rdbk_reg[31:0] <= 32'd0;

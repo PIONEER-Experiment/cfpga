@@ -17,7 +17,8 @@ module enableControl2 (
     input  logic reset,              // active-high
     input  logic master_signal,      // signal from master
     output logic enable_acquisition, // DDR3 i/o enabled
-    output logic enable_triggering   // self-triggering activated
+    output logic enable_triggering,  // self-triggering activated
+    output logic [31:0] diag_word    // diagnostics, see the end of the module
 );
 
 
@@ -166,6 +167,47 @@ module enableControl2 (
 
         endcase
     end // combinational always block to determine next state
+
+// =========================================================================
+// Diagnostics (channel registers 0x30 / 0x31): what the enable line did and how
+// this decoder reacted, since the last channel reset.
+//   [8:0]   CS (one-hot: IDLE, INIT_WAIT, WAIT_LINE_LOW, WAIT_LINE_HIGH, ACQUIRING,
+//                        DISABLE_TRIG, ACQ_WAIT, DISABLE_ACQ, ERROR)
+//   [12:9]  rising edges seen on the line   (4-bit, wraps)
+//   [16:13] falling edges seen on the line  (4-bit, wraps)
+//   [20:17] entries into ACQUIRING          (4-bit, wraps)
+//   [21]    sticky: left ACQUIRING because the line dropped (DISABLE_TRIG entered)
+//   [22]    sticky: acquisition switched off by the line rising in ACQ_WAIT (DISABLE_ACQ entered)
+//   [23]    sticky: WAIT_LINE_HIGH timed out, start pulse treated as stray (back to IDLE)
+//   [24]    sticky: WAIT_LINE_LOW timed out, started on the held-high level
+//   [25]    sticky: ERROR state entered
+//   [26]    the line as seen now
+//   [31:27] 0
+// =========================================================================
+    logic master_signal_d = 1'b0;
+    logic [3:0] rise_cnt = 4'd0, fall_cnt = 4'd0, acq_cnt = 4'd0;
+    logic flag_line_dropped = 1'b0, flag_disable_acq = 1'b0, flag_stray_pulse = 1'b0,
+          flag_held_start = 1'b0, flag_error = 1'b0;
+    always_ff @(posedge clk125) begin
+        master_signal_d <= master_signal;
+        if (reset) begin
+            rise_cnt <= 4'd0;  fall_cnt <= 4'd0;  acq_cnt <= 4'd0;
+            flag_line_dropped <= 1'b0;  flag_disable_acq <= 1'b0;  flag_stray_pulse <= 1'b0;
+            flag_held_start   <= 1'b0;  flag_error       <= 1'b0;
+        end
+        else begin
+            if ( master_signal && !master_signal_d) rise_cnt <= rise_cnt + 1;
+            if (!master_signal &&  master_signal_d) fall_cnt <= fall_cnt + 1;
+            if (CS != ACQUIRING      && NS == ACQUIRING)    acq_cnt           <= acq_cnt + 1;
+            if (CS == ACQUIRING      && NS == DISABLE_TRIG) flag_line_dropped <= 1'b1;
+            if (CS == ACQ_WAIT       && NS == DISABLE_ACQ)  flag_disable_acq  <= 1'b1;
+            if (CS == WAIT_LINE_HIGH && NS == IDLE)         flag_stray_pulse  <= 1'b1;
+            if (CS == WAIT_LINE_LOW  && NS == ACQUIRING)    flag_held_start   <= 1'b1;
+            if (NS == ERROR)                                flag_error        <= 1'b1;
+        end
+    end
+    assign diag_word = {5'b0, master_signal, flag_error, flag_held_start, flag_stray_pulse,
+                        flag_disable_acq, flag_line_dropped, acq_cnt, fall_cnt, rise_cnt, CS};
 
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
