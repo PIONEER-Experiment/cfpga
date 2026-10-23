@@ -330,14 +330,24 @@ module command_top (
                             tx_tvalid,                // [9]     command path presenting a word
                             tx_tready,                // [8]     command path may send (aurora ready and not paused)
                             cmd_path_debug[7:0]};     // [7:0]   see the port comment
+    // The snapshots (0x2A, 0x2B, 0x2C, 0x2E, 0x30) are taken only by a reset that arrives while a
+    // command is in progress, i.e. while the channel is stuck in one: resets of an idle channel leave
+    // them alone, so the capture of a stuck readout survives the extra resets it usually takes to
+    // get the master going again.  'snapshot_count' (0x30 [31:27]) says how many captures there have
+    // been since configuration.
     reg  [31:0] cmd_path_live_d = 32'd0;
     reg  [31:0] cmd_path_snapshot = 32'd0;
     reg         reset_d = 1'b0;
+    reg  [ 4:0] snapshot_count = 5'd0;
+    wire        take_snapshot;
+    assign take_snapshot = reset && !reset_d && !command_sm_state[0];   // command_sm not in IDLE
     always @(posedge clk) begin
         cmd_path_live_d <= cmd_path_live;
         reset_d         <= reset;
-        if (reset && !reset_d)
+        if (take_snapshot) begin
             cmd_path_snapshot <= cmd_path_live_d;
+            snapshot_count    <= snapshot_count + 1;
+        end
     end
 
     // DDR3-path diagnostics (channel registers 0x2B, 0x2C and 0x2D), frozen at the same reset edge.
@@ -371,11 +381,11 @@ module command_top (
         ddr3_path_live_b_d <= ddr3_path_live_b;
         link_word_counts_d <= link_word_counts;
         enable_diag_d      <= enable_diag;
-        if (reset && !reset_d) begin
+        if (take_snapshot) begin
             ddr3_path_snap_a      <= ddr3_path_live_a_d;
             ddr3_path_snap_b      <= ddr3_path_live_b_d;
             link_word_counts_snap <= link_word_counts_d;   // 0x2E; 0x2F is the live count
-            enable_diag_snap      <= enable_diag_d;        // 0x30; 0x31 is live
+            enable_diag_snap      <= {snapshot_count + 5'd1, enable_diag_d[26:0]};   // 0x30; 0x31 is live
         end
     end
 
