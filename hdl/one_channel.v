@@ -35,7 +35,10 @@ module one_channel(
   output gt0_qpllreset,                // output
   // status
 //  output [7:0] debug,
-  output channel_up
+  output channel_up,
+  // word counters at the Aurora core's own AXI interface (after the TX FIFO, before the RX FIFO):
+  // {RX words [31:16], TX words [15:0]}, free running, GRAY CODED, 'aurora_user_clk' domain
+  output [31:0] core_word_counts
  );
 
   wire local_axis_resetn;                 // a local reset synched to the Aurora 'user_clk'
@@ -216,6 +219,22 @@ module one_channel(
     .sys_reset_out(sys_reset_out),          // output, synched to 'aurora_user_clk', to TX FIFO and RX FIFO
     .tx_out_clk(tx_out_clk)                // output, from channel clock module
   );
+
+  // Count the words that the Aurora core itself accepts on 's_axi_tx' (i.e. words that made it through
+  // the TX FIFO) and delivers on 'm_axi_rx' (before the RX FIFO).  Together with the clk125-side
+  // counters in channel_main (FIFO input / FIFO output) these split the path at the FIFOs, so a word
+  // that is accepted into the TX FIFO but never reaches the master can be blamed on the FIFO or on the
+  // serial link.  Free running, never reset.  Exported gray coded so that a clk125 sampler sees at
+  // most one changed bit per increment.
+  reg [15:0] core_tx_cnt = 16'd0;
+  reg [15:0] core_rx_cnt = 16'd0;
+  reg [31:0] core_word_counts_gray = 32'd0;
+  always @(posedge aurora_user_clk) begin
+    if (local_axis_tx_tvalid && local_axis_tx_tready) core_tx_cnt <= core_tx_cnt + 1;
+    if (local_axis_rx_tvalid)                         core_rx_cnt <= core_rx_cnt + 1;
+    core_word_counts_gray <= {core_rx_cnt ^ (core_rx_cnt >> 1), core_tx_cnt ^ (core_tx_cnt >> 1)};
+  end
+  assign core_word_counts = core_word_counts_gray;
 
   // Instantiate a channel clock module
   aurora_8b10b_0_CLOCK_MODULE clock_module (

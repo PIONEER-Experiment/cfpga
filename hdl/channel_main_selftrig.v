@@ -661,6 +661,8 @@ command_top command_top (
     .ddr3_path_debug(4'd0),
     .mig_status(5'd0),
     .link_word_counts(32'd0),
+    .core_word_counts(32'd0),
+    .snapshot_trigger(~reset_clk125N),
     .enable_diag(32'd0),
     .image_type(image_type)
 );

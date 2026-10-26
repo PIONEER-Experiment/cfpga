@@ -109,6 +109,10 @@ module command_top (
      input [ 4:0] mig_status,
      // {words received from the Aurora RX [31:16], words accepted by the Aurora TX [15:0]}, free running
      input [31:0] link_word_counts,
+     // the same, counted at the Aurora core's own interface (after the TX FIFO / before the RX FIFO)
+     input [31:0] core_word_counts,
+     // rising edge takes the diagnostic snapshots (if a command is in progress); the master's reset line
+     input        snapshot_trigger,
      // enable-line decoder diagnostics (enableControl2.diag_word), clk domain
      input [31:0] enable_diag
 );
@@ -323,7 +327,7 @@ module command_top (
     // Aurora-side handshakes.  0x2A is the same word frozen the cycle before the last reset from the
     // master took effect, so that after a SYS.RST the state the channel was stuck in can still be read.
     // The snapshot register is deliberately not reset.
-    (* mark_debug = "true" *) wire [31:0] cmd_path_live;
+    wire [31:0] cmd_path_live;
     assign cmd_path_live = {command_sm_state[10:0],   // [31:21] command_sm CS (one-hot)
                             cc_rd_fill_state[9:0],    // [20:11] cc_rd_fill_sm CS (one-hot)
                             use_ddr3_data,            // [10]    TX mux set to DDR3 data
@@ -337,13 +341,14 @@ module command_top (
     // been since configuration.
     reg  [31:0] cmd_path_live_d = 32'd0;
     reg  [31:0] cmd_path_snapshot = 32'd0;
-    reg         reset_d = 1'b0;
+    reg         snapshot_trigger_d = 1'b0;
     reg  [ 4:0] snapshot_count = 5'd0;
     wire        take_snapshot;
-    assign take_snapshot = reset && !reset_d && !command_sm_state[0];   // command_sm not in IDLE
+    // taken on the rising edge of the master's reset line (before the channel's own reset follows it)
+    assign take_snapshot = snapshot_trigger && !snapshot_trigger_d && !command_sm_state[0];   // command_sm not in IDLE
     always @(posedge clk) begin
-        cmd_path_live_d <= cmd_path_live;
-        reset_d         <= reset;
+        cmd_path_live_d    <= cmd_path_live;
+        snapshot_trigger_d <= snapshot_trigger;
         if (take_snapshot) begin
             cmd_path_snapshot <= cmd_path_live_d;
             snapshot_count    <= snapshot_count + 1;
@@ -374,17 +379,19 @@ module command_top (
                                enable_reading,             // [2]     read-fill asked the DDR3 reader to start
                                reading_done_s2,            // [1]     DDR3 reader reports done
                                fill_header_fifo_empty};    // [0]     no fill header waiting
-    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0, link_word_counts_d = 32'd0, enable_diag_d = 32'd0;
-    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0, link_word_counts_snap = 32'd0, enable_diag_snap = 32'd0;
+    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0, link_word_counts_d = 32'd0, enable_diag_d = 32'd0, core_word_counts_d = 32'd0;
+    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0, link_word_counts_snap = 32'd0, enable_diag_snap = 32'd0, core_word_counts_snap = 32'd0;
     always @(posedge clk) begin
         ddr3_path_live_a_d <= ddr3_path_live_a;
         ddr3_path_live_b_d <= ddr3_path_live_b;
         link_word_counts_d <= link_word_counts;
+        core_word_counts_d <= core_word_counts;
         enable_diag_d      <= enable_diag;
         if (take_snapshot) begin
             ddr3_path_snap_a      <= ddr3_path_live_a_d;
             ddr3_path_snap_b      <= ddr3_path_live_b_d;
             link_word_counts_snap <= link_word_counts_d;   // 0x2E; 0x2F is the live count
+            core_word_counts_snap <= core_word_counts_d;   // 0x33; 0x32 is the live count
             enable_diag_snap      <= {snapshot_count + 5'd1, enable_diag_d[26:0]};   // 0x30; 0x31 is live
         end
     end
@@ -544,6 +551,8 @@ module command_top (
         .ddr3_path_live_b(ddr3_path_live_b),
         .link_word_counts_snap(link_word_counts_snap),
         .link_word_counts(link_word_counts),
+        .core_word_counts(core_word_counts),
+        .core_word_counts_snap(core_word_counts_snap),
         .enable_diag_snap(enable_diag_snap),
         .enable_diag(enable_diag)
     );

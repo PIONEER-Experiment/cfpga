@@ -670,6 +670,43 @@ always @(posedge clk125) begin
     if (c0_rx_axi_tvalid && c0_rx_axi_tready) aurora_rx_word_cnt <= aurora_rx_word_cnt + 1;
 end
 
+// The same counts taken at the Aurora core's own interface (after the TX FIFO / before the RX FIFO),
+// brought from 'aurora_user_clk' into clk125.  They are gray coded, so a sample taken across a single
+// increment differs in at most one bit and is either the old or the new value; the two clocks are
+// nominally equal in frequency but asynchronous, so very occasionally two increments fall between
+// samples and a sample could be torn.  A value is therefore only accepted once two consecutive
+// samples agree, which they always do as soon as the link is quiet.
+(* ASYNC_REG = "TRUE" *) reg [31:0] core_cnt_gray_s1 = 32'd0, core_cnt_gray_s2 = 32'd0;
+reg  [31:0] core_cnt_gray_s3 = 32'd0;
+reg  [31:0] core_word_counts = 32'd0;
+function [15:0] gray2bin;
+    input [15:0] g;
+    integer i;
+    begin
+        gray2bin[15] = g[15];
+        for (i = 14; i >= 0; i = i - 1) gray2bin[i] = gray2bin[i+1] ^ g[i];
+    end
+endfunction
+always @(posedge clk125) begin
+    core_cnt_gray_s1 <= c0_core_word_counts_gray;
+    core_cnt_gray_s2 <= core_cnt_gray_s1;
+    core_cnt_gray_s3 <= core_cnt_gray_s2;
+    if (core_cnt_gray_s3 == core_cnt_gray_s2)
+        core_word_counts <= {gray2bin(core_cnt_gray_s2[31:16]), gray2bin(core_cnt_gray_s2[15:0])};
+end
+
+// The diagnostic snapshots in command_top are triggered by the arrival of the master's reset line
+// itself, not by the channel's own reset: the latter follows the master_reset classifier and the
+// startup_reset synchronisers, some 100-300 ns after the line rises, by which time the master's own
+// post-reset activity (the ENABLE_ACQ pulse, the FIFO resets) has already disturbed the state we want
+// to freeze.  'rst_from_master_sync' is in the clk50 domain.
+wire rst_from_master_125;
+sync_2stage rst_from_master_125_sync (
+    .clk(clk125),
+    .in(rst_from_master_sync),
+    .out(rst_from_master_125)
+);
+
 // Synchronize  'readout_pause' to 'clk125'.
 (* ASYNC_REG = "TRUE" *) reg readout_pause_sync1, readout_pause_sync2;
 always @(posedge clk125) begin
@@ -717,6 +754,7 @@ led_status_async led_status_async (
 // the example design, rather than in the core.
 wire reset_clk125N;
 assign reset_clk125N = !reset_clk125;
+wire [31:0] c0_core_word_counts_gray;   // from the Aurora wrapper, 'aurora_user_clk' domain, gray coded
 all_channels channels(
     // clocks and reset
     .clk50(clk50),                            // Aurora 'init_clk' uses 50 MHz clock per PG046-20
@@ -749,7 +787,8 @@ all_channels channels(
     .c0_rxp(c0_rx), .c0_rxn(c0_rx_N),                // receive from channel 0 FPGA
     .c0_txp(c0_tx), .c0_txn(c0_tx_N),                // transmit to channel 0 FPGA
 //    .debug(debug[7:0]),
-    .channel_up(aurora_channel_up)
+    .channel_up(aurora_channel_up),
+    .core_word_counts(c0_core_word_counts_gray)
 );
 
 // We need to swap the bit order for the RX data
@@ -871,6 +910,8 @@ command_top command_top (
     .ddr3_path_debug(ddr3_path_debug_clk125),
     .mig_status(mig_status_clk125),
     .link_word_counts({aurora_rx_word_cnt, aurora_tx_word_cnt}),
+    .core_word_counts(core_word_counts),
+    .snapshot_trigger(rst_from_master_125),
     .enable_diag(enable_diag),
     .image_type(image_type),
 
