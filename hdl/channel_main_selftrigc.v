@@ -788,7 +788,7 @@ all_channels channels(
     .c0_txp(c0_tx), .c0_txn(c0_tx_N),                // transmit to channel 0 FPGA
 //    .debug(debug[7:0]),
     .channel_up(aurora_channel_up),
-    .core_word_counts(c0_core_word_counts_gray)
+    .c0_core_word_counts(c0_core_word_counts_gray)
 );
 
 // We need to swap the bit order for the RX data
