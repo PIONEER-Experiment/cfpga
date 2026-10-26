@@ -676,6 +676,7 @@ end
 // nominally equal in frequency but asynchronous, so very occasionally two increments fall between
 // samples and a sample could be torn.  A value is therefore only accepted once two consecutive
 // samples agree, which they always do as soon as the link is quiet.
+wire [31:0] c0_core_word_counts_gray;   // from the Aurora wrapper (all_channels below), 'aurora_user_clk' domain, gray coded
 (* ASYNC_REG = "TRUE" *) reg [31:0] core_cnt_gray_s1 = 32'd0, core_cnt_gray_s2 = 32'd0;
 reg  [31:0] core_cnt_gray_s3 = 32'd0;
 reg  [31:0] core_word_counts = 32'd0;
@@ -754,7 +755,6 @@ led_status_async led_status_async (
 // the example design, rather than in the core.
 wire reset_clk125N;
 assign reset_clk125N = !reset_clk125;
-wire [31:0] c0_core_word_counts_gray;   // from the Aurora wrapper, 'aurora_user_clk' domain, gray coded
 all_channels channels(
     // clocks and reset
     .clk50(clk50),                            // Aurora 'init_clk' uses 50 MHz clock per PG046-20
