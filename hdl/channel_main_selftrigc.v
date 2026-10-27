@@ -677,6 +677,13 @@ end
 // samples and a sample could be torn.  A value is therefore only accepted once two consecutive
 // samples agree, which they always do as soon as the link is quiet.
 wire [31:0] c0_core_word_counts_gray;   // from the Aurora wrapper (all_channels below), 'aurora_user_clk' domain, gray coded
+wire [31:0] c0_link_event_counts;       // from the Aurora wrapper, 'clk50' domain: {channel_up drops, lane_up drops, hard_err, link_reset}
+// link-event counters into clk125: rare events, so a plain two-stage sample is enough (read when quiet)
+(* ASYNC_REG = "TRUE" *) reg [31:0] link_events_s1 = 32'd0, link_events_s2 = 32'd0;
+always @(posedge clk125) begin
+    link_events_s1 <= c0_link_event_counts;
+    link_events_s2 <= link_events_s1;
+end
 (* ASYNC_REG = "TRUE" *) reg [31:0] core_cnt_gray_s1 = 32'd0, core_cnt_gray_s2 = 32'd0;
 reg  [31:0] core_cnt_gray_s3 = 32'd0;
 reg  [31:0] core_word_counts = 32'd0;
@@ -788,7 +795,8 @@ all_channels channels(
     .c0_txp(c0_tx), .c0_txn(c0_tx_N),                // transmit to channel 0 FPGA
 //    .debug(debug[7:0]),
     .channel_up(aurora_channel_up),
-    .c0_core_word_counts(c0_core_word_counts_gray)
+    .c0_core_word_counts(c0_core_word_counts_gray),
+    .c0_link_event_counts(c0_link_event_counts)
 );
 
 // We need to swap the bit order for the RX data
@@ -911,6 +919,7 @@ command_top command_top (
     .mig_status(mig_status_clk125),
     .link_word_counts({aurora_rx_word_cnt, aurora_tx_word_cnt}),
     .core_word_counts(core_word_counts),
+    .link_event_counts(link_events_s2),
     .snapshot_trigger(rst_from_master_125),
     .enable_diag(enable_diag),
     .image_type(image_type),

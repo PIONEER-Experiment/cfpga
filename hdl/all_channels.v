@@ -29,7 +29,8 @@ module all_channels(
   output c0_txp, c0_txn,                   // transmit to channel 0 FPGA
 //  output [7:0] debug,
   output channel_up,
-  output [31:0] c0_core_word_counts        // gray coded word counters at the Aurora core, 'aurora_user_clk' domain
+  output [31:0] c0_core_word_counts,       // gray coded word counters at the Aurora core, 'aurora_user_clk' domain
+  output [31:0] c0_link_event_counts       // link drop / error event counters, 'clk50' domain
  );
 
   wire [8:0] c0_live_status, c1_live_status;  // packed status bits from channels
@@ -72,7 +73,8 @@ module all_channels(
     .gt0_qpllreset(),                               // output
 //    .debug(debug[7:0]),         // debug bits
     .channel_up(channel_up),
-    .core_word_counts(c0_core_word_counts)
+    .core_word_counts(c0_core_word_counts),
+    .link_event_counts(c0_link_event_counts)
   );
  
 endmodule

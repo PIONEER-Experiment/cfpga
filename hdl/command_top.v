@@ -111,6 +111,8 @@ module command_top (
      input [31:0] link_word_counts,
      // the same, counted at the Aurora core's own interface (after the TX FIFO / before the RX FIFO)
      input [31:0] core_word_counts,
+     // {channel_up drops [31:24], lane_up drops [23:16], hard_err [15:8], link_reset [7:0]}, free running (0x34)
+     input [31:0] link_event_counts,
      // rising edge takes the diagnostic snapshots (if a command is in progress); the master's reset line
      input        snapshot_trigger,
      // enable-line decoder diagnostics (enableControl2.diag_word), clk domain
@@ -361,11 +363,9 @@ module command_top (
     // version of 0x2C (the live state machines are already at 0x21, 0x23, 0x24 and 0x25).
     // The state machines run on the ADC and DDR3 clocks, so the state fields are sampled
     // asynchronously, as the live registers are; they are read when nothing is moving anyway.
-    (* ASYNC_REG = "TRUE" *) reg reading_done_s1 = 1'b0, reading_done_s2 = 1'b0;
-    always @(posedge clk) begin
-        reading_done_s1 <= reading_done;
-        reading_done_s2 <= reading_done_s1;
-    end
+    // 'reading_done' is synchronised inside cc_rd_fill_sm; the diagnostic uses that copy rather than a
+    // second synchroniser on the same source (report_cdc CDC-11)
+    wire reading_done_s2;
     wire [31:0] ddr3_path_live_a;
     wire [31:0] ddr3_path_live_b;
     assign ddr3_path_live_a = {2'b0,
@@ -553,6 +553,7 @@ module command_top (
         .link_word_counts(link_word_counts),
         .core_word_counts(core_word_counts),
         .core_word_counts_snap(core_word_counts_snap),
+        .link_event_counts(link_event_counts),
         .enable_diag_snap(enable_diag_snap),
         .enable_diag(enable_diag)
     );
@@ -588,6 +589,7 @@ module command_top (
         .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),           // number of bursts to read from the DDR3
         .enable_reading(enable_reading),                       // start the 'ddr3_rd_control'
         .reading_done(reading_done),                           // reading is complete
+        .reading_done_synced(reading_done_s2),                 // the same, synchronised, for the diagnostics
         .acq_done_latch(acq_done_latch),                       // input, last self-trigger safely processed (default to 1 in other modes)
         // interface to the AXIS 2:1 MUX
         .use_ddr3_data(use_ddr3_data),                         // the data source is the DDR3 memory

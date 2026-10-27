@@ -52,6 +52,7 @@ module cc_rd_fill_sm (
   output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
   output reg enable_reading,              // start the 'ddr3_rd_control'
   input reading_done,                     // reading is complete
+  output reading_done_synced,             // 'reading_done' after the synchroniser below, for the diagnostics
   input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
 
 // interface to the AXIS 2:1 MUX
@@ -69,6 +70,7 @@ always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;
 end
+assign reading_done_synced = reading_done_sync2;
 
 // make a register to save the header
 reg [127:0] saved_header;

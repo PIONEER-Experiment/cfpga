@@ -78,6 +78,7 @@ module register_block64(
     input [31:0] enable_diag,                  // R49 (0x31): the same, live
     input [31:0] core_word_counts,             // R50 (0x32): {RX words, TX words} at the Aurora core itself (after the TX FIFO), live
     input [31:0] core_word_counts_snap,        // R51 (0x33): the same, frozen before the last reset
+    input [31:0] link_event_counts,            // R52 (0x34): {channel_up drops, lane_up drops, hard_err, link_reset}, 8 bits each, free running
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -328,7 +329,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h31)) rdbk_reg[31:0] <= enable_diag[31:0];
         if (rd_en && (reg_num[5:0] == 6'h32)) rdbk_reg[31:0] <= core_word_counts[31:0];
         if (rd_en && (reg_num[5:0] == 6'h33)) rdbk_reg[31:0] <= core_word_counts_snap[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h34)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h34)) rdbk_reg[31:0] <= link_event_counts[31:0];
         if (rd_en && (reg_num[5:0] == 6'h35)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h36)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h37)) rdbk_reg[31:0] <= 32'd0;
