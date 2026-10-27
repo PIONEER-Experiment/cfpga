@@ -37,11 +37,15 @@ module self_trigger #(
     input [5:0] ped_delay_in,         // pedestal delay in clock cycles (1..63)
     input ped_bypass_in,              // 1 => compare the running average against the threshold alone
     input enable,                     // start looking for triggers. Global in time.
-    input cbuf_trig_en,               // accept self triggers.  Local in time. Controlled by enable_sm_selftrig
+    input line_hold_off,              // fill boundary guard from enable_sm_selftrigc: triggers accepted while this
+                                      // is high belong to the next fill and their pulse to the master is held back
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
-    output reg trigger
+    output reg trigger_immediate,  // the accepted trigger itself, one HOLD_CYCLES pulse at acceptance: drives the
+                                   // trigger-address / time FIFO capture (fixed latency, see enable_sm_selftrigc)
+    output reg trigger             // the trigger line to the master: one pulse per accepted trigger, deferred
+                                   // past the fill boundary while 'line_hold_off' is high
 );
 
 localparam MAX_LOG2 = $clog2(MAX_PAIRS);
@@ -222,10 +226,14 @@ assign local_trigger_wire = self_trig_ready & trig_cond;
 reg holding_trigger, init_hold_counter, init_gap_counter;
 reg local_trigger_reg;
 reg local_trigger;
+// Triggers are accepted whenever the state machine below is out of IDLE, i.e. whenever
+// 'enable' (enable_triggering) is set.  They are no longer gated off around a fill boundary:
+// a trigger that lands there is accepted, captured, and assigned to the next fill (see the
+// trigger-line logic at the end of this file), instead of being dropped.
 always @(posedge clk) begin
-  local_trigger_reg <= local_trigger_wire & cbuf_trig_en;
+  local_trigger_reg <= local_trigger_wire;
   local_trigger     <= local_trigger_reg;
-  trigger           <= holding_trigger;
+  trigger_immediate <= holding_trigger;
 end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -398,6 +406,71 @@ always @ (posedge clk) begin
     init_gap_counter <= 1'b1;  // load the gap length as we enter TRIG_GAP
   end
 
+end
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// The trigger line to the master.
+//
+// Every accepted trigger (one pass through SETUP_HOLD) owes the master exactly one pulse on the
+// trigger line: HOLD_CYCLES high then GAP_CYCLES low, as discussed above.  The master counts
+// the pulses per fill and latches the count a fixed time after it raises 'new_fill' (io[3]); the
+// channel decides at its own fill boundary which fill a trigger belongs to (fill_parity in
+// enable_sm_selftrigc), and the two must agree.  So
+//   - a trigger accepted while 'line_hold_off' is low belongs to the fill that is open; its pulse
+//     goes out at once and reaches the master before the master latches, and
+//   - a trigger accepted while 'line_hold_off' is high belongs to the next fill; its pulse is held
+//     until the hold-off ends, which enable_sm_selftrigc guarantees is after the master has latched.
+// Nothing is dropped: the detection, its timestamp and its circular-buffer address are captured
+// at acceptance either way ('trigger_immediate').
+//
+// Acceptances are at least HOLD_CYCLES + GAP_CYCLES + 4 cycles apart and a line pulse takes
+// HOLD_CYCLES + GAP_CYCLES cycles, so the line keeps up and at most one immediate pulse is ever
+// owed; deferred pulses only accumulate during a hold-off (a few hundred ns, so a handful) and are
+// sent back to back once it ends.  A pulse that has started always completes, so that a trigger
+// accepted just before 'enable' drops is still counted by the master.
+localparam [1:0] LINE_IDLE = 2'd0, LINE_HIGH = 2'd1, LINE_LOW = 2'd2;
+reg [4:0] pending_now      = 5'd0;   // pulses owed for triggers accepted with the line free
+reg [4:0] pending_deferred = 5'd0;   // pulses owed for triggers accepted during a hold-off
+reg [1:0] line_state       = LINE_IDLE;
+reg [7:0] line_cntr        = 8'd0;
+wire accept_now = CS[SETUP_HOLD] & ~line_hold_off;
+wire accept_def = CS[SETUP_HOLD] &  line_hold_off;
+wire send_now   = (line_state == LINE_IDLE) & (pending_now != 5'd0);
+wire send_def   = (line_state == LINE_IDLE) & (pending_now == 5'd0) & (pending_deferred != 5'd0) & ~line_hold_off;
+always @(posedge clk) begin
+  if (rst) begin
+    pending_now      <= 5'd0;
+    pending_deferred <= 5'd0;
+    line_state       <= LINE_IDLE;
+    line_cntr        <= 8'd0;
+    trigger          <= 1'b0;
+  end
+  else begin
+    pending_now      <= pending_now      + {4'd0, accept_now} - {4'd0, send_now};
+    pending_deferred <= pending_deferred + {4'd0, accept_def} - {4'd0, send_def};
+    case (line_state)
+      LINE_IDLE: begin
+        if (send_now | send_def) begin
+          trigger    <= 1'b1;
+          line_cntr  <= HOLD_CYCLES - 8'd1;
+          line_state <= LINE_HIGH;
+        end
+      end
+      LINE_HIGH: begin
+        if (line_cntr == 8'd0) begin
+          trigger    <= 1'b0;
+          line_cntr  <= GAP_CYCLES - 8'd1;
+          line_state <= LINE_LOW;
+        end
+        else line_cntr <= line_cntr - 8'd1;
+      end
+      LINE_LOW: begin
+        if (line_cntr == 8'd0) line_state <= LINE_IDLE;
+        else                   line_cntr  <= line_cntr - 8'd1;
+      end
+      default: line_state <= LINE_IDLE;
+    endcase
+  end
 end
 
 endmodule

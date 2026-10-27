@@ -15,6 +15,8 @@ module circ_buf_to_ddr3_selftrigc (
     input [25:0] circ_buf_rd_dat,     // 26-bit wide data from the circular buffer
     input [15:0] circ_buf_trig_addr,  // circular buffer address corresponding to a trigger, FIFO output
     input trig_fifo_empty,            // no triggers available when asserted
+    input trig_fifo_parity,           // fill parity of the trigger at the head of the FIFO
+    input fill_parity,                // parity of the fill now open (enable_sm_selftrigc)
     input [22:0] fill_address,        // latched starting address for a fill
     input [41:0] trigger_time,        // the time of the most recent data trigger
     input init_ddr3_addr,             // a new run has started
@@ -192,6 +194,8 @@ circ_buf_to_ddr3_sm_selftrigc circ_buf_to_ddr3_sm_selftrigc (
     .cbuf_rd_en(cbuf_rd_en),                       // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     .cbuf_trig_en(cbuf_trig_en),                   // triggering of new waveforms is enabled
     .trig_fifo_empty(trig_fifo_empty),             // if not empty then process a waveform
+    .trig_fifo_parity(trig_fifo_parity),           // fill parity of the trigger at the head of the FIFO
+    .fill_parity(fill_parity),                     // parity of the fill now open
     .reset_clk_adc(reset_clk_adc),                 // either 'ext_reset' or 'reset_clk50' is asserted
     .burst_cntr_zero(burst_cntr_zero),             // all sample bursts have been saved
     .enable_acquisition(enable_acquisition),       // capturing and reading out data is enabled

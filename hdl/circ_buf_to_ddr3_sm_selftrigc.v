@@ -7,6 +7,8 @@ module circ_buf_to_ddr3_sm_selftrigc (
   input cbuf_rd_en,          // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
   input cbuf_trig_en,          // triggering of new waveforms is enabled
   input trig_fifo_empty,        // if not empty then process a waveform
+  input trig_fifo_parity,       // fill parity of the trigger at the head of the FIFO
+  input fill_parity,            // parity of the fill now open (enable_sm_selftrigc)
   input enable_acquisition,        // capturing and reading out data is enabled
   input burst_cntr_zero,              // all sample bursts have been saved
   // outputs
@@ -64,6 +66,24 @@ end
 // create a flag to indicate whether or not a trigger was seen
 reg got_trig;
 
+// Which fill this machine is collecting ('current_parity', sampled when the fill starts), and
+// whether the trigger at the head of the FIFO belongs to it.  Triggers accepted after the fill
+// boundary carry the other parity and stay in the FIFO until the next fill is opened; so the
+// end of a fill is recognised either by a next-fill trigger at the head of the FIFO, or by the
+// FIFO being empty once the boundary has settled: 'cbuf_trig_en' drops one clock after the
+// boundary and the last same-fill trigger can arrive up to five clocks after it, so wait a
+// dozen before concluding that none is coming.
+reg       current_parity = 1'b0;
+reg [3:0] trig_en_low_cnt = 4'd0;
+always @(posedge adc_clk) begin
+  if (cbuf_trig_en)                  trig_en_low_cnt <= 4'd0;
+  else if (trig_en_low_cnt != 4'd15) trig_en_low_cnt <= trig_en_low_cnt + 4'd1;
+end
+wire fill_closed     = !cbuf_trig_en && (trig_en_low_cnt >= 4'd12);
+wire head_this_fill  = !trig_fifo_empty && (trig_fifo_parity == current_parity);
+wire head_next_fill  = !trig_fifo_empty && (trig_fifo_parity != current_parity);
+wire fill_over       = fill_closed || head_next_fill;
+
 // Declare the symbolic names for states
 // Simplified one-hot encoding (each constant is an index into an array of bits)
 parameter [4:0]
@@ -107,7 +127,7 @@ always @ (posedge adc_clk) begin
 end
 
 // combinational always block to determine next state (use blocking [=] assignments) 
-always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero or enable_acquisition ) begin
+always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero or enable_acquisition or head_this_fill or fill_over ) begin
     NS = {21{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
@@ -134,14 +154,15 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
           if ( !enable_acquisition )
             // the run has ended, go to IDLE and wait for a new run
             NS[IDLE] = 1'b1;
-          else if (!trig_fifo_empty)
-            // a trigger has occurred, so go process it.
+          else if (head_this_fill)
+            // a trigger of this fill is waiting, so go process it.
             // This branch has top priority, so that we always process all accepted triggers.
             NS[WAVEFORM_INIT1] = 1'b1;
-          else if (!cbuf_trig_en && got_trig)
-            // the fill is over, and we had at least 1 trigger, so go handle the fill header and checksum
+          else if (fill_over && got_trig)
+            // the fill is over (a next-fill trigger is at the head of the FIFO, or the boundary has
+            // settled with nothing waiting), and we had at least 1 trigger: fill header and checksum
             NS[FILL_DONE1] = 1'b1;
-          else if (!cbuf_trig_en && !got_trig)
+          else if (fill_over && !got_trig)
             // the fill is over, but there were no triggers, so go clean up and end
             NS[NO_TRIGGER] = 1'b1;
           else
@@ -268,7 +289,11 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
     endcase
 end // combinational always block to determine next state
 
-// handle the "got_trig" flag
+// handle the "got_trig" flag, and sample the parity of the fill being opened
+always @(posedge adc_clk) begin
+  if (NS[FILL_INIT1])
+    current_parity <= fill_parity;
+end
 always @(posedge adc_clk) begin
   if (NS[FILL_INIT1])
     // clear the flag at the start of a fill
