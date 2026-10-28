@@ -39,13 +39,18 @@ module self_trigger #(
     input enable,                     // start looking for triggers. Global in time.
     input line_hold_off,              // fill boundary guard from enable_sm_selftrigc: triggers accepted while this
                                       // is high belong to the next fill and their pulse to the master is held back
+    input [7:0] min_separation_in,    // minimum separation of accepted triggers, in clocks (quasi-static; < 8 reads as 8)
+    input retrig_level_in,            // 1 => re-trigger after the separation while still over threshold (legacy);
+                                      // 0 => re-arm only once the comparator has dropped below threshold (one trigger per excursion)
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
     output reg trigger_immediate,  // the accepted trigger itself, one HOLD_CYCLES pulse at acceptance: drives the
                                    // trigger-address / time FIFO capture (fixed latency, see enable_sm_selftrigc)
-    output reg trigger             // the trigger line to the master: one pulse per accepted trigger, deferred
+    output reg trigger,            // the trigger line to the master: one pulse per accepted trigger, deferred
                                    // past the fill boundary while 'line_hold_off' is high
+    output line_quiet              // no pulse owed for the closing fill and the line is idle: enable_sm_selftrigc
+                                   // waits for this before it closes the fill (raises 'done' to the master)
 );
 
 localparam MAX_LOG2 = $clog2(MAX_PAIRS);
@@ -84,6 +89,16 @@ sync_2stage polar_sync (
    .in(polarity_in),
    .out(polarity)
 );
+wire [7:0] min_separation_sync;
+wire       retrig_level;
+sync_2stage #(.WIDTH(8)) minsep_sync (.clk(clk), .in(min_separation_in), .out(min_separation_sync));
+sync_2stage               retrig_sync (.clk(clk), .in(retrig_level_in),  .out(retrig_level));
+// the separation counter is loaded with (separation - 5): SETUP_HOLD, the load cycle of SEPARATION,
+// REARM and the two clocks of comparator pipeline before the next trigger can be seen in
+// ACCEPT_TRIGGERS make up the other five clocks of the minimum period (verified in simulation:
+// accepted triggers are never closer than the programmed value)
+reg [7:0] separation_load;
+always @(posedge clk) separation_load <= (min_separation_sync < 8'd8) ? 8'd3 : (min_separation_sync - 8'd5);   // floor of 8 clocks (20 ns), the pipeline
 
 wire [2:0] sum_log2_sync;
 wire [5:0] ped_delay_sync;
@@ -223,7 +238,8 @@ end
 wire local_trigger_wire;
 assign local_trigger_wire = self_trig_ready & trig_cond;
 
-reg holding_trigger, init_hold_counter, init_gap_counter;
+reg accepted_d1;                 // one clock after SETUP_HOLD, for the fixed-latency 'trigger_immediate'
+reg init_sep_counter;
 reg local_trigger_reg;
 reg local_trigger;
 // Triggers are accepted whenever the state machine below is out of IDLE, i.e. whenever
@@ -233,12 +249,12 @@ reg local_trigger;
 always @(posedge clk) begin
   local_trigger_reg <= local_trigger_wire;
   local_trigger     <= local_trigger_reg;
-  trigger_immediate <= holding_trigger;
+  trigger_immediate <= accepted_d1;      // high two clocks after SETUP_HOLD, exactly as the old HOLD_TRIGGER output was
 end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Create a down-counter that will delay triggers until enough time has passed for the trigger
-// calculations to be valid, and that provides the post-trigger hold (dead time).
+// calculations to be valid, and that provides the post-trigger minimum separation (dead time).
 // The settling time depends on the configured window and pedestal delay: the pedestal must be a
 // fully-populated average, i.e. D + ped_delay cycles plus the pipeline, after the enable.
 wire [7:0] settle_cycles;
@@ -255,10 +271,8 @@ always @(posedge clk) begin
       delay_cntr[7:0] <= 8'b0;
     else if (init_delay_cntr)
       delay_cntr[7:0] <= settle_cycles;  // at least 16 cycles (the old fixed value was 15), more for long windows
-    else if (init_hold_counter )
-      delay_cntr[7:0] <= HOLD_CYCLES;  // keep the trigger line high long enough for the master's 40 MHz receiver
-    else if (init_gap_counter )
-      delay_cntr[7:0] <= GAP_CYCLES;   // and then low long enough that the master sees the end of this trigger before the next
+    else if (init_sep_counter )
+      delay_cntr[7:0] <= separation_load;  // the programmed minimum separation between accepted triggers
     else if (delay_cntr_zero)
       // if zero then hold there
       delay_cntr[7:0] <= 8'b0;
@@ -267,29 +281,36 @@ always @(posedge clk) begin
       delay_cntr[7:0] <= delay_cntr[7:0] - 1;
 end
 
-// The trigger line is sampled by the master's channel_triggerc_receiver on its 40 MHz clock through
-// a two-stage synchroniser, and that receiver counts one trigger per contiguous high level.  So each
-// trigger must be high for at least two 40 MHz periods, and consecutive triggers must be separated
-// by at least two 40 MHz periods of low, or the master counts fewer triggers than the channel
-// stores waveforms and the readout loses alignment.  Before the gap existed, a pulse that was still
-// over threshold when the hold expired re-triggered after a 7.5 ns low, invisible to the master.
+// The pulse shape on the trigger line to the master (HOLD_CYCLES high, GAP_CYCLES low) is produced
+// by the line state machine at the end of this file; the detector below no longer has to wait for
+// it.  The detector's own dead time is the programmed minimum separation, and in the default
+// (edge) mode it also re-arms only once the comparator has dropped below threshold, so a pulse
+// that stays over threshold for longer than the separation gives one trigger, not a train.
 localparam [7:0] HOLD_CYCLES = 8'd24;   // 60 ns high
-localparam [7:0] GAP_CYCLES  = 8'd24;   // 60 ns low: dead time between consecutive triggers
+localparam [7:0] GAP_CYCLES  = 8'd24;   // 60 ns low: the master's receiver needs both
 
 // state machine to keep track of when trigger becomes reliable
 
 parameter [2:0]
-  IDLE           =  3'd0,
-  WAIT_FOR_VALID =  3'd1,
+  IDLE            = 3'd0,
+  WAIT_FOR_VALID  = 3'd1,
   ACCEPT_TRIGGERS = 3'd2,
   SETUP_HOLD      = 3'd3,
-  HOLD_TRIGGER    = 3'd4,
-  PIPE_ADJUST     = 3'd5,
-  TRIG_GAP        = 3'd6;
+  SEPARATION      = 3'd4,   // the programmed minimum separation after an accepted trigger
+  REARM           = 3'd5;   // wait (edge mode) for the comparator to have dropped below threshold
 
 // Declare current state and next state variables
-reg [6:0] /* synopsys enum STATE_TYPE */ CS;  // self_trigger SM state
-reg [6:0] /* synopsys enum STATE_TYPE */ NS;
+reg [5:0] /* synopsys enum STATE_TYPE */ CS;  // self_trigger SM state
+reg [5:0] /* synopsys enum STATE_TYPE */ NS;
+
+// 'armed': in edge mode a new trigger is accepted only after 'local_trigger' has been low at least
+// once since the last accepted trigger.  'local_trigger' is the comparator two clocks later, and the
+// acceptance decision uses the same signal, so the two are consistent.
+reg armed;
+always @(posedge clk) begin
+  if (rst || CS[SETUP_HOLD]) armed <= 1'b0;
+  else if (!local_trigger)   armed <= 1'b1;
+end
 
 // sync the enable signal into the adc clk domain
 (* ASYNC_REG = "TRUE" *) reg enable_sync1;
@@ -302,15 +323,15 @@ end
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge clk) begin
   if ( rst ) begin
-    CS             <= {7{1'b0}}; // set all state bits to 0
+    CS             <= {6{1'b0}}; // set all state bits to 0
     CS[IDLE]       <= 1'b1;      // set IDLE state bit to 1
   end
   else
     CS <=  NS;         // set state bits to next state
 end
 
-always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger or init_gap_counter ) begin
-  NS = {7{1'b0}}; // default all bits to zero; will overrride one bit
+always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger or init_sep_counter or armed or retrig_level ) begin
+  NS = {6{1'b0}}; // default all bits to zero; will overrride one bit
 
   case (1'b1) // synopsys full_case parallel_case
 
@@ -336,7 +357,7 @@ always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger or init_gap_cou
 
   CS[ACCEPT_TRIGGERS]: begin
     if ( enable_sync2 ) begin
-      if ( local_trigger )
+      if ( local_trigger && (armed || retrig_level) )
         NS[SETUP_HOLD] = 1'b1;
       else
         NS[ACCEPT_TRIGGERS] = 1'b1;
@@ -346,30 +367,28 @@ always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger or init_gap_cou
     end
   end
 
+  // one clock: the trigger is accepted here (timestamp latched, pulse owed to the master)
   CS[SETUP_HOLD]: begin
-    NS[HOLD_TRIGGER] = 1'b1;
+    NS[SEPARATION] = 1'b1;
   end
 
-  // hold the trigger line high so that new triggers can't enter (a deadtime)
-  CS[HOLD_TRIGGER]: begin
-    if ( delay_cntr_zero )
-      NS[TRIG_GAP] = 1'b1;
+  // the programmed minimum separation; the counter is loaded on the way in, so ignore 'zero' then
+  CS[SEPARATION]: begin
+    if ( delay_cntr_zero && !init_sep_counter )
+      NS[REARM] = 1'b1;
     else
-      NS[HOLD_TRIGGER] = 1'b1;
+      NS[SEPARATION] = 1'b1;
   end
 
-  // keep the trigger line low for a while so that the master sees the end of this trigger
-  CS[TRIG_GAP]: begin
-    // the gap counter is loaded during the first cycle in this state, so ignore 'zero' until then
-    if ( delay_cntr_zero && !init_gap_counter )
-      NS[PIPE_ADJUST] = 1'b1;
+  // edge mode: wait for the comparator to have been below threshold since the trigger;
+  // level mode: straight back to accepting (a pulse still over threshold re-triggers at once)
+  CS[REARM]: begin
+    if ( !enable_sync2 )
+      NS[IDLE] = 1'b1;
+    else if ( armed || retrig_level )
+      NS[ACCEPT_TRIGGERS] = 1'b1;
     else
-      NS[TRIG_GAP] = 1'b1;
-  end
-
-  // go one more clock cycle to adjust for pipeline delay between the trigger and self_trig_ready
-  CS[PIPE_ADJUST]: begin
-    NS[ACCEPT_TRIGGERS] = 1'b1;
+      NS[REARM] = 1'b1;
   end
 
   endcase
@@ -381,29 +400,30 @@ always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger or init_gap_cou
 always @ (posedge clk) begin
   init_delay_cntr   <= 1'b0;
   self_trig_ready   <= 1'b0;
-  init_hold_counter <= 1'b0;
-  init_gap_counter  <= 1'b0;
-  holding_trigger   <= 1'b0;
+  init_sep_counter  <= 1'b0;
+  accepted_d1       <= 1'b0;
 
   if (NS[IDLE]) begin
     init_delay_cntr <= 1'b1;
   end
 
-  if(NS[ACCEPT_TRIGGERS]) begin
+  // the comparator pipeline is kept live from ACCEPT_TRIGGERS onwards (also through the
+  // separation and re-arm), so that 'armed' sees the comparator drop and so that the first
+  // ACCEPT_TRIGGERS cycle after a re-arm already has a current 'local_trigger'
+  if(NS[ACCEPT_TRIGGERS] || NS[SETUP_HOLD] || NS[SEPARATION] || NS[REARM]) begin
     self_trig_ready <= 1'b1;
   end
 
   if(NS[SETUP_HOLD]) begin
-    init_hold_counter <= 1'b1;
     timestamp[41:0]   <= timing_counter[41:0];
   end
 
-  if(NS[HOLD_TRIGGER]) begin
-    holding_trigger <= 1'b1;
+  if(NS[SEPARATION] && CS[SETUP_HOLD]) begin
+    init_sep_counter <= 1'b1;  // load the separation as we enter SEPARATION
   end
 
-  if(NS[TRIG_GAP] && CS[HOLD_TRIGGER]) begin
-    init_gap_counter <= 1'b1;  // load the gap length as we enter TRIG_GAP
+  if(CS[SETUP_HOLD]) begin
+    accepted_d1 <= 1'b1;
   end
 
 end
@@ -423,34 +443,53 @@ end
 // Nothing is dropped: the detection, its timestamp and its circular-buffer address are captured
 // at acceptance either way ('trigger_immediate').
 //
-// Acceptances are at least HOLD_CYCLES + GAP_CYCLES + 4 cycles apart and a line pulse takes
-// HOLD_CYCLES + GAP_CYCLES cycles, so the line keeps up and at most one immediate pulse is ever
-// owed; deferred pulses only accumulate during a hold-off (a few hundred ns, so a handful) and are
-// sent back to back once it ends.  A pulse that has started always completes, so that a trigger
-// accepted just before 'enable' drops is still counted by the master.
+// A line pulse takes HOLD_CYCLES + GAP_CYCLES = 48 clocks (120 ns), while triggers may now be
+// accepted every 'min_separation' clocks, so a burst can be accepted faster than it can be
+// reported and the owed pulses queue up here (the DDR3 writer limits the sustained rate to a small
+// fraction of the line rate, so the queue is short-lived); deferred pulses also accumulate during a
+// fill-boundary hold-off.  The counters saturate rather than wrap.  A pulse that has started always
+// completes, so that a trigger accepted just before 'enable' drops is still counted by the master.
+// At the fill boundary, enable_sm_selftrigc does not close the fill (and so does not raise 'done'
+// to the master) until 'line_quiet': every pulse owed for the closing fill has been sent and its
+// gap has elapsed, so the master has counted it before it latches its count on 'done', however
+// long the backlog was.  Deferred pulses then go out at least GUARD_CYCLES after 'done'.
 localparam [1:0] LINE_IDLE = 2'd0, LINE_HIGH = 2'd1, LINE_LOW = 2'd2;
-reg [4:0] pending_now      = 5'd0;   // pulses owed for triggers accepted with the line free
-reg [4:0] pending_deferred = 5'd0;   // pulses owed for triggers accepted during a hold-off
+reg [7:0] pending_now      = 8'd0;   // pulses owed to the master for the fill that is open
+reg [7:0] pending_deferred = 8'd0;   // pulses owed for triggers accepted during a hold-off (the next fill)
 reg [1:0] line_state       = LINE_IDLE;
 reg [7:0] line_cntr        = 8'd0;
+reg       line_hold_off_d  = 1'b0;
 wire accept_now = CS[SETUP_HOLD] & ~line_hold_off;
 wire accept_def = CS[SETUP_HOLD] &  line_hold_off;
-wire send_now   = (line_state == LINE_IDLE) & (pending_now != 5'd0);
-wire send_def   = (line_state == LINE_IDLE) & (pending_now == 5'd0) & (pending_deferred != 5'd0) & ~line_hold_off;
+wire send_now   = (line_state == LINE_IDLE) & (pending_now != 8'd0);
+// when the hold-off ends the deferred pulses are simply pulses of the fill that is now open, so they
+// are merged into 'pending_now' (saturating) rather than kept as a separate, lower-priority queue
+// that a steady stream of new triggers could starve past the next fill boundary
+wire hold_release    = line_hold_off_d & ~line_hold_off;
+wire [8:0] merged = {1'b0, pending_now} + {1'b0, pending_deferred};
+assign line_quiet = (line_state == LINE_IDLE) & (pending_now == 8'd0);
 always @(posedge clk) begin
   if (rst) begin
-    pending_now      <= 5'd0;
-    pending_deferred <= 5'd0;
+    pending_now      <= 8'd0;
+    pending_deferred <= 8'd0;
     line_state       <= LINE_IDLE;
     line_cntr        <= 8'd0;
+    line_hold_off_d  <= 1'b0;
     trigger          <= 1'b0;
   end
   else begin
-    pending_now      <= pending_now      + {4'd0, accept_now} - {4'd0, send_now};
-    pending_deferred <= pending_deferred + {4'd0, accept_def} - {4'd0, send_def};
+    line_hold_off_d <= line_hold_off;
+    if (hold_release)
+      pending_now <= (merged[8] ? 8'd255 : merged[7:0]) + {7'd0, accept_now} - {7'd0, send_now};
+    else if (!(accept_now && pending_now == 8'd255))
+      pending_now <= pending_now + {7'd0, accept_now} - {7'd0, send_now};
+    if (hold_release)
+      pending_deferred <= 8'd0;
+    else if (!(accept_def && pending_deferred == 8'd255))
+      pending_deferred <= pending_deferred + {7'd0, accept_def};
     case (line_state)
       LINE_IDLE: begin
-        if (send_now | send_def) begin
+        if (send_now) begin
           trigger    <= 1'b1;
           line_cntr  <= HOLD_CYCLES - 8'd1;
           line_state <= LINE_HIGH;

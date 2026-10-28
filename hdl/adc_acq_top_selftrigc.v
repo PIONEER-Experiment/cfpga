@@ -27,6 +27,8 @@ module adc_acq_top_selftrigc (
     input        selftrig_polarity, // for self-triggering: 0 => negative polarity, 1 => positive
     input [2:0]  selftrig_sum_log2, // self-triggering: log2 of the number of sample pairs averaged
     input [5:0]  selftrig_ped_delay,// self-triggering: pedestal delay in 400 MHz clock cycles
+    input [7:0]  selftrig_min_separation, // self-triggering: minimum separation of accepted triggers, clocks
+    input        selftrig_retrig_level,   // self-triggering: legacy level re-trigger mode
     input        selftrig_ped_bypass,// self-triggering: 1 => no pedestal subtraction
     input [3:0] xadc_alarms,
 
@@ -196,6 +198,7 @@ wire self_trig_ready;
 wire self_trig_immediate;   // the accepted trigger at acceptance (fixed latency), for the trigger FIFOs
 wire line_hold_off;         // fill-boundary guard for the trigger line to the master
 wire fill_parity;           // toggles at every fill boundary
+wire line_quiet;            // self_trigger: nothing owed to the master for the closing fill
 enable_sm_selftrigc enable_sm_selftrigc (
     // inputs
     .adc_clk(adc_clk),                       // run the sm in this clock domain
@@ -207,6 +210,7 @@ enable_sm_selftrigc enable_sm_selftrigc (
     .ddr3_wr_done(ddr3_wr_done),             // asserted when the 'ddr3_wr_control' is in the DONE state
     .initial_fill_num_wr_clkadc(initial_fill_num_wr_clkadc), // when we initialize fill number, also initialize other needed variables
     .new_fill(new_fill),
+    .line_quiet(line_quiet),                 // self_trigger: nothing owed to the master for the closing fill
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), //  we are in a state where we are actively writing to the ddr3
     // outputs
     .cbuf_wr_en(cbuf_wr_en),                 // writing into the circ buf by the ADC is enabled, must extend past final trigger
@@ -272,9 +276,12 @@ self_trigger self_trigger(
     .ped_bypass_in(selftrig_ped_bypass),      // 1 => absolute threshold on the running average
     .enable(enable_triggering),               // start looking for triggers
     .line_hold_off(line_hold_off),            // fill-boundary guard: hold the master's pulse back, tag as next fill
+    .min_separation_in(selftrig_min_separation[7:0]), // minimum separation of accepted triggers, clocks
+    .retrig_level_in(selftrig_retrig_level),  // legacy level re-trigger mode
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid
     .trigger_immediate(self_trig_immediate),  // a trigger has been accepted (fixed latency, for the FIFOs)
     .trigger(self_trig),                      // the trigger line to the master (deferred across fill boundaries)
+    .line_quiet(line_quiet),                  // nothing owed to the master for the closing fill
     .timestamp(timestamp)                     // latched time_counter value when the trigger fires
 );
 
@@ -300,9 +307,16 @@ endgenerate
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a FIFO that will hold the value of the 'write' address for each trigger point.
 wire trig_addr_rd_en;
+// The trigger-address, trigger-time and parity FIFOs are cleared at every run start as well as by
+// the full reset (6.6.9): a trigger left over from the previous run (accepted after the reader
+// had gone IDLE on enable_acquisition dropping) would otherwise sit at the head of the FIFO with a
+// stale fill parity, and the parity logic in circ_buf_to_ddr3_sm would end the first fill on it.
+// 'run_start_reset' is 64 clocks, which satisfies the FIFO generator's reset requirements; the
+// first trigger of a run is microseconds later (enable_triggering plus the detector's settle).
+wire trig_fifo_rst = adc_acq_full_reset | run_start_reset;
 circ_buf_fifo circ_buf_fifo (
   .clk(adc_clk),                    // 400 MHz ADC DDR clock
-  .rst(adc_acq_full_reset),                 // reset from the Master FPGA
+  .rst(trig_fifo_rst),              // full reset from the Master FPGA, or a run start
   .din(circ_buf_wr_addr[15:0]),        // current 'write' address
   .wr_en(trig_pulse),                // single-period pulse from 'acq_trig' input
   .rd_en(trig_addr_rd_en),            // read a trigger address from the FIFO
@@ -316,7 +330,7 @@ circ_buf_fifo circ_buf_fifo (
 // signals that control the fifo for the circ buf trigger address
 trigger_time_fifo trigger_time_fifo (
   .clk(adc_clk),                    // 400 MHz ADC DDR clock
-  .rst(adc_acq_full_reset),         // reset from the Master FPGA
+  .rst(trig_fifo_rst),              // full reset from the Master FPGA, or a run start
   .din(timestamp),                  // current 'write' address
   .wr_en(trig_pulse),               // single-period pulse from 'acq_trig' input
   .rd_en(trig_addr_rd_en),          // read a trigger address from the FIFO
@@ -338,7 +352,7 @@ always @(posedge adc_clk) fill_parity_d <= {fill_parity_d[3:0], fill_parity};
 reg        trig_parity_mem [0:1023];
 reg [9:0]  trig_parity_wr = 10'd0, trig_parity_rd = 10'd0;
 always @(posedge adc_clk) begin
-    if (adc_acq_full_reset) begin
+    if (trig_fifo_rst) begin
         trig_parity_wr <= 10'd0;
         trig_parity_rd <= 10'd0;
     end

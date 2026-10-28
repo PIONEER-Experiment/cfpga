@@ -86,15 +86,18 @@ always @(posedge clk) begin
     all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 26'b0);
 end
 
-// latch and clear the acq_done to avoid timing issues
-reg acq_done_local;
-reg clear_acq_done;
-always @(posedge clk) begin
-  if ( acq_done_latch )
-    acq_done_local <= 1'b1;
-  else if ( clear_acq_done )
-    acq_done_local <= 1'b0;
-end
+// The "has the fill closed?" interlock.  Until 6.6.9 this was a latch set by 'acq_done_latch'
+// (the delayed ext_done) and cleared after use.  That latch had no reset, set beat clear, and
+// enable_sm_selftrigc holds ext_done high between runs, so at the first read-fill of every run
+// (and after any close that overlapped the clear) it was already set and the state machine went
+// straight to the header FIFO, which was still empty: ERROR1, the master saw chan_error_rc, and
+// the next readout tripped ERROR_TRIG_NUM on the leftover header.  The header FIFO itself is the
+// right interlock: ddr3_wr_control pushes the fill header into it only after the header (the last
+// word of the fill) has been written to the DDR3, so "header waiting" means "fill in memory".
+// CHK_FIFO_EMPTY therefore waits for the header FIFO to become non-empty, bounded by the
+// 'acq_wait_cntr' time-out below, and errors only on the time-out.  'acq_done_latch' is no longer
+// used (the port is kept for the other channel_main variants).
+reg clear_acq_done;   // (no longer drives anything; kept so the output block below is unchanged)
 
 
 // keep track of fill number we are reading
@@ -159,7 +162,7 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments)
-always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or acq_done_latch or run_sm or acq_done_local or acq_wait_timeout ) begin
+always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or run_sm or acq_wait_timeout ) begin
     NS = 10'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
@@ -180,16 +183,13 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         // We enter the CHK_FIFO_EMPTY state after we have been started.
         // There should be a complete header in the FIFO. If nothing is there, then we flag an error
         CS[CHK_FIFO_EMPTY]: begin
-//            if ( !acq_done_latch ) begin
-            if ( !acq_done_local && !acq_wait_timeout ) begin
-               // the DDR3 writing and header fifo should be ready for us -- wait here
+            if ( fill_header_fifo_empty && !acq_wait_timeout ) begin
+               // the fill is still being closed and written to the DDR3 -- wait here
                // (bounded: on timeout we fall through and report an error)
                NS[CHK_FIFO_EMPTY] = 1'b1;
             end
-            // See if there is something in the header FIFO
             else if (fill_header_fifo_empty)
-                // We were asked for a fill, but nothing there, so go flag an error.
-                // We need to somehow resync.
+                // We were asked for a fill, and none arrived within the time-out: flag an error.
                 NS[ERROR1] = 1'b1;
             else
                 // Fetch and check the fill_fifo_header.

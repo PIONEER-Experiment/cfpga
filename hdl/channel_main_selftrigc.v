@@ -242,7 +242,14 @@ wire acq_done;
 wire ddr3_selftrig_wr_active;
 wire run_start_reset;   // from adc_acq_top_selftrigc: 160 ns pulse at the start of every run, clears the fill/DDR3 FIFOs
 // Inform the master FPGA that no data transfer to DDR3 is in process
-assign acq_idle = adc_acq_sm_idle || acq_done || !ddr3_selftrig_wr_active;
+// The done line to the master (C0_DONE).  Since 6.6.9 it is asserted only when a fill has been
+// closed (the ext_done pulse from enable_sm_selftrigc, which is produced only after every trigger
+// pulse owed to the master for that fill has been sent) or when the acquisition is idle; the
+// master latches its per-fill self-trigger count for this channel on its rising edge, and its
+// acquisition controller waits for it before storing the fill record.  It used to be high as well
+// whenever the DDR3 writer was merely between waveforms, which gave the master a "done" before
+// the fill was closed and would have latched the count at the wrong moment.
+assign acq_idle = adc_acq_sm_idle || acq_done;
 
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
@@ -375,6 +382,8 @@ wire [11:0] selftrig_threshold;
 wire [2:0]  selftrig_sum_log2;
 wire [5:0]  selftrig_ped_delay;
 wire        selftrig_ped_bypass;
+wire [7:0]  selftrig_min_separation;
+wire        selftrig_retrig_level;
 //sync_2stage #(
 //  .WIDTH(12)
 //) selftrig_sync (
@@ -434,6 +443,8 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .selftrig_sum_log2(selftrig_sum_log2[2:0]),          // self-triggering: log2 of the number of sample pairs averaged
     .selftrig_ped_delay(selftrig_ped_delay[5:0]),        // self-triggering: pedestal delay in 400 MHz clock cycles
     .selftrig_ped_bypass(selftrig_ped_bypass),           // self-triggering: 1 => no pedestal subtraction
+    .selftrig_min_separation(selftrig_min_separation[7:0]), // self-triggering: minimum separation of accepted triggers, clocks
+    .selftrig_retrig_level(selftrig_retrig_level),       // self-triggering: legacy level re-trigger mode
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
@@ -480,6 +491,7 @@ sync_2stage st_sync (
   .in(acq_trig),
   .out(self_trig_ddr3)
 );
+wire dwf_reset;   // declared before its first use (the data-writer FIFO reset); assigned below
 
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the fill address between the ADC block and the DDR3 block
@@ -510,7 +522,6 @@ assign high_water_warning = 1'b0;
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
 // Reset it when there is a full reset or when we are starting over -- flagged
 // by the event count reset
-wire dwf_reset;
 wire ddr3_write_fifo_full;
 assign dwf_reset = adc_acq_full_reset | evt_cnt_reset | run_start_reset;
 ddr3_write_fifo ddr3_write_fifo (
@@ -547,6 +558,7 @@ sync_2stage fhf_reset_sync (
   .in(dwf_reset),
   .out(fill_header_fifo_reset)
 );
+wire [4:0] mig_status_ddr3, mig_status_clk125;   // declared before the ddr3_intf instance that drives mig_status_ddr3
 wire acq_done_ddr3;
 sync_2stage ack_done_sync (
   .clk(ddr3_domain_clk),
@@ -658,7 +670,6 @@ ddr3_read_data_width_converter ddr3_read_data_width_converter(
 );
 
 // DDR3 user-interface handshakes, synchronised to clk125 for the diagnostic registers
-wire [4:0] mig_status_ddr3, mig_status_clk125;
 sync_2stage #(.WIDTH(5)) mig_status_sync (.clk(clk125), .in(mig_status_ddr3), .out(mig_status_clk125));
 
 // Count the words exchanged with the Aurora core, for comparison with the master's per-channel
@@ -894,6 +905,8 @@ command_top command_top (
     .selftrig_sum_log2(selftrig_sum_log2[2:0]),                        // self-triggering: averaging window
     .selftrig_ped_delay(selftrig_ped_delay[5:0]),                      // self-triggering: pedestal delay
     .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
+    .selftrig_min_separation(selftrig_min_separation[7:0]),            // self-triggering: minimum separation, clocks
+    .selftrig_retrig_level(selftrig_retrig_level),                     // self-triggering: legacy level re-trigger mode
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished

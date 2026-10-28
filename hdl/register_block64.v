@@ -47,6 +47,8 @@ module register_block64(
     output [2:0]  selftrig_sum_log2,         // self-triggering: log2 of the number of sample pairs averaged
     output [5:0]  selftrig_ped_delay,        // self-triggering: pedestal delay in 400 MHz clock cycles (1..63)
     output        selftrig_ped_bypass,       // self-triggering: 1 => no pedestal subtraction
+    output [7:0]  selftrig_min_separation,   // self-triggering: minimum separation of accepted triggers, 400 MHz clocks
+    output        selftrig_retrig_level,     // self-triggering: 1 => re-trigger while still over threshold (legacy level mode)
     input  [22:0] current_waveform_num,
  
     // slow control
@@ -124,7 +126,7 @@ module register_block64(
     //   bits [8:3]  pedestal delay in 400 MHz clock cycles, 1..63 (000100 = 4)
     //   bit  [9]    1 = bypass the pedestal subtraction
     // default 0x21 reproduces the original fixed 4-sample / 4-cycle trigger
-    reg [31:0] reg40_ = 32'h00000021;
+    reg [31:0] reg40_ = 32'h00005021;  // window 4 samples, pedestal delay 4 clocks, minimum separation 20 clocks (50 ns), edge mode
     
     // write to the writable registers
     always @ (posedge clk) begin
@@ -269,6 +271,12 @@ module register_block64(
     assign selftrig_sum_log2[2:0]      = reg40_[2:0];
     assign selftrig_ped_delay[5:0]     = reg40_[8:3];
     assign selftrig_ped_bypass         = reg40_[9];
+    // R40 [17:10]: minimum separation between accepted self triggers in 400 MHz clocks; 0 (an older
+    // configuration writing only the low bits) reads as the default of 20 = 50 ns.  R40 [18]: 1 keeps
+    // the legacy behaviour of re-triggering after the separation while the signal is still over
+    // threshold; 0 (default) re-arms only once it has dropped below, one trigger per excursion.
+    assign selftrig_min_separation[7:0] = (reg40_[17:10] == 8'd0) ? 8'd20 : reg40_[17:10];
+    assign selftrig_retrig_level        = reg40_[18];
     
     reg [31:0] rdbk_reg;
     assign tx_data[31:0] = rdbk_reg[31:0];
@@ -291,7 +299,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h0b)) rdbk_reg[31:0] <= {17'd0, adc_buf_current_data_delay[64:50]}; // R11 is read only
         if (rd_en && (reg_num[5:0] == 6'h0c)) rdbk_reg[31:0] <= {31'd0, adc_buf_delay_data_error};          // R12 is read only
         if (rd_en && (reg_num[5:0] == 6'h0d)) rdbk_reg[31:0] <= reg13_[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h0e)) rdbk_reg[11:0] <= {20'd0, reg14_[11:0]};
+        if (rd_en && (reg_num[5:0] == 6'h0e)) rdbk_reg[31:0] <= {20'd0, reg14_[11:0]};
         if (rd_en && (reg_num[5:0] == 6'h0f)) rdbk_reg[31:0] <= {10'd0, reg15_[21:0]};
         if (rd_en && (reg_num[5:0] == 6'h10)) rdbk_reg[31:0] <= {20'd0, reg16_[11:0]};
         if (rd_en && (reg_num[5:0] == 6'h11)) rdbk_reg[31:0] <= {10'd0, reg17_[21:0]};

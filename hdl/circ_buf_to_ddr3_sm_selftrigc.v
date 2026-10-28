@@ -81,7 +81,13 @@ always @(posedge adc_clk) begin
 end
 wire fill_closed     = !cbuf_trig_en && (trig_en_low_cnt >= 4'd12);
 wire head_this_fill  = !trig_fifo_empty && (trig_fifo_parity == current_parity);
-wire head_next_fill  = !trig_fifo_empty && (trig_fifo_parity != current_parity);
+// a next-fill trigger at the head of the FIFO ends the fill only once the fill is closing
+// (cbuf_trig_en low); while the fill is open such an entry can only be stale (it cannot be
+// produced by the boundary logic) and is discarded, otherwise it would end an open fill and
+// leave enable_sm_selftrigc waiting for a reader that never returns to TRIG_WAIT
+wire head_other      = !trig_fifo_empty && (trig_fifo_parity != current_parity);
+wire head_next_fill  = head_other && !cbuf_trig_en;
+wire head_stale      = head_other &&  cbuf_trig_en;
 wire fill_over       = fill_closed || head_next_fill;
 
 // Declare the symbolic names for states
@@ -107,11 +113,12 @@ parameter [4:0]
     DDR3_WRITE_WAIT = 5'd17,  // 20000
     DONE            = 5'd18,  // 40000
     WAVEFORM_INIT4  = 5'd19,  // increment-only, see WAVEFORM_INIT3
-    WAVEFORM_INIT5  = 5'd20;  // increment-only, see WAVEFORM_INIT3
+    WAVEFORM_INIT5  = 5'd20,  // increment-only, see WAVEFORM_INIT3
+    DISCARD_TRIG    = 5'd21;  // pop a trigger of the wrong fill parity seen while the fill is open (should not happen)
     
 // Declare current state and next state variables
-reg [20:0] /* synopsys enum STATE_TYPE */ CS;
-reg [20:0] /* synopsys enum STATE_TYPE */ NS;
+reg [21:0] /* synopsys enum STATE_TYPE */ CS;
+reg [21:0] /* synopsys enum STATE_TYPE */ NS;
 assign circ_to_ddr3_state[18:0] = CS[18:0];  // readback keeps the original 19-bit encoding; WAVEFORM_INIT4/5 (CS[20:19]) read as zero
 //assign circ_to_ddr3_state[19] = 1'b0;
 //synopsys state_vector CS
@@ -119,7 +126,7 @@ assign circ_to_ddr3_state[18:0] = CS[18:0];  // readback keeps the original 19-b
 // sequential always block for state transitions (use non-blocking [<=] assignments)
 always @ (posedge adc_clk) begin
     if (reset_clk_adc) begin
-        CS <= #1 {21{1'b0}}; // set all state bits to 0
+        CS <= #1 {22{1'b0}}; // set all state bits to 0
         CS[IDLE] <= #1 1'b1; // set IDLE state bit to 1
     end
     else
@@ -127,8 +134,8 @@ always @ (posedge adc_clk) begin
 end
 
 // combinational always block to determine next state (use blocking [=] assignments) 
-always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero or enable_acquisition or head_this_fill or fill_over ) begin
-    NS = {21{1'b0}}; // default all bits to zero; will overrride one bit
+always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or burst_cntr_zero or enable_acquisition or head_this_fill or fill_over or head_stale ) begin
+    NS = {22{1'b0}}; // default all bits to zero; will overrride one bit
 
     case (1'b1) // synopsys full_case parallel_case
 
@@ -165,6 +172,9 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
           else if (fill_over && !got_trig)
             // the fill is over, but there were no triggers, so go clean up and end
             NS[NO_TRIGGER] = 1'b1;
+          else if (head_stale)
+            // a trigger of the other parity while the fill is open: stale, pop it and carry on
+            NS[DISCARD_TRIG] = 1'b1;
           else
             // wait here
             NS[TRIG_WAIT] = 1'b1;
@@ -201,6 +211,10 @@ always @ (CS or cbuf_rd_en or cbuf_trig_en or trig_fifo_empty or got_trig or bur
 
         CS[WAVEFORM_INIT5]: begin
                 NS[LOOP1] = 1'b1;
+        end
+        // one clock: the stale trigger is popped on the way in, then back to waiting
+        CS[DISCARD_TRIG]: begin
+                NS[TRIG_WAIT] = 1'b1;
         end
 
     // We use 4 states to collect and forward bursts of ADC data.
@@ -361,6 +375,10 @@ always @ (posedge adc_clk) begin
       cbuf_rd_trig_wait    <= #1 1'b1;  // waiting for another trigger or the negation of 'cbuf_rd_en'
       // indicate that writing is not active, so that it is safe to read, until we find something in the trig_fifo
       ddr3_selftrig_wr_active <= #1 !trig_fifo_empty;
+    end
+
+    if (NS[DISCARD_TRIG]) begin
+      trig_addr_rd_en          <= #1 1'b1;   // pop the stale trigger (address, time and parity FIFOs together)
     end
 
     if (NS[WAVEFORM_INIT1]) begin
