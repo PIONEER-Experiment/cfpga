@@ -10,12 +10,3 @@ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks {clk
 #set_false_path -to [get_pins \
 #    -of_objects [get_nets -hierarchical -quiet -filter {MARK_DEBUG == 1}] \
 #    -filter {IS_LEAF == 1 && DIRECTION == IN}]
-
-
-
-
-
-
-
-
-
