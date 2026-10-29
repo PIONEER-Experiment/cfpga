@@ -67,6 +67,8 @@ module command_top (
     output [2:0]  selftrig_sum_log2,          // self-triggering: log2 of the number of sample pairs averaged
     output [5:0]  selftrig_ped_delay,         // self-triggering: pedestal delay in 400 MHz clock cycles
     output        selftrig_ped_bypass,        // self-triggering: 1 => no pedestal subtraction
+    output [7:0]  selftrig_min_separation,    // self-triggering: minimum separation of accepted triggers, 400 MHz clocks
+    output        selftrig_retrig_level,      // self-triggering: 1 => re-trigger while still over threshold (legacy level mode)
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
     output read_fill_done,                    // read fill state machine finished
@@ -524,6 +526,8 @@ module command_top (
         .selftrig_sum_log2(selftrig_sum_log2[2:0]),                        // self-triggering: averaging window
         .selftrig_ped_delay(selftrig_ped_delay[5:0]),                      // self-triggering: pedestal delay
         .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
+        .selftrig_min_separation(selftrig_min_separation[7:0]),            // self-triggering: minimum separation (6.6.9)
+        .selftrig_retrig_level(selftrig_retrig_level),                     // self-triggering: level re-trigger mode (6.6.9)
         .async_pre_trig(async_pre_trig[15:0]),                         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
         .current_waveform_num(current_waveform_num[22:0]),
         // slow control
