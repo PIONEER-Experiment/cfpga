@@ -500,7 +500,14 @@ reg  fill_parity_d = 1'b0;
 wire boundary        = fill_parity ^ fill_parity_d;
 wire merge_deferred  = hold_release | boundary;
 wire [8:0] merged = {1'b0, pending_now} + {1'b0, pending_deferred};
-assign line_quiet = (line_state == LINE_IDLE) & (pending_now == 8'd0);
+// 'line_quiet' is registered (6.6.10): combinational, this compare fed enable_sm_selftrigc's next-state
+// logic and its guard-counter reset across two modules, 6 LUT levels at 400 MHz, and routed with 9 ps
+// of slack.  One clock of latency is harmless here: enable_sm only ever waits for it to become true,
+// and the one event that makes it false again (the merge of deferred pulses) is at the fill boundary,
+// many clocks before any of the states that test it.
+reg line_quiet_r = 1'b0;
+always @(posedge clk) line_quiet_r <= (line_state == LINE_IDLE) & (pending_now == 8'd0);
+assign line_quiet = line_quiet_r;
 always @(posedge clk) begin
   trig_refuse <= trig_backlog_full | (merged[8:0] >= 9'd240);   // the two queues are merged at the hold release, so bound their sum
   if (rst)                                                   refused_count <= 16'd0;
