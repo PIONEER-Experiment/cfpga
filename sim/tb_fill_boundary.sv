@@ -19,11 +19,13 @@ integer minsep_arg = 20, level_arg = 0;
 initial begin if ($value$plusargs("minsep=%d", minsep_arg)) min_sep = minsep_arg; if ($value$plusargs("level=%d", level_arg)) retrig_level = level_arg; end
 wire line_hold_off, fill_parity, line_quiet, close_forced;
 wire self_trig_ready, trig_imm, trig_line; wire [41:0] timestamp;
-wire trig_backlog_full; wire [15:0] refused_count; wire [7:0] pending_pulses;
+wire trig_backlog_full; wire [15:0] refused_count; wire [7:0] pending_pulses; wire refused_pulse, trig_discarded;
+integer refused_pulses = 0; always @(posedge adc_clk) if (refused_pulse) refused_pulses = refused_pulses + 1;
+integer discards = 0; always @(posedge adc_clk) if (trig_discarded) discards = discards + 1;
 self_trigger st (.clk(adc_clk), .rst(rst), .adcdat(adcdat), .timing_counter(timing_counter),
   .threshold_in(12'sd100), .polarity_in(1'b1), .sum_log2_in(3'd1), .ped_delay_in(6'd4), .ped_bypass_in(1'b1),
   .enable(enable_triggering), .line_hold_off(line_hold_off), .min_separation_in(min_sep), .retrig_level_in(retrig_level),
-  .trig_backlog_full(trig_backlog_full), .fill_parity(fill_parity), .refused_count(refused_count), .pending_pulses(pending_pulses),
+  .trig_backlog_full(trig_backlog_full), .fill_parity(fill_parity), .refused_count(refused_count), .pending_pulses(pending_pulses), .refused_pulse(refused_pulse),
   .self_trig_ready(self_trig_ready), .timestamp(timestamp), .trigger_immediate(trig_imm), .trigger(trig_line), .line_quiet(line_quiet));
 
 // ---------------- channel: enable_sm ----------------
@@ -83,7 +85,7 @@ circ_buf_to_ddr3_sm_selftrigc cb (.adc_clk(adc_clk), .reset_clk_adc(rst), .cbuf_
   .checksum_update(x9), .checksum_init(x10), .adc_acq_out_valid(x11), .burst_adr_cntr_en(x12), .save_start_adr(x13),
   .save_last_adr(x14), .trig_addr_rd_en(trig_addr_rd_en), .burst_cntr_init(x15), .burst_cntr_en(x16), .waveform_cntr_init(x17),
   .waveform_cntr_en(x18), .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), .fill_cntr_en(x19), .latch_fill_num(x20),
-  .address_cntr_en(), .circ_to_ddr3_state(cb_state));
+  .address_cntr_en(), .circ_to_ddr3_state(cb_state), .trig_discarded(trig_discarded));
 // DDR3 writer model: 'done' is a level, asserted ~50 clocks after the reader parks in DDR3_WRITE_WAIT (state bit 17)
 // and held until the reader leaves it (as ddr3_wr_control's DONE state does)
 reg [7:0] wr_done_cnt = 0;
@@ -236,7 +238,9 @@ initial begin
   // every pulse is seen (accepted or refused); the master counts exactly the accepted ones; per-fill counts agree;
   // refusals happen only in the noise / low-backlog runs, and never cost a forced close
   // (in the noise run pulses closer than the separation merge, so only 'no more passes than pulses' holds there)
-  $display("boundaries issued %0d, fills closed by the channel %0d", boundaries, fill_idx_chan);
+  $display("boundaries issued %0d, fills closed by the channel %0d, refused pulses %0d (count %0d), discards %0d", boundaries, fill_idx_chan, refused_pulses, refused_count, discards);
+  if (refused_pulses != refused_count) begin $display("refused pulse / count disagree"); mismatches = mismatches + 1; end
+  if (discards != 0) begin $display("a trigger was discarded"); mismatches = mismatches + 1; end
   if ((pulses_sent == accepted || ($test$plusargs("noise") && accepted <= pulses_sent)) && accepted - refused_count == trig_num && mismatches == 0 && fill_idx_master == fill_idx_chan && close_forced_count == 0
       && fill_idx_chan == boundaries
       && ((refused_count != 0) == ($test$plusargs("noise") || backlog_thr < 100 || wfm_bursts > 1))) $display("PASS"); else $display("FAIL");

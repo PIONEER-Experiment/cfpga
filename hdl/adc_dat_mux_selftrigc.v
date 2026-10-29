@@ -15,6 +15,7 @@ module adc_dat_mux_selftrigc (
     input [25:0] dat1_,                // a pair of ADC samples and a pair of over-range bits
     input [25:0] dat0_,                // a pair of ADC samples and a pair of over-range bits
     input [11:0] channel_tag,          // stuff about the channel to put in the header
+    input [6:0]  chan_err_word,        // {lost data, fault, cause code[4:0]}: the channel's sticky error state (6.6.10)
     input [22:0] num_fill_bursts,      // number of 8 (or 10) sample bursts
     input [22:0] waveform_start_adr,   // first DDR3 memory location for this waveform
     input [22:0] current_waveform_num, // the current waveform number, to be used in header
@@ -53,11 +54,11 @@ assign fill_header[ 52: 50] = 3'b000;                     //  3-bit to shift bur
 assign fill_header[ 75: 53] = fill_addr[22:0];            // 23-bit value for starting DDR3 burst address of fill
 assign fill_header[ 98: 76] = current_waveform_num[22:0]; // 23-bit final waveform (trigger) count    5800c0000000001ddf800000100006d5
 assign fill_header[102: 99] = async_pre_trig[15:12];      //  4-bit MSB value for number of pre-trigger ADC pairs from register R21
-assign fill_header[109:103] = 7'd0;                       //  7-bit unused
+assign fill_header[109:103] = chan_err_word[6:0];         //  7-bit channel error word (6.6.10): [109] lost data, [108] fault, [107:103] cause
 assign fill_header[121:110] = channel_tag[11:0];          // 12-bit channel tag
 assign fill_header[122:122] = 1'b0;                       //  1-bit cbuf=1, all other modes = 0
 assign fill_header[123:123] = 1'b1;                       //  1-bit self triggered = 1, all other modes = 0
-assign fill_header[125:124] = 1'b1;                       //  1-bit circular-buffered self triggered = 1, all others 0
+assign fill_header[124:124] = 1'b1;                       //  1-bit circular-buffered self triggered = 1, all others 0
 assign fill_header[125:125] = 1'b0;                       //  1-bit unused
 assign fill_header[127:126] = 2'b01;                      //  2-bit header tag; this pattern cannot appear in sign-extended data (always 2'b00 or 2'b11)
 assign fill_header[131:128] = 4'd1;                       //  4-bit burst contents tag, tag = '1' for fill header

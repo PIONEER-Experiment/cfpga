@@ -36,7 +36,8 @@ module circ_buf_to_ddr3_sm_selftrigc (
   output reg fill_cntr_en,         // will be enabled once per fill
   output reg latch_fill_num,        // latch the fill number to be used in fill header / checksum
   output reg address_cntr_en,       // increment the ddr3 address so that we can track the starting address for the next fill
-  output [18:0] circ_to_ddr3_state  // current state
+  output [18:0] circ_to_ddr3_state, // current state
+  output reg trig_discarded         // one clock: a trigger of the wrong fill parity was discarded (error latch)
 );
 
 
@@ -377,8 +378,10 @@ always @ (posedge adc_clk) begin
       ddr3_selftrig_wr_active <= #1 !trig_fifo_empty;
     end
 
+    trig_discarded <= #1 1'b0;
     if (NS[DISCARD_TRIG]) begin
       trig_addr_rd_en          <= #1 1'b1;   // pop the stale trigger (address, time and parity FIFOs together)
+      trig_discarded           <= #1 1'b1;
     end
 
     if (NS[WAVEFORM_INIT1]) begin

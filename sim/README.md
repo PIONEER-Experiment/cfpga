@@ -28,3 +28,9 @@ Icarus does not accept two SystemVerilog constructs that Vivado does; make `enab
 header is written must wait (not error), and time out only if no header ever comes.
 
     iverilog -g2012 -o sim tb_rd_fill.v ../hdl/cc_rd_fill_sm.v ../hdl/sync_2stage.v && vvp sim
+
+`tb_chan_error.v` — `chan_error_selftrigc` (6.6.10): sets from the three clock domains become sticky bits
+(register 0x37) and the {lost data, fault, cause code} word of the fill header; the clear and the full reset
+empty them.
+
+    iverilog -g2012 -o sim tb_chan_error.v ../hdl/chan_error_selftrigc.v && vvp sim

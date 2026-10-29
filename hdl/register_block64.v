@@ -83,6 +83,10 @@ module register_block64(
     input [31:0] link_event_counts,            // R52 (0x34): {channel_up drops, lane_up drops, hard_err, link_reset}, 8 bits each, free running
     input [31:0] selftrig_diag,                // R53 (0x35): {pulses owed to the master [31:24], forced fill closes [23:16], refused triggers [15:0]}
     input [31:0] rd_fill_diag,                 // R54 (0x36): {stalls in GET_DDR3_DATA [31:26], DDR3 words still to send [25:0]}
+    input [31:0] error_status,                 // R55 (0x37): {snapshot valid, lost data, fault, 13'd0, error bits [15:0]}; a write clears
+    input [31:0] selftrig_diag_snap,           // R56 (0x38): 0x35 frozen at the first error
+    input [31:0] rd_fill_diag_snap,            // R57 (0x39): 0x36 frozen at the first error
+    output       clear_errors,                 // one clock: register 0x37 was written
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -102,6 +106,8 @@ module register_block64(
     end
     // set the illegal flag if any upper bit is non-zero
     assign illegal_reg_num = (reg_num[31:6] == 26'b00000000000000000000000000) ? 1'b0 : 1'b1;
+    reg clear_errors_r = 1'b0;
+    assign clear_errors = clear_errors_r;
     
     // make a block of 64 32-bit registers
     // those with explicit defaults follow below
@@ -167,6 +173,8 @@ module register_block64(
         if (wr_en && (reg_num[5:0] == 6'h26)) reg38_[31:0] <= rx_data[31:0];
         if (wr_en && (reg_num[5:0] == 6'h28)) reg40_[31:0] <= rx_data[31:0];
         // R39 (0x27) was a 'run in progress' flag that nothing in the firmware consumed; it is now read-only zero
+        // R55 (0x37): any write clears the error latch and its snapshot (6.6.10)
+        clear_errors_r <= wr_en && (reg_num[5:0] == 6'h37);
         // R40 through R63 are read only
     end
 
@@ -342,9 +350,9 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h34)) rdbk_reg[31:0] <= link_event_counts[31:0];
         if (rd_en && (reg_num[5:0] == 6'h35)) rdbk_reg[31:0] <= selftrig_diag[31:0];
         if (rd_en && (reg_num[5:0] == 6'h36)) rdbk_reg[31:0] <= rd_fill_diag[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h37)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h38)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h39)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h37)) rdbk_reg[31:0] <= error_status[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h38)) rdbk_reg[31:0] <= selftrig_diag_snap[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h39)) rdbk_reg[31:0] <= rd_fill_diag_snap[31:0];
         if (rd_en && (reg_num[5:0] == 6'h3a)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h3b)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h3c)) rdbk_reg[31:0] <= 32'd0;

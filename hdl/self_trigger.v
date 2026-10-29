@@ -54,6 +54,7 @@ module self_trigger #(
     output line_quiet,             // no pulse owed for the closing fill and the line is idle: enable_sm_selftrigc
                                    // waits for this before it closes the fill (raises 'done' to the master)
     output reg [15:0] refused_count, // triggers refused because the FIFOs or the pulse queue were full (saturating; diagnostic)
+    output refused_pulse,          // one clock per refused trigger (error latch)
     output [7:0] pending_pulses    // pulses owed to the master for the open fill, live (diagnostic)
 );
 
@@ -481,6 +482,7 @@ reg       line_hold_off_d  = 1'b0;
 wire accept_now = CS[SETUP_HOLD] & ~refused & ~line_hold_off;
 wire accept_def = CS[SETUP_HOLD] & ~refused &  line_hold_off;
 assign pending_pulses = pending_now;
+assign refused_pulse  = CS[SETUP_HOLD] & refused;
 wire send_now   = (line_state == LINE_IDLE) & (pending_now != 8'd0);
 // when the hold-off ends the deferred pulses are simply pulses of the fill that is now open, so they
 // are merged into 'pending_now' (saturating) rather than kept as a separate, lower-priority queue

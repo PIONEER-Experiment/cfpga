@@ -54,6 +54,7 @@ module cc_rd_fill_sm (
   input reading_done,                     // reading is complete
   output reading_done_synced,             // 'reading_done' after the synchroniser below, for the diagnostics
   output [31:0] rd_fill_diag,             // register 0x36: {stalls in GET_DDR3_DATA [31:26], DDR3 words still to send [25:0]}
+  output [1:0]  err_set_125,              // error latch sets, clk: {DDR3 read stalled, header wait timed out}
   input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
 
 // interface to the AXIS 2:1 MUX
@@ -169,6 +170,7 @@ always @(posedge clk) begin
   else if ( ddr3_stall_cntr == 21'h0FFFFF && ddr3_stall_count != 6'h3F ) ddr3_stall_count <= ddr3_stall_count + 6'd1;
 end
 assign rd_fill_diag = {ddr3_stall_count, ddr3_words_to_send[25:0]};
+assign err_set_125  = {(ddr3_stall_cntr == 21'h0FFFFF), (CS[ERROR1] && !error_found)};   // one clock each
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

@@ -339,9 +339,14 @@ always @ (CS or ddr3_wr_fifo_empty or ddr3_wr_fifo_dat or burst_cntr_zero or add
                 NS[SYNC_ERR] = 1'b1;
         end
 
-        // Stay in SYNC_ERR state until the state machine is reset.
-        // Raise the 'error' flag
+        // Stay in SYNC_ERR until the run has ended (6.6.10: it used to need a reset).  The flag
+        // 'ddr3_wr_sync_err' is latched by the channel's error latch and reported to the master, so
+        // the condition is never silent; the write FIFO is cleared at the next run start, after
+        // which the machine can start that run cleanly.
         CS[SYNC_ERR]: begin
+            if (!acq_enabled && !enable_acquisition_ddr3)
+               NS[IDLE] = 1'b1;
+            else
                NS[SYNC_ERR] = 1'b1;
         end
 

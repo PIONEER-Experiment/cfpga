@@ -120,7 +120,11 @@ module command_top (
      // enable-line decoder diagnostics (enableControl2.diag_word), clk domain
      input [31:0] enable_diag,
      // self-trigger diagnostics from adc_acq_top (register 0x35), adc_clk domain, status only
-     input [31:0] selftrig_diag
+     input [31:0] selftrig_diag,
+     // channel error latch (6.6.10): the sticky bits (clk), the clear from register 0x37, the read-fill sets
+     input [15:0] err_bits,
+     output       clear_errors,
+     output [1:0] err_set_125
 );
 
     wire ser_num_le, command_le;
@@ -352,7 +356,20 @@ module command_top (
     reg  [ 4:0] snapshot_count = 5'd0;
     wire        take_snapshot;
     // taken on the rising edge of the master's reset line (before the channel's own reset follows it)
-    assign take_snapshot = snapshot_trigger && !snapshot_trigger_d && !command_sm_state[0];   // command_sm not in IDLE
+    // ... and (6.6.10) unconditionally at the first error latched since the last clear: the error latch's
+    // bits rising from zero.  'error_snap_valid' says the snapshot registers hold an error capture (rather
+    // than a reset capture or nothing); register 0x37 reports it.
+    reg  err_any_d = 1'b0, error_snap_valid = 1'b0;
+    wire err_any = |err_bits;
+    wire error_snapshot = err_any && !err_any_d;
+    reg  [31:0] selftrig_diag_snap = 32'd0, rd_fill_diag_snap = 32'd0;
+    wire [31:0] error_status = {error_snap_valid, |(err_bits & 16'h003F), |(err_bits & 16'h03C0), 13'd0, err_bits};
+    always @(posedge clk) begin
+        err_any_d <= err_any;
+        if (error_snapshot) begin error_snap_valid <= 1'b1; selftrig_diag_snap <= selftrig_diag; rd_fill_diag_snap <= rd_fill_diag; end
+        else if (!err_any)  error_snap_valid <= 1'b0;
+    end
+    assign take_snapshot = (snapshot_trigger && !snapshot_trigger_d && !command_sm_state[0]) || error_snapshot;
     always @(posedge clk) begin
         cmd_path_live_d    <= cmd_path_live;
         snapshot_trigger_d <= snapshot_trigger;
@@ -564,7 +581,11 @@ module command_top (
         .enable_diag_snap(enable_diag_snap),
         .enable_diag(enable_diag),
         .selftrig_diag(selftrig_diag),
-        .rd_fill_diag(rd_fill_diag)
+        .rd_fill_diag(rd_fill_diag),
+        .error_status(error_status),
+        .selftrig_diag_snap(selftrig_diag_snap),
+        .rd_fill_diag_snap(rd_fill_diag_snap),
+        .clear_errors(clear_errors)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -600,6 +621,7 @@ module command_top (
         .reading_done(reading_done),                           // reading is complete
         .reading_done_synced(reading_done_s2),                 // the same, synchronised, for the diagnostics
         .rd_fill_diag(rd_fill_diag),                           // register 0x36 (stalls, words still to send)
+        .err_set_125(err_set_125),                             // error latch sets (read stalled, header wait timed out)
         .acq_done_latch(acq_done_latch),                       // input, last self-trigger safely processed (default to 1 in other modes)
         // interface to the AXIS 2:1 MUX
         .use_ddr3_data(use_ddr3_data),                         // the data source is the DDR3 memory

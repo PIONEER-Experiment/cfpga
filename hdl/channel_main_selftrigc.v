@@ -88,6 +88,16 @@ wire enable_acquisition;                // indicates that data acquisition has n
 wire master_enable_125;
 wire [31:0] enable_diag;   // enable-line decoder diagnostics for registers 0x30 / 0x31
 wire [31:0] selftrig_diag; // self-trigger diagnostics for register 0x35 (adc_acq_top)
+// channel error latch (6.6.10)
+wire [3:0]  err_set_adc_acq;          // from adc_acq_top: {trigger FIFO overrun, trigger discarded, fill close forced, trigger refused}
+wire [1:0]  err_set_125;              // from command_top: {DDR3 read stalled, header wait timed out}
+wire        fill_header_overrun;      // from ddr3_intf (ddr3 clock)
+wire        ddr3_wr_sync_err;         // from ddr3_intf (ddr3 clock), level
+wire        ddr3_rd_fifo_input_tready;
+wire [15:0] chan_err_bits;            // the sticky bits, clk125
+wire        chan_err_any;
+wire [6:0]  chan_err_word;            // {lost data, fault, cause code}, adc_clk, into every fill header
+wire        clear_errors;             // a write to register 0x37
 enableControl2 enableControl2(
   .clk125(clk125),
   .reset(reset_clk125),
@@ -468,7 +478,9 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .burst_start_adr(burst_start_adr[22:0]),                    // starting address of current fill
     .timestamp(timestamp),
     .run_start_reset(run_start_reset),                           // stretched run-start pulse, clears the fill/DDR3 FIFOs
-    .selftrig_diag(selftrig_diag)                                // register 0x35 (adc_clk domain, status only)
+    .selftrig_diag(selftrig_diag),                               // register 0x35 (adc_clk domain, status only)
+    .err_set_adc(err_set_adc_acq),                               // error latch sets, adc_clk
+    .chan_err_word(chan_err_word)                                // the channel's error word, into the fill header
 
 );
 sync_2stage ddr3_wr_en_sync (
@@ -582,7 +594,7 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),      // input, data is available when this is not asserted
     .ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),      // output, use and remove the data on the FIFO head
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),   // input, 132-bit 4-bit tag plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
-    .ddr3_wr_sync_err(),                          // synchronization error flag
+    .ddr3_wr_sync_err(ddr3_wr_sync_err),          // synchronization error flag (error latch, 6.6.10)
     .ddr3_wr_done(ddr3_wr_done),                  // asserted when the 'ddr3_wr_control' is in the DONE state
     .high_water_warning(high_water_warning),      // passed ddr3 high water mark -- must pause data taking
     .acq_done(acq_done),                          // input, acquisition is done
@@ -594,6 +606,7 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
     .fill_header_fifo_reset(fill_header_fifo_reset),     // input, clear out the fifo for a new run
     .fill_header_fifo_empty(fill_header_fifo_empty),     // output, a header is available when not asserted
+    .fill_header_overrun(fill_header_overrun),           // output, a header was written to a full FIFO (error latch)
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // input, remove the current data from the FIFO
     .fill_header_fifo_out(fill_header_fifo_out[151:0]),  // output, data at the head of the FIFO
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),       // input, the address of the first requested 128-bit burst
@@ -645,7 +658,7 @@ ddr3_read_fifo ddr3_read_fifo(
     .s_aclk(ddr3_domain_clk),
     .s_aresetn(~reset_ddr3_clk),
     .s_axis_tvalid(ddr3_rd_fifo_wr_en),
-    .s_axis_tready(),
+    .s_axis_tready(ddr3_rd_fifo_input_tready),   // a word offered while not ready is lost: reported (error latch, 6.6.10)
     .s_axis_tlast(ddr3_rd_fifo_input_tlast),
     .s_axis_tdata(ddr3_rd_fifo_input_dat[127:0]),
     .m_axis_tvalid(ddr3_rd_fifo_output_tvalid),
@@ -655,6 +668,25 @@ ddr3_read_fifo ddr3_read_fifo(
     .axis_prog_full(ddr3_rd_fifo_almost_full),
     .wr_rst_busy(),        // output wire wr_rst_busy
     .rd_rst_busy()         // output wire rd_rst_busy
+);
+
+////////////////////////////////////////////////////////////////////////////
+// Channel error latch (6.6.10): every way the channel can lose a trigger or a waveform, or fail
+// in its DDR3 / readout path, sets a sticky bit here.  The bits go into every fill header (the
+// master raises the TTS line on them), into register 0x37, and the first one freezes the
+// channel's diagnostic snapshot.  Cleared by a write to 0x37 or the full reset.
+chan_error_selftrigc chan_error (
+    .adc_clk(adc_clk),
+    .ddr3_clk(ddr3_domain_clk),
+    .clk125(clk125),
+    .full_reset_adc(adc_acq_full_reset),
+    .clear_125(clear_errors),
+    .set_adc({err_set_adc_acq[3], ddr3_write_fifo_full & adc_acq_out_valid, err_set_adc_acq[2:0]}),
+    .set_ddr3({ddr3_rd_fifo_wr_en & ~ddr3_rd_fifo_input_tready, ddr3_wr_sync_err, fill_header_overrun}),
+    .set_125(err_set_125),
+    .err_bits_125(chan_err_bits),
+    .err_any_125(chan_err_any),
+    .err_word_adc(chan_err_word)
 );
 
 // Create a width converter to change the 128-bit data to 32-bit data
@@ -938,6 +970,9 @@ command_top command_top (
     .snapshot_trigger(rst_from_master_125),
     .enable_diag(enable_diag),
     .selftrig_diag(selftrig_diag),
+    .err_bits(chan_err_bits),                 // error latch bits (register 0x37, snapshot on the first)
+    .clear_errors(clear_errors),              // a write to 0x37
+    .err_set_125(err_set_125),                // read-fill error sets
     .image_type(image_type),
 
     // other state machine states

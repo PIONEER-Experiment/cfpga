@@ -56,7 +56,9 @@ module adc_acq_top_selftrigc (
     output [22:0] burst_start_adr, // starting address of fill
     output [41:0] timestamp,
     output reg run_start_reset,    // stretched init_ddr3_addr: clear the fill-address / DDR3-write / fill-header FIFOs for a new run
-    output [31:0] selftrig_diag    // register 0x35: {pulses owed to the master [31:24], forced fill closes [23:16], refused triggers [15:0]}
+    output [31:0] selftrig_diag,   // register 0x35: {pulses owed to the master [31:24], forced fill closes [23:16], refused triggers [15:0]}
+    output [3:0]  err_set_adc,     // error latch sets, adc_clk: {trigger FIFO overrun, trigger discarded, fill close forced, trigger refused}
+    input  [6:0]  chan_err_word    // {lost data, fault, cause code} for the fill header
 );
 
 //wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
@@ -203,6 +205,7 @@ wire line_quiet;            // self_trigger: nothing owed to the master for the 
 wire close_forced;          // enable_sm: a fill was closed by its time-out
 wire trig_backlog_full;     // the trigger FIFOs are nearly full (below): self_trigger refuses new triggers
 wire [15:0] refused_count;  // self_trigger: triggers refused
+wire refused_pulse, trig_discarded, trig_fifo_full;
 wire [ 7:0] pending_pulses; // self_trigger: pulses owed to the master, live
 enable_sm_selftrigc enable_sm_selftrigc (
     // inputs
@@ -287,6 +290,7 @@ self_trigger self_trigger(
     .trig_backlog_full(trig_backlog_full),    // the trigger FIFOs are nearly full: refuse triggers until they drain
     .fill_parity(fill_parity),                // a fill boundary releases the deferred pulses for the fill it closes
     .refused_count(refused_count),            // triggers refused (diagnostic)
+    .refused_pulse(refused_pulse),            // one clock per refusal (error latch)
     .pending_pulses(pending_pulses),          // pulses owed to the master (diagnostic)
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid
     .trigger_immediate(self_trig_immediate),  // a trigger has been accepted (fixed latency, for the FIFOs)
@@ -331,7 +335,7 @@ circ_buf_fifo circ_buf_fifo (
   .wr_en(trig_pulse),                // single-period pulse from 'acq_trig' input
   .rd_en(trig_addr_rd_en),            // read a trigger address from the FIFO
   .dout(circ_buf_trig_addr[15:0]),    // circular bufferr address corresponding to a trigger
-  .full(),                            // 'full' is not used
+  .full(trig_fifo_full),              // a write while full is a lost trigger (error latch; the back-pressure keeps it from happening)
   .empty(trig_fifo_empty)            // no triggers available when asserted
 );
 
@@ -392,6 +396,7 @@ always @(posedge adc_clk) begin
     else if (close_forced && close_forced_count != 8'hFF) close_forced_count <= close_forced_count + 8'd1;
 end
 assign selftrig_diag = {pending_pulses, close_forced_count, refused_count};
+assign err_set_adc   = {trig_fifo_full & trig_pulse, trig_discarded, close_forced, refused_pulse};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a module that moves data from the circular buffer to the DDR3 'write' FIFO.
@@ -427,7 +432,9 @@ circ_buf_to_ddr3_selftrigc circ_buf_to_ddr3_selftrigc(
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), //  we are in a state where we are actively writing to the ddr3
     .fill_cntr_en(fill_cntr_en),
     .address_cntr_en(address_cntr_en),             // increment the ddr3 address so that we can track the starting address for the next fill
-    .circ_to_ddr3_state(circ_to_ddr3_state)
+    .circ_to_ddr3_state(circ_to_ddr3_state),
+    .trig_discarded(trig_discarded),               // a trigger of the wrong parity was discarded (error latch)
+    .chan_err_word(chan_err_word[6:0])             // the channel's error word, into the fill header
 );
 
 endmodule
