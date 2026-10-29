@@ -118,7 +118,9 @@ module command_top (
      // rising edge takes the diagnostic snapshots (if a command is in progress); the master's reset line
      input        snapshot_trigger,
      // enable-line decoder diagnostics (enableControl2.diag_word), clk domain
-     input [31:0] enable_diag
+     input [31:0] enable_diag,
+     // self-trigger diagnostics from adc_acq_top (register 0x35), adc_clk domain, status only
+     input [31:0] selftrig_diag
 );
 
     wire ser_num_le, command_le;
@@ -331,6 +333,7 @@ module command_top (
     // Aurora-side handshakes.  0x2A is the same word frozen the cycle before the last reset from the
     // master took effect, so that after a SYS.RST the state the channel was stuck in can still be read.
     // The snapshot register is deliberately not reset.
+    wire [31:0] rd_fill_diag;
     wire [31:0] cmd_path_live;
     assign cmd_path_live = {command_sm_state[10:0],   // [31:21] command_sm CS (one-hot)
                             cc_rd_fill_state[9:0],    // [20:11] cc_rd_fill_sm CS (one-hot)
@@ -559,7 +562,9 @@ module command_top (
         .core_word_counts_snap(core_word_counts_snap),
         .link_event_counts(link_event_counts),
         .enable_diag_snap(enable_diag_snap),
-        .enable_diag(enable_diag)
+        .enable_diag(enable_diag),
+        .selftrig_diag(selftrig_diag),
+        .rd_fill_diag(rd_fill_diag)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -594,6 +599,7 @@ module command_top (
         .enable_reading(enable_reading),                       // start the 'ddr3_rd_control'
         .reading_done(reading_done),                           // reading is complete
         .reading_done_synced(reading_done_s2),                 // the same, synchronised, for the diagnostics
+        .rd_fill_diag(rd_fill_diag),                           // register 0x36 (stalls, words still to send)
         .acq_done_latch(acq_done_latch),                       // input, last self-trigger safely processed (default to 1 in other modes)
         // interface to the AXIS 2:1 MUX
         .use_ddr3_data(use_ddr3_data),                         // the data source is the DDR3 memory

@@ -81,6 +81,8 @@ module register_block64(
     input [31:0] core_word_counts,             // R50 (0x32): {RX words, TX words} at the Aurora core itself (after the TX FIFO), live
     input [31:0] core_word_counts_snap,        // R51 (0x33): the same, frozen before the last reset
     input [31:0] link_event_counts,            // R52 (0x34): {channel_up drops, lane_up drops, hard_err, link_reset}, 8 bits each, free running
+    input [31:0] selftrig_diag,                // R53 (0x35): {pulses owed to the master [31:24], forced fill closes [23:16], refused triggers [15:0]}
+    input [31:0] rd_fill_diag,                 // R54 (0x36): {stalls in GET_DDR3_DATA [31:26], DDR3 words still to send [25:0]}
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -338,8 +340,8 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h32)) rdbk_reg[31:0] <= core_word_counts[31:0];
         if (rd_en && (reg_num[5:0] == 6'h33)) rdbk_reg[31:0] <= core_word_counts_snap[31:0];
         if (rd_en && (reg_num[5:0] == 6'h34)) rdbk_reg[31:0] <= link_event_counts[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h35)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h36)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h35)) rdbk_reg[31:0] <= selftrig_diag[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h36)) rdbk_reg[31:0] <= rd_fill_diag[31:0];
         if (rd_en && (reg_num[5:0] == 6'h37)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h38)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h39)) rdbk_reg[31:0] <= 32'd0;

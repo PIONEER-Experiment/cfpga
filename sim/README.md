@@ -10,6 +10,15 @@ master count must equal the number of waveforms the channel stored, and no pulse
     vvp sim +seed=5 +burst +bdelay=10      # random run, bursts at 80% of the trigger-line rate, 10 ns board delay
     vvp sim +sweep +bdelay=30              # one pulse per fill swept from 80 clocks before to 240 after the boundary
     vvp sim +pairs +minsep=20 [+level=1]   # pulse pairs at swept spacing: minimum separation and re-arm mode
+    vvp sim +seed=3 +noise +bdelay=10      # pulses faster than the trigger line: refusals expected, counts must still agree
+    vvp sim +seed=4 +burst +backlog=6 +wfm_bursts=100   # slow reader, trigger FIFO backs up: FIFO back-pressure path
+    vvp sim +seed=8 +nflen=60              # a 1.5 us new_fill level must close one fill, not two
+    vvp sim +seed=9 +nflen=1 +bdelay=10    # a 25 ns new_fill level must not be missed
+    vvp sim +seed=7 +burst +wfm_bursts=60 +bdelay=20   # slow reader at the default back-pressure threshold
+
+The testbench raises a boundary only after the master has seen the previous done (as the acquisition
+controller does), and then as soon as asked, i.e. back-to-back; `+freerun` drops that wait and is
+informational only (boundaries during a close are absorbed, so fills < boundaries there).
 
 Icarus does not accept two SystemVerilog constructs that Vivado does; make `enable_sm_sim.sv` from
 `../hdl/enable_sm_selftrigc.sv` by rewriting the two enum ternaries

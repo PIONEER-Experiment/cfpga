@@ -17,11 +17,13 @@ reg enable_triggering = 0, enable_acquisition = 0;
 reg [7:0] min_sep = 8'd20; reg retrig_level = 0;
 integer minsep_arg = 20, level_arg = 0;
 initial begin if ($value$plusargs("minsep=%d", minsep_arg)) min_sep = minsep_arg; if ($value$plusargs("level=%d", level_arg)) retrig_level = level_arg; end
-wire line_hold_off, fill_parity, line_quiet;
+wire line_hold_off, fill_parity, line_quiet, close_forced;
 wire self_trig_ready, trig_imm, trig_line; wire [41:0] timestamp;
+wire trig_backlog_full; wire [15:0] refused_count; wire [7:0] pending_pulses;
 self_trigger st (.clk(adc_clk), .rst(rst), .adcdat(adcdat), .timing_counter(timing_counter),
   .threshold_in(12'sd100), .polarity_in(1'b1), .sum_log2_in(3'd1), .ped_delay_in(6'd4), .ped_bypass_in(1'b1),
   .enable(enable_triggering), .line_hold_off(line_hold_off), .min_separation_in(min_sep), .retrig_level_in(retrig_level),
+  .trig_backlog_full(trig_backlog_full), .fill_parity(fill_parity), .refused_count(refused_count), .pending_pulses(pending_pulses),
   .self_trig_ready(self_trig_ready), .timestamp(timestamp), .trigger_immediate(trig_imm), .trigger(trig_line), .line_quiet(line_quiet));
 
 // ---------------- channel: enable_sm ----------------
@@ -36,7 +38,8 @@ enable_sm_selftrigc en (.adc_clk(adc_clk), .enable_triggering(enable_triggering)
   .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), .initial_fill_num_wr_clkadc(1'b0), .new_fill(new_fill),
   .cbuf_wr_en(cbuf_wr_en), .cbuf_trig_en(cbuf_trig_en), .cbuf_rd_en(cbuf_rd_en), .ddr3_wr_en(ddr3_wr_en),
   .trig_pulse(trig_pulse), .adc_acq_sm_idle(sm_idle), .init_ddr3_addr(init_ddr3_addr), .ext_done(ext_done),
-  .line_hold_off(line_hold_off), .fill_parity(fill_parity), .enable_sm_state(en_state));
+  .line_hold_off(line_hold_off), .fill_parity(fill_parity), .close_forced(close_forced), .enable_sm_state(en_state));
+integer close_forced_count = 0; always @(posedge adc_clk) if (close_forced) close_forced_count = close_forced_count + 1;
 
 // ---------------- channel: trigger FIFOs (behavioural, FWFT) + parity FIFO (as in adc_acq_top) ----------------
 reg [15:0] addr_mem [0:1023]; reg [9:0] a_wr = 0, a_rd = 0;
@@ -55,9 +58,22 @@ always @(posedge adc_clk) begin
     end
 end
 wire trig_fifo_parity = trig_parity_mem[trig_parity_rd];
+// back-pressure flag as in adc_acq_top (threshold 960 of 1024; +backlog=N lowers it to exercise the path)
+integer backlog_thr = 960; initial if ($value$plusargs("backlog=%d", backlog_thr)) ;
+reg trig_backlog_full_r = 0; always @(posedge adc_clk) trig_backlog_full_r <= ((trig_parity_wr - trig_parity_rd) >= backlog_thr[9:0]);
+assign trig_backlog_full = trig_backlog_full_r;
 
 // ---------------- channel: circ_buf_to_ddr3_sm ----------------
-wire [18:0] cb_state; wire burst_cntr_zero = 1'b1;   // one burst per waveform
+wire [18:0] cb_state;
+// bursts per waveform: 1 by default (the reader is then faster than any pulse train); +wfm_bursts=N makes
+// each waveform N loops (4 clocks each) long, so that a burst of pulses backs up in the trigger FIFO
+integer wfm_bursts = 1; initial if ($value$plusargs("wfm_bursts=%d", wfm_bursts)) ;
+integer bursts_left = 0; reg burst_cntr_zero = 1'b1;
+always @(posedge adc_clk) begin
+  if (cb.NS[cb.WAVEFORM_INIT1] && !cb.CS[cb.WAVEFORM_INIT1]) bursts_left = wfm_bursts;
+  if (cb.CS[cb.LOOP4]) bursts_left = bursts_left - 1;
+  burst_cntr_zero <= (bursts_left <= 1);
+end
 wire x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16,x17,x18,x19,x20;
 circ_buf_to_ddr3_sm_selftrigc cb (.adc_clk(adc_clk), .reset_clk_adc(rst), .cbuf_rd_en(cbuf_rd_en), .cbuf_trig_en(cbuf_trig_en),
   .trig_fifo_empty(trig_fifo_empty), .trig_fifo_parity(trig_fifo_parity), .fill_parity(fill_parity),
@@ -117,9 +133,22 @@ task pulse; integer k; begin
   @(posedge adc_clk); adcdat <= 26'd0; pulses_sent = pulses_sent + 1;
 end endtask
 // a readout boundary as the master's acq controller produces it: new_fill_pause_triggers high for 6 ttc clocks
+// +nflen=N sets the level's width in ttc clocks (6 = the real NEW_DDR3_BUFFER + TRANSITION; a long level must
+// not close a second fill, a 1-clock one must not be missed)
+integer nflen = 6; initial if ($value$plusargs("nflen=%d", nflen)) ;
+integer boundaries = 0;
+// As the master's acquisition controller: a boundary is only raised once the previous one has been answered
+// with done (WAIT collects the dones before STORE_ACQ_INFO / IDLE); the next one then follows as soon as the
+// readouts thread asks, which with back-to-back triggers is a few ttc clocks after the done.  +freerun drops
+// the wait (not what the master does; it shows what the channel makes of boundaries during a close).
+reg done_pending = 0;
+always @(posedge ttc_clk) if (rx.new_fill_latch) done_pending <= 0;
+integer wdone;
 task boundary; begin
-  recording = 1;
-  @(posedge ttc_clk); new_fill_pause_triggers <= 1; repeat (6) @(posedge ttc_clk); new_fill_pause_triggers <= 0;
+  recording = 1; boundaries = boundaries + 1;
+  wdone = 0; while (done_pending && !$test$plusargs("freerun") && wdone < 1000000) begin @(posedge ttc_clk); wdone = wdone + 1; end
+  repeat (3) @(posedge ttc_clk);   // STORE_ACQ_INFO, IDLE, NEW_DDR3_BUFFER
+  @(posedge ttc_clk); new_fill_pause_triggers <= 1; done_pending <= 1; repeat (nflen) @(posedge ttc_clk); new_fill_pause_triggers <= 0;
 end endtask
 
 integer seed = 1, seed2 = 8, i, gap, fill_gap, nb;
@@ -178,6 +207,7 @@ initial begin
   fork
     begin : pulser
       for (i = 0; i < 3000; i = i + 1) begin
+        if ($test$plusargs("noise")) gap = 10 + ($urandom(seed) % 10); else   // faster than the trigger line: refusals expected
         if ($test$plusargs("burst")) gap = 20 + ($urandom(seed) % 80); else
         gap = 200 + ($urandom(seed) % 400);     // pulses 0.5-1.5 us apart (dense: many land in boundaries)
         repeat (gap) @(posedge adc_clk);
@@ -201,9 +231,15 @@ initial begin
   for (i = 0; i < fill_idx_master && i < fill_idx_chan; i = i + 1)
     if (master_latched[i] != chan_fill_wf[i]) begin mismatches = mismatches + 1;
       if (mismatches < 10) $display("MISMATCH fill %0d: master counted %0d, channel stored %0d", i, master_latched[i], chan_fill_wf[i]); end
-  $display("pulses sent %0d, accepted by self_trigger %0d, master total trig_num %0d, fills master %0d channel %0d, fill mismatches %0d, pending now/def %0d/%0d",
-           pulses_sent, accepted, trig_num, fill_idx_master, fill_idx_chan, mismatches, st.pending_now, st.pending_deferred);
-  if (pulses_sent == accepted && accepted == trig_num && mismatches == 0 && fill_idx_master == fill_idx_chan) $display("PASS"); else $display("FAIL");
+  $display("pulses sent %0d, passes through SETUP_HOLD %0d, refused %0d, master total trig_num %0d, fills master %0d channel %0d, fill mismatches %0d, pending now/def %0d/%0d, forced closes %0d",
+           pulses_sent, accepted, refused_count, trig_num, fill_idx_master, fill_idx_chan, mismatches, st.pending_now, st.pending_deferred, close_forced_count);
+  // every pulse is seen (accepted or refused); the master counts exactly the accepted ones; per-fill counts agree;
+  // refusals happen only in the noise / low-backlog runs, and never cost a forced close
+  // (in the noise run pulses closer than the separation merge, so only 'no more passes than pulses' holds there)
+  $display("boundaries issued %0d, fills closed by the channel %0d", boundaries, fill_idx_chan);
+  if ((pulses_sent == accepted || ($test$plusargs("noise") && accepted <= pulses_sent)) && accepted - refused_count == trig_num && mismatches == 0 && fill_idx_master == fill_idx_chan && close_forced_count == 0
+      && fill_idx_chan == boundaries
+      && ((refused_count != 0) == ($test$plusargs("noise") || backlog_thr < 100 || wfm_bursts > 1))) $display("PASS"); else $display("FAIL");
   $finish;
 end
 endmodule

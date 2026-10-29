@@ -42,6 +42,8 @@ module self_trigger #(
     input [7:0] min_separation_in,    // minimum separation of accepted triggers, in clocks (quasi-static; < 8 reads as 8)
     input retrig_level_in,            // 1 => re-trigger after the separation while still over threshold (legacy);
                                       // 0 => re-arm only once the comparator has dropped below threshold (one trigger per excursion)
+    input trig_backlog_full,          // the trigger-address FIFOs are nearly full (adc_acq_top): accept no more until they drain
+    input fill_parity,                // from enable_sm_selftrigc: toggles at every fill boundary (a boundary releases the deferred pulses)
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
@@ -49,8 +51,10 @@ module self_trigger #(
                                    // trigger-address / time FIFO capture (fixed latency, see enable_sm_selftrigc)
     output reg trigger,            // the trigger line to the master: one pulse per accepted trigger, deferred
                                    // past the fill boundary while 'line_hold_off' is high
-    output line_quiet              // no pulse owed for the closing fill and the line is idle: enable_sm_selftrigc
+    output line_quiet,             // no pulse owed for the closing fill and the line is idle: enable_sm_selftrigc
                                    // waits for this before it closes the fill (raises 'done' to the master)
+    output reg [15:0] refused_count, // triggers refused because the FIFOs or the pulse queue were full (saturating; diagnostic)
+    output [7:0] pending_pulses    // pulses owed to the master for the open fill, live (diagnostic)
 );
 
 localparam MAX_LOG2 = $clog2(MAX_PAIRS);
@@ -238,6 +242,16 @@ end
 wire local_trigger_wire;
 assign local_trigger_wire = self_trig_ready & trig_cond;
 
+// Back-pressure on acceptance (6.6.9).  A trigger is refused -- it still passes through
+// SETUP_HOLD / SEPARATION / REARM, so the dead time and re-arm behave as usual, but it is not
+// captured and owes the master no pulse -- when the trigger-address FIFOs are nearly full or the
+// queue of pulses owed to the master is nearly saturated.  Without this a channel triggering
+// faster than it can be read out (a threshold in the noise) overflows the IP FIFOs silently while
+// the parity tag RAM beside them keeps writing, the three lose step, and the master is owed pulses
+// for waveforms that were never stored.  Refusing keeps 'the master's count == the channel's
+// waveform count' true at any rate.  The decision is registered (one clock stale is harmless).
+reg trig_refuse = 1'b0;
+reg refused     = 1'b0;          // the current pass through SETUP_HOLD is a refusal
 reg accepted_d1;                 // one clock after SETUP_HOLD, for the fixed-latency 'trigger_immediate'
 reg init_sep_counter;
 reg local_trigger_reg;
@@ -422,11 +436,16 @@ always @ (posedge clk) begin
     init_sep_counter <= 1'b1;  // load the separation as we enter SEPARATION
   end
 
-  if(CS[SETUP_HOLD]) begin
+  if(CS[SETUP_HOLD] && !refused) begin
     accepted_d1 <= 1'b1;
   end
 
+  if(NS[SETUP_HOLD] && !CS[SETUP_HOLD]) begin
+    refused <= trig_refuse;      // decided once, on the way in
+  end
+
 end
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // The trigger line to the master.
@@ -459,15 +478,32 @@ reg [7:0] pending_deferred = 8'd0;   // pulses owed for triggers accepted during
 reg [1:0] line_state       = LINE_IDLE;
 reg [7:0] line_cntr        = 8'd0;
 reg       line_hold_off_d  = 1'b0;
-wire accept_now = CS[SETUP_HOLD] & ~line_hold_off;
-wire accept_def = CS[SETUP_HOLD] &  line_hold_off;
+wire accept_now = CS[SETUP_HOLD] & ~refused & ~line_hold_off;
+wire accept_def = CS[SETUP_HOLD] & ~refused &  line_hold_off;
+assign pending_pulses = pending_now;
 wire send_now   = (line_state == LINE_IDLE) & (pending_now != 8'd0);
 // when the hold-off ends the deferred pulses are simply pulses of the fill that is now open, so they
 // are merged into 'pending_now' (saturating) rather than kept as a separate, lower-priority queue
 // that a steady stream of new triggers could starve past the next fill boundary
 wire hold_release    = line_hold_off_d & ~line_hold_off;
+// A fill boundary also releases them: the deferred pulses were accepted during the previous
+// hold-off and carry the parity of the fill that this boundary is now closing, so they are owed
+// for that fill and must go out before its 'done'.  Normally the guard after the previous 'done'
+// has long since released them, but if the master opened and closed the next fill before the
+// guard ran out (back-to-back readout triggers), they would otherwise stay held through the
+// close, be counted by the master in the fill after, and the two sides would disagree by that
+// many for two fills.  The master has latched the previous fill's count before it can raise the
+// next 'new_fill' (its acquisition controller waits for every channel's done first).
+reg  fill_parity_d = 1'b0;
+wire boundary        = fill_parity ^ fill_parity_d;
+wire merge_deferred  = hold_release | boundary;
 wire [8:0] merged = {1'b0, pending_now} + {1'b0, pending_deferred};
 assign line_quiet = (line_state == LINE_IDLE) & (pending_now == 8'd0);
+always @(posedge clk) begin
+  trig_refuse <= trig_backlog_full | (merged[8:0] >= 9'd240);   // the two queues are merged at the hold release, so bound their sum
+  if (rst)                                                   refused_count <= 16'd0;
+  else if (CS[SETUP_HOLD] && refused && refused_count != 16'hFFFF) refused_count <= refused_count + 16'd1;
+end
 always @(posedge clk) begin
   if (rst) begin
     pending_now      <= 8'd0;
@@ -479,12 +515,13 @@ always @(posedge clk) begin
   end
   else begin
     line_hold_off_d <= line_hold_off;
-    if (hold_release)
+    fill_parity_d   <= fill_parity;
+    if (merge_deferred)
       pending_now <= (merged[8] ? 8'd255 : merged[7:0]) + {7'd0, accept_now} - {7'd0, send_now};
     else if (!(accept_now && pending_now == 8'd255))
       pending_now <= pending_now + {7'd0, accept_now} - {7'd0, send_now};
-    if (hold_release)
-      pending_deferred <= 8'd0;
+    if (merge_deferred)
+      pending_deferred <= {7'd0, accept_def};    // a trigger accepted in the boundary clock itself is deferred (new parity)
     else if (!(accept_def && pending_deferred == 8'd255))
       pending_deferred <= pending_deferred + {7'd0, accept_def};
     case (line_state)

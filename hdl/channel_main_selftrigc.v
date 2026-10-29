@@ -87,6 +87,7 @@ wire enable_triggering;                 // indicates enabled for self triggering
 wire enable_acquisition;                // indicates that data acquisition has not yet completed
 wire master_enable_125;
 wire [31:0] enable_diag;   // enable-line decoder diagnostics for registers 0x30 / 0x31
+wire [31:0] selftrig_diag; // self-trigger diagnostics for register 0x35 (adc_acq_top)
 enableControl2 enableControl2(
   .clk125(clk125),
   .reset(reset_clk125),
@@ -466,7 +467,8 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .packed_adc_dat(packed_adc_dat[25:0]),
     .burst_start_adr(burst_start_adr[22:0]),                    // starting address of current fill
     .timestamp(timestamp),
-    .run_start_reset(run_start_reset)                            // stretched run-start pulse, clears the fill/DDR3 FIFOs
+    .run_start_reset(run_start_reset),                           // stretched run-start pulse, clears the fill/DDR3 FIFOs
+    .selftrig_diag(selftrig_diag)                                // register 0x35 (adc_clk domain, status only)
 
 );
 sync_2stage ddr3_wr_en_sync (
@@ -935,6 +937,7 @@ command_top command_top (
     .link_event_counts(link_events_s2),
     .snapshot_trigger(rst_from_master_125),
     .enable_diag(enable_diag),
+    .selftrig_diag(selftrig_diag),
     .image_type(image_type),
 
     // other state machine states

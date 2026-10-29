@@ -55,7 +55,8 @@ module adc_acq_top_selftrigc (
                                                // bits[25:13] = second ADC sample
     output [22:0] burst_start_adr, // starting address of fill
     output [41:0] timestamp,
-    output reg run_start_reset     // stretched init_ddr3_addr: clear the fill-address / DDR3-write / fill-header FIFOs for a new run
+    output reg run_start_reset,    // stretched init_ddr3_addr: clear the fill-address / DDR3-write / fill-header FIFOs for a new run
+    output [31:0] selftrig_diag    // register 0x35: {pulses owed to the master [31:24], forced fill closes [23:16], refused triggers [15:0]}
 );
 
 //wire [22:0] burst_start_adr;    // first DDR3 burst memory location for this fill (3 LSBs = 0)
@@ -199,6 +200,10 @@ wire self_trig_immediate;   // the accepted trigger at acceptance (fixed latency
 wire line_hold_off;         // fill-boundary guard for the trigger line to the master
 wire fill_parity;           // toggles at every fill boundary
 wire line_quiet;            // self_trigger: nothing owed to the master for the closing fill
+wire close_forced;          // enable_sm: a fill was closed by its time-out
+wire trig_backlog_full;     // the trigger FIFOs are nearly full (below): self_trigger refuses new triggers
+wire [15:0] refused_count;  // self_trigger: triggers refused
+wire [ 7:0] pending_pulses; // self_trigger: pulses owed to the master, live
 enable_sm_selftrigc enable_sm_selftrigc (
     // inputs
     .adc_clk(adc_clk),                       // run the sm in this clock domain
@@ -220,6 +225,7 @@ enable_sm_selftrigc enable_sm_selftrigc (
     .trig_pulse(trig_pulse),                 // a trigger passed while the system is enabled for new triggers
     .line_hold_off(line_hold_off),           // fill-boundary guard for the trigger line to the master
     .fill_parity(fill_parity),               // toggles at every fill boundary
+    .close_forced(close_forced),             // a fill was closed by the time-out (diagnostic count below)
     .adc_acq_sm_idle(adc_acq_sm_idle),       // ADC acquisition state machine is idle (used for front panel LED status)
     .init_ddr3_addr(init_ddr3_addr),         // initialize the ddr3 address for this run
     .ext_done(ext_done),                     // assert external acquisition is done
@@ -278,6 +284,10 @@ self_trigger self_trigger(
     .line_hold_off(line_hold_off),            // fill-boundary guard: hold the master's pulse back, tag as next fill
     .min_separation_in(selftrig_min_separation[7:0]), // minimum separation of accepted triggers, clocks
     .retrig_level_in(selftrig_retrig_level),  // legacy level re-trigger mode
+    .trig_backlog_full(trig_backlog_full),    // the trigger FIFOs are nearly full: refuse triggers until they drain
+    .fill_parity(fill_parity),                // a fill boundary releases the deferred pulses for the fill it closes
+    .refused_count(refused_count),            // triggers refused (diagnostic)
+    .pending_pulses(pending_pulses),          // pulses owed to the master (diagnostic)
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid
     .trigger_immediate(self_trig_immediate),  // a trigger has been accepted (fixed latency, for the FIFOs)
     .trigger(self_trig),                      // the trigger line to the master (deferred across fill boundaries)
@@ -365,6 +375,23 @@ always @(posedge adc_clk) begin
     end
 end
 wire trig_fifo_parity = trig_parity_mem[trig_parity_rd];
+// Occupancy of the trigger FIFOs, from the parity RAM pointers (in lock-step with the IP FIFOs,
+// which are TRIG_FIFO_DEPTH deep).  Above the threshold self_trigger refuses new triggers, so the
+// IP FIFOs never fill ('full' is not connected) and the three stay in step.  The threshold leaves
+// room for the triggers in flight between acceptance and 'trig_pulse' (5 clocks: at most one).
+localparam [9:0] TRIG_FIFO_DEPTH = 10'd1023;   // the pointers wrap at 1024; 1023 usable before 'full'
+localparam [9:0] TRIG_BACKLOG_THRESHOLD = 10'd960;
+reg trig_backlog_full_r = 1'b0;
+always @(posedge adc_clk) trig_backlog_full_r <= ((trig_parity_wr - trig_parity_rd) >= TRIG_BACKLOG_THRESHOLD);
+assign trig_backlog_full = trig_backlog_full_r;
+
+// Diagnostic word for register 0x35 (adc_clk domain, read asynchronously: status only)
+reg [7:0] close_forced_count = 8'd0;
+always @(posedge adc_clk) begin
+    if (adc_acq_full_reset)                            close_forced_count <= 8'd0;
+    else if (close_forced && close_forced_count != 8'hFF) close_forced_count <= close_forced_count + 8'd1;
+end
+assign selftrig_diag = {pending_pulses, close_forced_count, refused_count};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Connect a module that moves data from the circular buffer to the DDR3 'write' FIFO.

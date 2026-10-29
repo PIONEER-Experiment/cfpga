@@ -22,7 +22,7 @@ initial begin
   $display("case 2 (header already waiting): ERROR1 seen=%0d GET_FIFO_HDR seen=%0d  (want 0 / 1)", saw_err, saw_hdr);
   run_sm<=0; hdr_empty<=1; repeat(20) @(posedge clk); saw_err=0; saw_hdr=0;
   // case 3: header never comes -> time-out -> ERROR1 (counter preloaded short for the test)
-  force dut.acq_wait_cntr = 29'd200; run_sm<=1; @(posedge clk); release dut.acq_wait_cntr; repeat(400) @(posedge clk);
+  force dut.acq_wait_cntr = 21'd200; run_sm<=1; @(posedge clk); release dut.acq_wait_cntr; repeat(400) @(posedge clk);
   $display("case 3 (no header, time-out): ERROR1 seen=%0d GET_FIFO_HDR seen=%0d  (want 1 / 0)", saw_err, saw_hdr);
   $finish;
 end

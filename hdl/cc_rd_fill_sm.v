@@ -53,6 +53,7 @@ module cc_rd_fill_sm (
   output reg enable_reading,              // start the 'ddr3_rd_control'
   input reading_done,                     // reading is complete
   output reading_done_synced,             // 'reading_done' after the synchroniser below, for the diagnostics
+  output [31:0] rd_fill_diag,             // register 0x36: {stalls in GET_DDR3_DATA [31:26], DDR3 words still to send [25:0]}
   input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
 
 // interface to the AXIS 2:1 MUX
@@ -140,15 +141,34 @@ assign cc_rd_fill_state = CS;
 // generous: it only has to catch a channel that will never finish, and a readout that
 // is merely slow (a loaded DAQ server, a large fill) must never trip it.
 // The counter reloads whenever we are not running, i.e. between commands.
-reg [28:0] acq_wait_cntr;
+// 2^21 clk125 = 16.8 ms (6.6.9; was 4.3 s, a diagnostic setting from before the state snapshots
+// existed).  The fill-closing states of enable_sm_selftrigc are bounded at 2.6 ms, after which the
+// header is either written or will never come, so a header that has not arrived in 16.8 ms is
+// not coming; replying with an error then costs one event instead of stalling the DAQ for seconds.
+// The master's own reply wait is 67 ms, longer than this, so the error reply is always taken.
+reg [20:0] acq_wait_cntr;
 wire acq_wait_timeout;
-assign acq_wait_timeout = (acq_wait_cntr[28:0] == 29'd0);
+assign acq_wait_timeout = (acq_wait_cntr[20:0] == 21'd0);
 always @(posedge clk) begin
   if ( !run_sm )
-    acq_wait_cntr[28:0] <= 29'h1FFFFFFF;          // ~4.3 s at 125 MHz
+    acq_wait_cntr[20:0] <= 21'h1FFFFF;            // ~16.8 ms at 125 MHz
   else if ( CS[CHK_FIFO_EMPTY] && !acq_wait_timeout )
-    acq_wait_cntr[28:0] <= acq_wait_cntr[28:0] - 1;
+    acq_wait_cntr[20:0] <= acq_wait_cntr[20:0] - 1;
 end
+// Diagnostics for a readout that stalls in GET_DDR3_DATA (register 0x36): the words still owed
+// to the master, live, and a count of stalls, where a stall is 2^20 clocks (8 ms) in
+// GET_DDR3_DATA without a word accepted by the Aurora.  A read that under-delivers (the DDR3 read
+// FIFO dropped words) sits here with nothing to send, which is the channel half of the
+// first-event hang signature; this says so without a logic analyser.
+reg  [20:0] ddr3_stall_cntr = 21'd0;
+reg  [ 5:0] ddr3_stall_count = 6'd0;
+always @(posedge clk) begin
+  if ( !CS[GET_DDR3_DATA] || aurora_ddr3_accept ) ddr3_stall_cntr <= 21'd0;
+  else if ( !ddr3_stall_cntr[20] )               ddr3_stall_cntr <= ddr3_stall_cntr + 21'd1;
+  if ( reset )                                                             ddr3_stall_count <= 6'd0;
+  else if ( ddr3_stall_cntr == 21'h0FFFFF && ddr3_stall_count != 6'h3F ) ddr3_stall_count <= ddr3_stall_count + 6'd1;
+end
+assign rd_fill_diag = {ddr3_stall_count, ddr3_words_to_send[25:0]};
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)

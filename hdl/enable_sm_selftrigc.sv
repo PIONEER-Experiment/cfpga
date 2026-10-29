@@ -24,6 +24,7 @@ module enable_sm_selftrigc (
     output logic         ext_done,        // external output indicating acquisition is done
     output logic         line_hold_off,   // fill-boundary guard for the trigger line to the master (see self_trigger)
     output logic         fill_parity,     // toggles at every fill boundary; tags each trigger with its fill
+    output logic         close_forced,    // one clock: a fill was closed by the time-out, not by the reader (diagnostic count)
     output logic [9:0]   enable_sm_state  // enable_sm current state
 );
 
@@ -103,10 +104,46 @@ state_t NS;
 
 assign enable_sm_state = CS;
 
+// 'new_fill' is a ~150 ns level from the master (NEW_DDR3_BUFFER + TRANSITION).  It is taken as a
+// latched rising edge rather than as a level (6.6.9): a level could be seen twice if a fill ever
+// closed in less than the level's width (a second, empty fill the master did not ask for), or not
+// at all if it ended before this machine was back in TRIG_ENABLED (the channel then one fill
+// behind for the rest of the run).  The request is held until TRIG_ENABLED consumes it, and
+// dropped at the end of the run.
+logic new_fill_sync3 = 1'b0, new_fill_req = 1'b0;
+wire  new_fill_edge  = new_fill_sync2 & ~new_fill_sync3;
+wire  new_fill_boundary = new_fill_edge | new_fill_req;
+always_ff @(posedge adc_clk) begin
+  new_fill_sync3 <= new_fill_sync2;
+  if (reset_clk_adc || !enable_acquisition) new_fill_req <= 1'b0;
+  else if (CS == TRIG_ENABLED)             new_fill_req <= 1'b0;   // consumed (an edge in this state acts directly)
+  else if (new_fill_edge)                  new_fill_req <= 1'b1;
+end
+
 // Sequential state update
 always_ff @(posedge adc_clk) begin
     if (reset_clk_adc) CS <= IDLE;
     else               CS <= NS;
+end
+
+// =========================================================================
+// Bound on the fill-closing states (CBUF_RD_ENABLED, DDR3_DONE_WAIT): 2^22 clocks = 10.5 ms.  A
+// legitimate close drains whatever the trigger FIFO holds at 2.5 ns per sample: up to the
+// back-pressure threshold of 960 waveforms (adc_acq_top_selftrigc), 1.2 ms at 1024 samples each and
+// 10 ms only at ~4400 samples, so this is well clear of any real close and still inside the
+// channel's own header wait (16.8 ms, cc_rd_fill_sm) and the master's wait for done (26 ms).  A
+// fill that cannot close ends in a header-less fill (the master then gets a channel error for that
+// event) instead of a hung channel.
+// =========================================================================
+logic [22:0] close_cntr = 23'd0;
+wire  close_timeout = close_cntr[22];
+always_ff @(posedge adc_clk) begin
+    if (reset_clk_adc || !(CS == CBUF_RD_ENABLED || CS == DDR3_DONE_WAIT)) close_cntr <= 23'd0;
+    else if (!close_timeout)                                               close_cntr <= close_cntr + 23'd1;
+    // the time-out exit was taken (the normal exits are tested first in the case above, so a
+    // close_timeout that coincides with a legitimate exit is not counted)
+    close_forced <= close_timeout && (NS == DONE1) && !(!enable_acquisition && !ddr3_selftrig_wr_active) &&
+                    ((CS == CBUF_RD_ENABLED && !cbuf_rd_trig_wait) || (CS == DDR3_DONE_WAIT && !ddr3_wr_done_sync2));
 end
 
 // Next-state logic
@@ -142,7 +179,7 @@ always_comb begin
     // which could abandon an in-progress DDR3 write; now both paths drain cleanly.
     TRIG_ENABLED: begin
       // Both run-end and fill-boundary go through the drain sequence.
-      if (!enable_acquisition || new_fill_sync2)  NS = CBUF_RD_ENABLED;
+      if (!enable_acquisition || new_fill_boundary)  NS = CBUF_RD_ENABLED;
       // filling this buffer  is still active, so stay here
       else                                        NS = TRIG_ENABLED;
     end
@@ -156,9 +193,12 @@ always_comb begin
       if (cbuf_rd_trig_wait)
         // Normal path: circular buffer reader has finished sending the last event.
         NS = CBUF_RD_DONE;
-      else if (close_timeout && line_quiet)
+      else if (close_timeout)
         // The reader never came back to TRIG_WAIT (it should not be possible since 6.6.9, but a
-        // fill that cannot be closed must not hold the master for ever): wrap up anyway.
+        // fill that cannot be closed must not hold the master for ever): wrap up anyway.  This
+        // exit does not wait for 'line_quiet' -- a time-out that could itself be held off (by a
+        // channel triggering faster than its line can report) would be no bound at all.  The
+        // master's count for this fill may then be short; 'close_forced' records that it happened.
         NS = DONE1;
       else if (!enable_acquisition && !ddr3_selftrig_wr_active && line_quiet)
         // Run-end escape: no active DDR3 write in progress and no more triggers
@@ -190,8 +230,8 @@ always_comb begin
     DDR3_DONE_WAIT: begin
       if (ddr3_wr_done_sync2 && line_quiet)
         NS = DONE1;
-      else if (close_timeout && line_quiet)
-        NS = DONE1;                    // bounded, as CBUF_RD_ENABLED
+      else if (close_timeout)
+        NS = DONE1;                    // bounded, as CBUF_RD_ENABLED (unconditional, see there)
       else if (!enable_acquisition && !ddr3_selftrig_wr_active && line_quiet)
         NS = DONE1;
       else
@@ -222,19 +262,6 @@ always_comb begin
     
   endcase
 end // combinational always block to determine next state
-
-// =========================================================================
-// Bound on the fill-closing states (CBUF_RD_ENABLED, DDR3_DONE_WAIT): 2^20 clocks = 2.6 ms, far
-// longer than any legitimate close (a full 1024-sample drain is 1.3 us) and far shorter than the
-// master's read-fill time-out, so a fill that cannot close ends in a header-less fill (the
-// master then gets a channel error for that event) instead of a hung channel.
-// =========================================================================
-logic [20:0] close_cntr = 21'd0;
-wire  close_timeout = close_cntr[20];
-always_ff @(posedge adc_clk) begin
-    if (reset_clk_adc || !(CS == CBUF_RD_ENABLED || CS == DDR3_DONE_WAIT)) close_cntr <= 21'd0;
-    else if (!close_timeout)                                               close_cntr <= close_cntr + 21'd1;
-end
 
 // =========================================================================
 // Fill-boundary bookkeeping for deferred triggers.
