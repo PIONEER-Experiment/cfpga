@@ -9,8 +9,8 @@
 
   // Define 8-bit constants to hold info about code version and functionality
   `define  MAJOR_REV   8'h06  // major revision
-  `define  MINOR_REV   8'h06  // minor revision
-  `define  PATCH_REV   8'h0A  // patch revision
+  `define  MINOR_REV   8'h07  // minor revision
+  `define  PATCH_REV   8'h00  // patch revision
   
   // Define constants indicating which style of firmware this is
   `define STANDARD_MODE 4'b0001
@@ -30,5 +30,6 @@
   `define  CC_RD_FILL    5'd8  // read the next fill
   `define CC_RD_ADC      5'd9   // read a block directly from the ADC
   `define CC_MAP_DELAY   5'd10   // map out ADC tap delay settings
+  `define CC_PEEK_HDR    5'd11   // return the fill header at the head of the header FIFO without popping it (6.7.0)
 
 `endif

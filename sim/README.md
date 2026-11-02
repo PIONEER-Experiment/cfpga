@@ -34,3 +34,10 @@ header is written must wait (not error), and time out only if no header ever com
 empty them.
 
     iverilog -g2012 -o sim tb_chan_error.v ../hdl/chan_error_selftrigc.v && vvp sim
+
+`tb_peek_hdr.v` — `cc_peek_hdr_sm` (6.7.0): the peek command carries the fill number the master expects;
+the reply is RSN, CC, the four header words (tlast on the last) and the header stays in the FIFO; a header
+for an older fill is popped (once, with a settle wait) and reported in CC bit 8; back-pressure; the
+time-out reply; a malformed command.
+
+    iverilog -g2012 -o sim tb_peek_hdr.v ../hdl/cc_peek_hdr_sm.v && vvp sim

@@ -188,13 +188,14 @@ module command_top (
     // Use the actual command from the command register to activate 1 particular sm.
     wire run_cmd_sm;
     wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
-    wire run_cc_rd_fill;
+    wire run_cc_rd_fill, run_cc_peek_hdr;
 
     assign run_cc_loopback  = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
     assign run_cc_rd_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_RD_REG));
     assign run_cc_wr_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_WR_REG));
     assign run_cc_rd_fill   = (run_cmd_sm && (command_reg[4:0] == `CC_RD_FILL));
     assign run_cc_map_delay = (run_cmd_sm && (command_reg[4:0] == `CC_MAP_DELAY));
+    assign run_cc_peek_hdr  = (run_cmd_sm && (command_reg[4:0] == `CC_PEEK_HDR));
 
     reg s1, s2, s3;
     wire run_cc_rd_fill_pulse;
@@ -223,28 +224,32 @@ module command_top (
     // merge 'running' and 'done' signals from the state machines that handle individual commands.
     // only 1 of each, from the activated sm, should ever be active at the same time
     wire cmd_sm_running, map_sm_running;
-    wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_map_delay_running;
-    assign cmd_sm_running = cc_loopback_running || cc_rd_reg_running || cc_wr_reg_running || cc_rd_fill_running || cc_map_delay_running;
+    wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_map_delay_running, cc_peek_hdr_running;
+    assign cmd_sm_running = cc_loopback_running || cc_rd_reg_running || cc_wr_reg_running || cc_rd_fill_running || cc_map_delay_running || cc_peek_hdr_running;
 
     wire cmd_sm_done, map_sm_done;
-    wire cc_loopback_done, cc_rd_reg_done, cc_wr_reg_done, cc_rd_fill_done, cc_map_delay_done;
-    assign cmd_sm_done = cc_loopback_done || cc_rd_reg_done || cc_wr_reg_done || cc_rd_fill_done || cc_map_delay_done;
+    wire cc_loopback_done, cc_rd_reg_done, cc_wr_reg_done, cc_rd_fill_done, cc_map_delay_done, cc_peek_hdr_done;
+    assign cmd_sm_done = cc_loopback_done || cc_rd_reg_done || cc_wr_reg_done || cc_rd_fill_done || cc_map_delay_done || cc_peek_hdr_done;
     assign read_fill_done = cc_rd_fill_done;
 
     ////////////////////////////////////////////////////////////////////
     // every state machine will need to drive certain FIFO control lines
-    wire command_top_sm_rx_tready, loopback_sm_rx_tready, rd_reg_sm_rx_tready, wr_reg_sm_rx_tready;
-    assign rx_tready = command_top_sm_rx_tready || loopback_sm_rx_tready || rd_reg_sm_rx_tready || wr_reg_sm_rx_tready;
+    wire command_top_sm_rx_tready, loopback_sm_rx_tready, rd_reg_sm_rx_tready, wr_reg_sm_rx_tready, peek_hdr_sm_rx_tready;
+    assign rx_tready = command_top_sm_rx_tready || loopback_sm_rx_tready || rd_reg_sm_rx_tready || wr_reg_sm_rx_tready || peek_hdr_sm_rx_tready;
+    // the fill-header FIFO is popped by the read-fill command, and by the peek command for a stale header (6.7.0)
+    wire rd_fill_fifo_rd_en, peek_hdr_fifo_rd_en, peek_hdr_discarded;
+    assign fill_header_fifo_rd_en = rd_fill_fifo_rd_en || peek_hdr_fifo_rd_en;
          
-    wire loopback_sm_tx_tvalid, rd_reg_sm_tx_tvalid, wr_reg_sm_tx_tvalid, rd_fill_sm_tx_tvalid, map_delay_sm_tx_tvalid;
-    assign tx_tvalid = loopback_sm_tx_tvalid || rd_reg_sm_tx_tvalid || wr_reg_sm_tx_tvalid || rd_fill_sm_tx_tvalid || map_delay_sm_tx_tvalid;
+    wire loopback_sm_tx_tvalid, rd_reg_sm_tx_tvalid, wr_reg_sm_tx_tvalid, rd_fill_sm_tx_tvalid, map_delay_sm_tx_tvalid, peek_hdr_sm_tx_tvalid;
+    assign tx_tvalid = loopback_sm_tx_tvalid || rd_reg_sm_tx_tvalid || wr_reg_sm_tx_tvalid || rd_fill_sm_tx_tvalid || map_delay_sm_tx_tvalid || peek_hdr_sm_tx_tvalid;
 
-    wire loopback_sm_tx_tlast, rd_reg_sm_tx_tlast, wr_reg_sm_tx_tlast, rd_fill_sm_tx_tlast, map_delay_sm_tx_tlast;
-    assign tx_tlast = loopback_sm_tx_tlast || rd_reg_sm_tx_tlast || wr_reg_sm_tx_tlast || rd_fill_sm_tx_tlast || map_delay_sm_tx_tlast;
+    wire loopback_sm_tx_tlast, rd_reg_sm_tx_tlast, wr_reg_sm_tx_tlast, rd_fill_sm_tx_tlast, map_delay_sm_tx_tlast, peek_hdr_sm_tx_tlast;
+    assign tx_tlast = loopback_sm_tx_tlast || rd_reg_sm_tx_tlast || wr_reg_sm_tx_tlast || rd_fill_sm_tx_tlast || map_delay_sm_tx_tlast || peek_hdr_sm_tx_tlast;
 
     /////////////////////////////////////////////////
     // connect a big mux to steer data to the TX FIFO
-    wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_delay_data;
+    wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_delay_data, send_hdr_data;
+    wire [1:0] hdr_word_sel;
     wire [31:0] map_data_integrity;
     reg [31:0] tx_data_reg;
 
@@ -276,26 +281,27 @@ module command_top (
 
     always @ (posedge clk) begin
         if (send_csn)           tx_data_reg[31:0] <= serial_num_reg[31:0]; // serial number
-        if (send_cmd)           tx_data_reg[31:0] <= command_reg[31:0];    // command
+        if (send_cmd)           tx_data_reg[31:0] <= {command_reg[31:9], peek_hdr_discarded, command_reg[7:0]}; // command ([8]: peek discarded a stale header, 6.7.0)
         if (send_inv_cmd)       tx_data_reg[31:0] <= ~command_reg[31:0];   // inverse of command
         if (send_rx_data)       tx_data_reg[31:0] <= rx_data[31:0];        // loopback
         if (send_reg_data)      tx_data_reg[31:0] <= reg_data[31:0];           // reading from a register
         if (send_delay_data) tx_data_reg[31:0] <= map_data_out[31:0];   // reading tap delay validity
+        if (send_hdr_data)      tx_data_reg[31:0] <= fill_header_fifo_out[hdr_word_sel*32 +: 32]; // peeking the fill header (6.7.0)
     end
     assign tx_data[31:0] = tx_data_reg[31:0];
     
     // Create the mux control signals
     // All state machines need to send the CSN
-    wire loopback_sm_send_csn, rd_reg_sm_send_csn, wr_reg_sm_send_csn, rd_fill_sm_send_csn, map_delay_sm_send_csn;
-    assign send_csn = loopback_sm_send_csn || rd_reg_sm_send_csn || wr_reg_sm_send_csn || rd_fill_sm_send_csn || map_delay_sm_send_csn;
+    wire loopback_sm_send_csn, rd_reg_sm_send_csn, wr_reg_sm_send_csn, rd_fill_sm_send_csn, map_delay_sm_send_csn, peek_hdr_sm_send_csn;
+    assign send_csn = loopback_sm_send_csn || rd_reg_sm_send_csn || wr_reg_sm_send_csn || rd_fill_sm_send_csn || map_delay_sm_send_csn || peek_hdr_sm_send_csn;
     
     // All state machines need to send the CC
-    wire loopback_sm_send_cmd, rd_reg_sm_send_cmd, wr_reg_sm_send_cmd, rd_fill_sm_send_cmd, map_delay_sm_send_cmd;
-    assign send_cmd = loopback_sm_send_cmd || rd_reg_sm_send_cmd || wr_reg_sm_send_cmd || rd_fill_sm_send_cmd || map_delay_sm_send_cmd;
+    wire loopback_sm_send_cmd, rd_reg_sm_send_cmd, wr_reg_sm_send_cmd, rd_fill_sm_send_cmd, map_delay_sm_send_cmd, peek_hdr_sm_send_cmd;
+    assign send_cmd = loopback_sm_send_cmd || rd_reg_sm_send_cmd || wr_reg_sm_send_cmd || rd_fill_sm_send_cmd || map_delay_sm_send_cmd || peek_hdr_sm_send_cmd;
 
     // Only a few state machines need to send the inverse CC
-    wire rd_reg_sm_send_inv_cmd, wr_reg_sm_send_inv_cmd, rd_fill_sm_send_inv_cmd, map_delay_sm_send_inv_cmd;
-    assign send_inv_cmd = rd_reg_sm_send_inv_cmd || wr_reg_sm_send_inv_cmd || rd_fill_sm_send_inv_cmd || map_delay_sm_send_inv_cmd;
+    wire rd_reg_sm_send_inv_cmd, wr_reg_sm_send_inv_cmd, rd_fill_sm_send_inv_cmd, map_delay_sm_send_inv_cmd, peek_hdr_sm_send_inv_cmd;
+    assign send_inv_cmd = rd_reg_sm_send_inv_cmd || wr_reg_sm_send_inv_cmd || rd_fill_sm_send_inv_cmd || map_delay_sm_send_inv_cmd || peek_hdr_sm_send_inv_cmd;
     
     // Only the loopback state machine send RX DATA directly
     wire loopback_sm_send_rx_data;
@@ -589,6 +595,32 @@ module command_top (
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // connect the state machine that processes the CC_PEEK_HDR command (6.7.0): the fill header at
+    // the head of the FIFO, without popping it, so the master can size the event before reading it
+    cc_peek_hdr_sm cc_peek_hdr_sm (
+        .clk(clk),
+        .reset(reset),
+        .run_sm(run_cc_peek_hdr),
+        .sm_running(cc_peek_hdr_running),
+        .sm_done(cc_peek_hdr_done),
+        .tx_tvalid(peek_hdr_sm_tx_tvalid),
+        .tx_tlast(peek_hdr_sm_tx_tlast),
+        .tx_tready(tx_tready),
+        .send_csn(peek_hdr_sm_send_csn),
+        .send_cmd(peek_hdr_sm_send_cmd),
+        .send_inv_cmd(peek_hdr_sm_send_inv_cmd),
+        .send_hdr_data(send_hdr_data),
+        .hdr_word_sel(hdr_word_sel),
+        .discarded(peek_hdr_discarded),
+        .rx_tvalid(rx_tvalid),
+        .rx_tlast(rx_tlast),
+        .rx_data(rx_data[31:0]),
+        .rx_tready(peek_hdr_sm_rx_tready),
+        .fill_header_fifo_empty(fill_header_fifo_empty),
+        .fill_header_fill_num(fill_header_fifo_out[23:0]),
+        .fill_header_fifo_rd_en(peek_hdr_fifo_rd_en)
+    );
+
     // connect the state machine that processes the CC_RD_FILL command
     cc_rd_fill_sm cc_rd_fill_sm (
         .clk(clk),                                             // local clock
@@ -610,7 +642,7 @@ module command_top (
         // local controls
         // interface to the header FIFO
         .fill_header_fifo_empty(fill_header_fifo_empty),     // a header is available when not asserted
-        .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // remove the current data from the FIFO
+        .fill_header_fifo_rd_en(rd_fill_fifo_rd_en),         // remove the current data from the FIFO
         .fill_header_fifo_out(fill_header_fifo_out[151:0]),     // data at the head of the FIFO
         .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
         .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
