@@ -29,10 +29,13 @@ module adc_acq_top_selftrigc (
     input [5:0]  selftrig_ped_delay,// self-triggering: pedestal delay in 400 MHz clock cycles
     input [7:0]  selftrig_min_separation, // self-triggering: minimum separation of accepted triggers, clocks
     input        selftrig_retrig_level,   // self-triggering: legacy level re-trigger mode
+    input  [7:0] selftrig_line_hold,      // trigger-line pulse, clocks high (6.8.1; VIO or constant 24)
+    input  [7:0] selftrig_line_gap,       // trigger-line pulse, clocks low  (6.8.1; VIO or constant 24)
     input        selftrig_ped_bypass,// self-triggering: 1 => no pedestal subtraction
     input [3:0] xadc_alarms,
 
     // outputs
+    output self_trig,                          // the trigger line (6.8.1: kept inside the channel, not sent to the master)
     output ddr3_wr_en,                         // writing of triggered events to memory is enabled - asserted for triggers
     output cbuf_rd_en,                         // we have enabled storing of events -- asserted when not switching fill buffers
     output ddr3_selftrig_wr_active,            // we are not actively writing to ddr3
@@ -55,7 +58,7 @@ module adc_acq_top_selftrigc (
     output [22:0] burst_start_adr, // starting address of fill
     output [41:0] timestamp,
     output reg run_start_reset,    // stretched init_ddr3_addr: clear the fill-address / DDR3-write / fill-header FIFOs for a new run
-    output [31:0] selftrig_diag,   // register 0x35: {0 [31:24] (was: pulses owed to the master), forced fill closes [23:16], refused triggers [15:0]}
+    output [31:0] selftrig_diag,   // register 0x35: {pulses owed to the master [31:24], forced fill closes [23:16], refused triggers [15:0]}
     output [3:0]  err_set_adc,     // error latch sets, adc_clk: {trigger FIFO overrun, trigger discarded, fill close forced, trigger refused}
     input  [6:0]  chan_err_word    // {lost data, fault, cause code} for the fill header
 );
@@ -198,22 +201,26 @@ wire trig_enabled;
 wire trig_pulse;
 wire self_trig_ready;
 wire self_trig_immediate;   // the accepted trigger at acceptance (fixed latency), for the trigger FIFOs
+wire line_hold_off;         // fill-boundary guard for the trigger line to the master
 wire fill_parity;           // toggles at every fill boundary
+wire line_quiet;            // self_trigger: nothing owed to the master for the closing fill
 wire close_forced;          // enable_sm: a fill was closed by its time-out
 wire trig_backlog_full;     // the trigger FIFOs are nearly full (below): self_trigger refuses new triggers
 wire [15:0] refused_count;  // self_trigger: triggers refused
 wire refused_pulse, trig_discarded, trig_fifo_full;
+wire [ 7:0] pending_pulses; // self_trigger: pulses owed to the master, live
 enable_sm_selftrigc enable_sm_selftrigc (
     // inputs
     .adc_clk(adc_clk),                       // run the sm in this clock domain
     .enable_triggering(enable_triggering),   // a run has started and enabled triggers
     .enable_acquisition(enable_acquisition), // data acquisition has not yet ended -- decoupled from triggering to avoid end of run timing issues
-    .self_trig(self_trig_immediate),         // self trigger to start collecting data (at acceptance)
+    .self_trig(self_trig_immediate),         // self trigger to start collecting data (at acceptance, not the deferred line)
     .reset_clk_adc(adc_acq_full_reset),      // synchronously negated
     .cbuf_rd_trig_wait(cbuf_rd_trig_wait),   // waiting for another trigger or the negation of 'cbuf_rd_en'
     .ddr3_wr_done(ddr3_wr_done),             // asserted when the 'ddr3_wr_control' is in the DONE state
     .initial_fill_num_wr_clkadc(initial_fill_num_wr_clkadc), // when we initialize fill number, also initialize other needed variables
     .new_fill(new_fill),
+    .line_quiet(line_quiet),                 // self_trigger: nothing owed to the master for the closing fill
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), //  we are in a state where we are actively writing to the ddr3
     // outputs
     .cbuf_wr_en(cbuf_wr_en),                 // writing into the circ buf by the ADC is enabled, must extend past final trigger
@@ -221,6 +228,7 @@ enable_sm_selftrigc enable_sm_selftrigc (
     .cbuf_rd_en(cbuf_rd_en),                 // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     .ddr3_wr_en(ddr3_wr_en),                 // writing of triggered events to memory is enabled
     .trig_pulse(trig_pulse),                 // a trigger passed while the system is enabled for new triggers
+    .line_hold_off(line_hold_off),           // fill-boundary guard for the trigger line to the master
     .fill_parity(fill_parity),               // toggles at every fill boundary
     .close_forced(close_forced),             // a fill was closed by the time-out (diagnostic count below)
     .adc_acq_sm_idle(adc_acq_sm_idle),       // ADC acquisition state machine is idle (used for front panel LED status)
@@ -278,13 +286,20 @@ self_trigger self_trigger(
     .ped_delay_in(selftrig_ped_delay),        // pedestal delay in clock cycles
     .ped_bypass_in(selftrig_ped_bypass),      // 1 => absolute threshold on the running average
     .enable(enable_triggering),               // start looking for triggers
+    .line_hold_off(line_hold_off),            // fill-boundary guard: hold the master's pulse back, tag as next fill
     .min_separation_in(selftrig_min_separation[7:0]), // minimum separation of accepted triggers, clocks
     .retrig_level_in(selftrig_retrig_level),  // legacy level re-trigger mode
     .trig_backlog_full(trig_backlog_full),    // the trigger FIFOs are nearly full: refuse triggers until they drain
+    .fill_parity(fill_parity),                // a fill boundary releases the deferred pulses for the fill it closes
+    .line_hold_cycles_in(selftrig_line_hold), // trigger-line pulse shape (6.8.1)
+    .line_gap_cycles_in(selftrig_line_gap),
     .refused_count(refused_count),            // triggers refused (diagnostic)
     .refused_pulse(refused_pulse),            // one clock per refusal (error latch)
+    .pending_pulses(pending_pulses),          // pulses owed to the master (diagnostic)
     .self_trig_ready(self_trig_ready),        // enough cycles have passed for self-triggering to be valid
     .trigger_immediate(self_trig_immediate),  // a trigger has been accepted (fixed latency, for the FIFOs)
+    .trigger(self_trig),                      // the trigger line to the master (deferred across fill boundaries)
+    .line_quiet(line_quiet),                  // nothing owed to the master for the closing fill
     .timestamp(timestamp)                     // latched time_counter value when the trigger fires
 );
 
@@ -347,7 +362,7 @@ trigger_time_fifo trigger_time_fifo (
 // to.  'trig_pulse' is five clocks after self_trigger accepted the trigger (trigger_immediate,
 // then the edge detector in enable_sm_selftrigc), so the parity is delayed by the same five
 // clocks to tag the entry with the fill parity at the moment of acceptance, which is also the
-// moment the fill boundary was decided in enable_sm_selftrigc.  The IP FIFOs are
+// moment self_trigger decided whether to send or hold the master's pulse.  The IP FIFOs are
 // first-word-fall-through; so is this one.  Written and read with the same strobes and reset
 // with the same reset, so the three stay aligned.
 reg [4:0] fill_parity_d = 5'd0;
@@ -384,7 +399,7 @@ always @(posedge adc_clk) begin
     if (adc_acq_full_reset)                            close_forced_count <= 8'd0;
     else if (close_forced && close_forced_count != 8'hFF) close_forced_count <= close_forced_count + 8'd1;
 end
-assign selftrig_diag = {8'd0, close_forced_count, refused_count};
+assign selftrig_diag = {pending_pulses, close_forced_count, refused_count};
 assign err_set_adc   = {trig_fifo_full & trig_pulse, trig_discarded, close_forced, refused_pulse};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

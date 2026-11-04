@@ -13,14 +13,18 @@
 // as a useful reference, here's the syntax to mark signals for debug:
 // (* mark_debug = "true" *) 
 
-module channel_main_selftrigc (
+module channel_main_selftrigc #(
+  // 6.8.1: a VIO (vio_line, created by scripts/add_line_vio.tcl) sets the trigger-line pulse shape.
+  // 0 for a release build without the IP: the shape is then fixed at the 6.7.0 values (24 / 24 clocks).
+  parameter DEBUG_LINE_VIO = 1
+) (
   // Utility
   //output [9:0] debug,           // to 10-pin header
   input [8:0] debug,           // from 10-pin header (10th pin grounded)
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  output acq_trig,              // to master, C0_TRIG on schematic: unused since 6.8.0 (held low; was one pulse per self trigger)
+  output acq_trig,              // to master, C0_TRIG on schematic: held low (6.8.1: the trigger line is kept inside the channel, not sent)
   output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   // lkg -- stc -- need master to switch reset from io[3] to io[2]
   input  [2:0] io,              // input connections to the master FPGA
@@ -395,6 +399,8 @@ wire [5:0]  selftrig_ped_delay;
 wire        selftrig_ped_bypass;
 wire [7:0]  selftrig_min_separation;
 wire        selftrig_retrig_level;
+wire [7:0]  selftrig_line_hold, selftrig_line_gap;   // trigger-line pulse shape (6.8.1), clk50 domain, quasi-static
+wire        self_trig_line;                          // the trigger line, internal only (6.8.1)
 //sync_2stage #(
 //  .WIDTH(12)
 //) selftrig_sync (
@@ -456,9 +462,12 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .selftrig_ped_bypass(selftrig_ped_bypass),           // self-triggering: 1 => no pedestal subtraction
     .selftrig_min_separation(selftrig_min_separation[7:0]), // self-triggering: minimum separation of accepted triggers, clocks
     .selftrig_retrig_level(selftrig_retrig_level),       // self-triggering: legacy level re-trigger mode
+    .selftrig_line_hold(selftrig_line_hold),             // trigger-line pulse, clocks high (6.8.1)
+    .selftrig_line_gap(selftrig_line_gap),               // trigger-line pulse, clocks low  (6.8.1)
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
+    .self_trig(self_trig_line),                          // the trigger line (6.8.1: paces the fill close, not sent to the master)
     .ddr3_wr_en(ddr3_wr_en),                             // writing of triggered events to memory is enabled -- asserted while storing a trigger
     .cbuf_rd_en(cbuf_rd_en),                             // we have enabled storing of events -- asserted when not switching fill buffers
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),   // DDR3 unavailable for reading since we are writing
@@ -498,9 +507,24 @@ sync_2stage cbuf_rd_en_sync (
   .in(cbuf_rd_en),
   .out(cbuf_rd_en_ddr3)
 );
-// The trigger line to the master is no longer driven (6.8.0): the master takes each fill's
-// waveform count from its header.  Held low; free for a new job (see v670-header-first.md, step B).
+// The trigger line to the master is not driven (6.8.0): the master sizes each event from the fill
+// headers.  6.8.1 keeps the line logic inside the channel (self_trigger / enable_sm_selftrigc),
+// because its timing paces the fill close, but does not send it.
 assign acq_trig = 1'b0;
+
+// Trigger-line pulse shape (6.8.1): from a VIO over JTAG, or fixed at the 6.7.0 values.  The VIO
+// outputs start at 24 / 24; self_trigger resynchronises them, so change them between runs.
+generate if (DEBUG_LINE_VIO) begin : line_vio
+  vio_line vio_line (
+    .clk(clk50),
+    .probe_in0({selftrig_line_hold, selftrig_line_gap}),   // read back what is applied
+    .probe_out0(selftrig_line_hold),                       // clocks high, default 8'd24
+    .probe_out1(selftrig_line_gap)                         // clocks low,  default 8'd24
+  );
+end else begin : line_fixed
+  assign selftrig_line_hold = 8'd24;
+  assign selftrig_line_gap  = 8'd24;
+end endgenerate
 wire dwf_reset;   // declared before its first use (the data-writer FIFO reset); assigned below
 
 ////////////////////////////////////////////////////////////////////////////

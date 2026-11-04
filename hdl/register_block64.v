@@ -81,7 +81,7 @@ module register_block64(
     input [31:0] core_word_counts,             // R50 (0x32): {RX words, TX words} at the Aurora core itself (after the TX FIFO), live
     input [31:0] core_word_counts_snap,        // R51 (0x33): the same, frozen before the last reset
     input [31:0] link_event_counts,            // R52 (0x34): {channel_up drops, lane_up drops, hard_err, link_reset}, 8 bits each, free running
-    input [31:0] selftrig_diag,                // R53 (0x35): {0 [31:24] (6.8.0; was pulses owed to the master), forced fill closes [23:16], refused triggers [15:0]}
+    input [31:0] selftrig_diag,                // R53 (0x35): {trigger-line pulses queued [31:24] (6.8.1: the line stays inside the channel), forced fill closes [23:16], refused triggers [15:0]}
     input [31:0] rd_fill_diag,                 // R54 (0x36): {stalls in GET_DDR3_DATA [31:26], DDR3 words still to send [25:0]}
     input [31:0] error_status,                 // R55 (0x37): {snapshot valid, lost data, fault, 13'd0, error bits [15:0]}; a write clears
     input [31:0] selftrig_diag_snap,           // R56 (0x38): 0x35 frozen at the first error

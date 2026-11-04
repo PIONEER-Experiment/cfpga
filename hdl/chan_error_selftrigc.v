@@ -9,7 +9,7 @@
 // write to 0x37, or the full reset, clears them.
 //
 // Bit map (also in read_status.py):
-//    0  trigger refused: the trigger FIFOs were nearly full (self_trigger)                   loss
+//    0  trigger refused: the trigger FIFOs or the pulse queue were full (self_trigger)        loss
 //    1  fill closed by the time-out, not by the reader (enable_sm_selftrigc)                 loss
 //    2  a trigger of the wrong fill parity was discarded (circ_buf_to_ddr3_sm)               loss
 //    3  DDR3 write FIFO was full when a word was written to it                               loss

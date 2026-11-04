@@ -1,6 +1,9 @@
 `timescale 1ns/10ps
 `default_nettype wire
 
+// 6.8.1: 'line_quiet' / 'line_hold_off' are restored from 6.7.0 (6.8.0 removed them with the trigger
+// line).  The line is no longer sent to the master, but closing a fill only once the line is quiet
+// is kept; the comments below that speak of the master's per-fill count describe 6.7.x.
 module enable_sm_selftrigc (
     input  logic         adc_clk,                    
     input  logic         enable_triggering,           // self triggers enabled and valid.    adc clk
@@ -12,6 +15,7 @@ module enable_sm_selftrigc (
     input  logic         ddr3_selftrig_wr_active,     // enabled whenever we are actively writing a trigger to the DDR3.  adc clk
     input  logic         initial_fill_num_wr_clkadc,  // when we initialize fill number, also initialize any other needed variables.  adc clk
     input  logic         new_fill,                    // a new fill has been requested, so we need to wrap up the current fill.  from master, sync'd
+    input  logic         line_quiet,                  // self_trigger: every pulse owed to the master for this fill has been sent (adc clk)
 
     output logic         cbuf_wr_en,      // writing into the circ buf by the ADC is enabled, must extend past final trigger
     output logic         cbuf_trig_en,    // triggering of new waveforms is enabled for the current DDR3 write buffer
@@ -21,6 +25,7 @@ module enable_sm_selftrigc (
     output logic         adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
     output logic         init_ddr3_addr,  // initialize the ddr3 address for this run
     output logic         ext_done,        // external output indicating acquisition is done
+    output logic         line_hold_off,   // fill-boundary guard for the trigger line to the master (see self_trigger)
     output logic         fill_parity,     // toggles at every fill boundary; tags each trigger with its fill
     output logic         close_forced,    // one clock: a fill was closed by the time-out, not by the reader (diagnostic count)
     output logic [9:0]   enable_sm_state  // enable_sm current state
@@ -193,10 +198,12 @@ always_comb begin
         NS = CBUF_RD_DONE;
       else if (close_timeout)
         // The reader never came back to TRIG_WAIT (it should not be possible since 6.6.9, but a
-        // fill that cannot be closed must not hold the master for ever): wrap up anyway.
-        // 'close_forced' records that it happened.
+        // fill that cannot be closed must not hold the master for ever): wrap up anyway.  This
+        // exit does not wait for 'line_quiet' -- a time-out that could itself be held off (by a
+        // channel triggering faster than its line can report) would be no bound at all.  The
+        // master's count for this fill may then be short; 'close_forced' records that it happened.
         NS = DONE1;
-      else if (!enable_acquisition && !ddr3_selftrig_wr_active)
+      else if (!enable_acquisition && !ddr3_selftrig_wr_active && line_quiet)
         // Run-end escape: no active DDR3 write in progress and no more triggers
         // will arrive (enable is gone), so nothing left to drain -- skip to wrap-up.
         NS = DONE1;
@@ -220,14 +227,15 @@ always_comb begin
     // one, so ddr3_wr_done can never come.  Once the reader is idle
     // (ddr3_selftrig_wr_active low) there is nothing left to wait for; go to
     // DONE1 so ext_done is produced and the machine can return to IDLE.
-    // (Until 6.7.x both exits also waited for self_trigger's 'line_quiet', so that the master had
-    // counted every trigger-line pulse of the fill before 'done'.  There is no line any more.)
+    // In both cases also wait for 'line_quiet': 'done' (DONE1/DONE2) is what the master latches
+    // its per-fill trigger count on, so every pulse owed to it for this fill must have been sent
+    // and counted first.
     DDR3_DONE_WAIT: begin
-      if (ddr3_wr_done_sync2)
+      if (ddr3_wr_done_sync2 && line_quiet)
         NS = DONE1;
       else if (close_timeout)
-        NS = DONE1;                    // bounded, as CBUF_RD_ENABLED
-      else if (!enable_acquisition && !ddr3_selftrig_wr_active)
+        NS = DONE1;                    // bounded, as CBUF_RD_ENABLED (unconditional, see there)
+      else if (!enable_acquisition && !ddr3_selftrig_wr_active && line_quiet)
         NS = DONE1;
       else
         NS = DDR3_DONE_WAIT;
@@ -259,20 +267,47 @@ always_comb begin
 end // combinational always block to determine next state
 
 // =========================================================================
-// Fill parity.
+// Fill-boundary bookkeeping for deferred triggers.
 //
 // At a fill boundary (new_fill while in TRIG_ENABLED with the acquisition still on) the fill
-// parity toggles.  From then on every accepted trigger is tagged with the new parity (it belongs
-// to the next fill: adc_acq_top_selftrigc), and circ_buf_to_ddr3_sm ends the closing fill at the
-// first trigger of the other parity.  (Until 6.7.x a trigger-line hold-off and its guard counter
-// lived here too, to keep the master's pulse count on the right side of 'done'; they went with
-// the line in 6.8.0.)
+// parity toggles and the trigger-line hold-off is raised, at the same clock edge.  From then on
+// self_trigger tags every accepted trigger with the new parity (it belongs to the next fill)
+// and holds its pulse to the master back.  The fill is not closed ('done' to the master, which
+// is what the master latches its per-fill count on) until self_trigger reports 'line_quiet',
+// i.e. every pulse owed for the closing fill has been sent and its gap has elapsed, so the
+// master has counted it (within 75 ns of its edge) before 'done' reaches it (not less than
+// ~50 ns after DONE1).  The hold-off stays up while the fill is being closed and for
+// GUARD_CYCLES (100 = 250 ns) after DONE1, so the first deferred pulse reaches the master well
+// after it has latched.  No fixed delay between new_fill and the latch is assumed any more.
 // =========================================================================
+localparam logic [7:0] GUARD_CYCLES = 8'd100;
+logic [7:0] guard_cntr = 8'd0;
 wire boundary_ns = (CS == TRIG_ENABLED) && (NS == CBUF_RD_ENABLED) && enable_acquisition;
+wire closing_ns  = (NS == CBUF_RD_ENABLED) || (NS == CBUF_RD_DONE) || (NS == DDR3_DONE_WAIT) ||
+                   (NS == DONE1) || (NS == DONE2) || (NS == BUFFER_FILL_START);
 always_ff @(posedge adc_clk) begin
-    if (reset_clk_adc)              fill_parity <= 1'b0;
-    else if (NS == INIT_DDR3_ADDR)  fill_parity <= 1'b0;   // run start: the trigger FIFOs are cleared at the same time (adc_acq_top)
-    else if (boundary_ns)           fill_parity <= ~fill_parity;
+    if (reset_clk_adc) begin
+        fill_parity   <= 1'b0;
+        guard_cntr    <= 8'd0;
+        line_hold_off <= 1'b0;
+    end
+    else begin
+        if (NS == INIT_DDR3_ADDR) begin
+            fill_parity <= 1'b0;           // run start: the trigger FIFOs are cleared at the same time (adc_acq_top)
+            guard_cntr  <= 8'd0;
+        end
+        else if (boundary_ns) begin
+            fill_parity <= ~fill_parity;
+            guard_cntr  <= GUARD_CYCLES;
+        end
+        else if (NS == DONE1 && CS != DONE1) begin
+            guard_cntr  <= GUARD_CYCLES;   // restart the guard when 'done' is raised to the master
+        end
+        else if (guard_cntr != 8'd0) begin
+            guard_cntr  <= guard_cntr - 8'd1;
+        end
+        line_hold_off <= closing_ns | boundary_ns | (guard_cntr > 8'd1);
+    end
 end
 
 // Registered outputs: “on entry” driven from NS
