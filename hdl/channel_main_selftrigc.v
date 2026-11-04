@@ -20,7 +20,7 @@ module channel_main_selftrigc (
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  output acq_trig,              // to master, asserted active-hi when a self trigger achieved, C0_TRIG on schematic
+  output acq_trig,              // to master, C0_TRIG on schematic: unused since 6.8.0 (held low; was one pulse per self trigger)
   output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   // lkg -- stc -- need master to switch reset from io[3] to io[2]
   input  [2:0] io,              // input connections to the master FPGA
@@ -459,7 +459,6 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
-    .self_trig(acq_trig),                                // trigger threshold has been exceeded for this channel
     .ddr3_wr_en(ddr3_wr_en),                             // writing of triggered events to memory is enabled -- asserted while storing a trigger
     .cbuf_rd_en(cbuf_rd_en),                             // we have enabled storing of events -- asserted when not switching fill buffers
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),   // DDR3 unavailable for reading since we are writing
@@ -499,12 +498,9 @@ sync_2stage cbuf_rd_en_sync (
   .in(cbuf_rd_en),
   .out(cbuf_rd_en_ddr3)
 );
-wire self_trig_ddr3;
-sync_2stage st_sync (
-  .clk(ddr3_domain_clk),
-  .in(acq_trig),
-  .out(self_trig_ddr3)
-);
+// The trigger line to the master is no longer driven (6.8.0): the master takes each fill's
+// waveform count from its header.  Held low; free for a new job (see v670-header-first.md, step B).
+assign acq_trig = 1'b0;
 wire dwf_reset;   // declared before its first use (the data-writer FIFO reset); assigned below
 
 ////////////////////////////////////////////////////////////////////////////

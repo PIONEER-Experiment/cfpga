@@ -9,8 +9,10 @@
 //    that the trigger becomes an absolute-threshold comparison on the running average
 //  - a polarity bit selects the sign of the difference that is tested
 //  - the clock is the 400 MHz DDR3 clock with a pair of samples input per clock cycle
-//  - the trigger pulse remains high as long as the pedestal-subtracted value exceeds the threshold,
-//    and for at least 105 ns so that the master fpga can sense it with its 40 MHz clock
+//  - each accepted trigger is one 'trigger_immediate' pulse, which captures its circular-buffer address,
+//    time and fill parity.  Nothing is sent to the master any more (6.8.0): the master sizes each event
+//    from the waveform counts in the fill headers (CC_PEEK_HDR), so the old trigger-line pulse, its
+//    queue and the fill-boundary hold-off are gone
 //
 // Window / pedestal encoding (quasi-static inputs, changed between runs only):
 //   sum_log2_in[2:0]  : D = 2^sum_log2 sample pairs are summed, i.e. 2, 4, 8, ... 128 samples.
@@ -37,25 +39,17 @@ module self_trigger #(
     input [5:0] ped_delay_in,         // pedestal delay in clock cycles (1..63)
     input ped_bypass_in,              // 1 => compare the running average against the threshold alone
     input enable,                     // start looking for triggers. Global in time.
-    input line_hold_off,              // fill boundary guard from enable_sm_selftrigc: triggers accepted while this
-                                      // is high belong to the next fill and their pulse to the master is held back
     input [7:0] min_separation_in,    // minimum separation of accepted triggers, in clocks (quasi-static; < 8 reads as 8)
     input retrig_level_in,            // 1 => re-trigger after the separation while still over threshold (legacy);
                                       // 0 => re-arm only once the comparator has dropped below threshold (one trigger per excursion)
     input trig_backlog_full,          // the trigger-address FIFOs are nearly full (adc_acq_top): accept no more until they drain
-    input fill_parity,                // from enable_sm_selftrigc: toggles at every fill boundary (a boundary releases the deferred pulses)
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
-    output reg trigger_immediate,  // the accepted trigger itself, one HOLD_CYCLES pulse at acceptance: drives the
+    output reg trigger_immediate,  // the accepted trigger itself, a one-clock pulse at acceptance: drives the
                                    // trigger-address / time FIFO capture (fixed latency, see enable_sm_selftrigc)
-    output reg trigger,            // the trigger line to the master: one pulse per accepted trigger, deferred
-                                   // past the fill boundary while 'line_hold_off' is high
-    output line_quiet,             // no pulse owed for the closing fill and the line is idle: enable_sm_selftrigc
-                                   // waits for this before it closes the fill (raises 'done' to the master)
-    output reg [15:0] refused_count, // triggers refused because the FIFOs or the pulse queue were full (saturating; diagnostic)
-    output refused_pulse,          // one clock per refused trigger (error latch)
-    output [7:0] pending_pulses    // pulses owed to the master for the open fill, live (diagnostic)
+    output reg [15:0] refused_count, // triggers refused because the trigger FIFOs were nearly full (saturating; diagnostic)
+    output refused_pulse           // one clock per refused trigger (error latch)
 );
 
 localparam MAX_LOG2 = $clog2(MAX_PAIRS);
@@ -245,12 +239,10 @@ assign local_trigger_wire = self_trig_ready & trig_cond;
 
 // Back-pressure on acceptance (6.6.9).  A trigger is refused -- it still passes through
 // SETUP_HOLD / SEPARATION / REARM, so the dead time and re-arm behave as usual, but it is not
-// captured and owes the master no pulse -- when the trigger-address FIFOs are nearly full or the
-// queue of pulses owed to the master is nearly saturated.  Without this a channel triggering
+// captured -- when the trigger-address FIFOs are nearly full.  Without this a channel triggering
 // faster than it can be read out (a threshold in the noise) overflows the IP FIFOs silently while
-// the parity tag RAM beside them keeps writing, the three lose step, and the master is owed pulses
-// for waveforms that were never stored.  Refusing keeps 'the master's count == the channel's
-// waveform count' true at any rate.  The decision is registered (one clock stale is harmless).
+// the parity tag RAM beside them keeps writing and the three lose step.  Every refusal is counted
+// and latched as a data loss.  The decision is registered (one clock stale is harmless).
 reg trig_refuse = 1'b0;
 reg refused     = 1'b0;          // the current pass through SETUP_HOLD is a refusal
 reg accepted_d1;                 // one clock after SETUP_HOLD, for the fixed-latency 'trigger_immediate'
@@ -259,8 +251,8 @@ reg local_trigger_reg;
 reg local_trigger;
 // Triggers are accepted whenever the state machine below is out of IDLE, i.e. whenever
 // 'enable' (enable_triggering) is set.  They are no longer gated off around a fill boundary:
-// a trigger that lands there is accepted, captured, and assigned to the next fill (see the
-// trigger-line logic at the end of this file), instead of being dropped.
+// a trigger that lands there is accepted, captured, and tagged with the parity of the next fill
+// (adc_acq_top_selftrigc), instead of being dropped.
 always @(posedge clk) begin
   local_trigger_reg <= local_trigger_wire;
   local_trigger     <= local_trigger_reg;
@@ -296,13 +288,9 @@ always @(posedge clk) begin
       delay_cntr[7:0] <= delay_cntr[7:0] - 1;
 end
 
-// The pulse shape on the trigger line to the master (HOLD_CYCLES high, GAP_CYCLES low) is produced
-// by the line state machine at the end of this file; the detector below no longer has to wait for
-// it.  The detector's own dead time is the programmed minimum separation, and in the default
-// (edge) mode it also re-arms only once the comparator has dropped below threshold, so a pulse
-// that stays over threshold for longer than the separation gives one trigger, not a train.
-localparam [7:0] HOLD_CYCLES = 8'd24;   // 60 ns high
-localparam [7:0] GAP_CYCLES  = 8'd24;   // 60 ns low: the master's receiver needs both
+// The detector's dead time is the programmed minimum separation, and in the default (edge) mode
+// it also re-arms only once the comparator has dropped below threshold, so a pulse that stays
+// over threshold for longer than the separation gives one trigger, not a train.
 
 // state machine to keep track of when trigger becomes reliable
 
@@ -382,7 +370,7 @@ always @ (CS or enable_sync2 or delay_cntr_zero or local_trigger or init_sep_cou
     end
   end
 
-  // one clock: the trigger is accepted here (timestamp latched, pulse owed to the master)
+  // one clock: the trigger is accepted here (timestamp latched)
   CS[SETUP_HOLD]: begin
     NS[SEPARATION] = 1'b1;
   end
@@ -449,113 +437,15 @@ end
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// The trigger line to the master.
-//
-// Every accepted trigger (one pass through SETUP_HOLD) owes the master exactly one pulse on the
-// trigger line: HOLD_CYCLES high then GAP_CYCLES low, as discussed above.  The master counts
-// the pulses per fill and latches the count a fixed time after it raises 'new_fill' (io[3]); the
-// channel decides at its own fill boundary which fill a trigger belongs to (fill_parity in
-// enable_sm_selftrigc), and the two must agree.  So
-//   - a trigger accepted while 'line_hold_off' is low belongs to the fill that is open; its pulse
-//     goes out at once and reaches the master before the master latches, and
-//   - a trigger accepted while 'line_hold_off' is high belongs to the next fill; its pulse is held
-//     until the hold-off ends, which enable_sm_selftrigc guarantees is after the master has latched.
-// Nothing is dropped: the detection, its timestamp and its circular-buffer address are captured
-// at acceptance either way ('trigger_immediate').
-//
-// A line pulse takes HOLD_CYCLES + GAP_CYCLES = 48 clocks (120 ns), while triggers may now be
-// accepted every 'min_separation' clocks, so a burst can be accepted faster than it can be
-// reported and the owed pulses queue up here (the DDR3 writer limits the sustained rate to a small
-// fraction of the line rate, so the queue is short-lived); deferred pulses also accumulate during a
-// fill-boundary hold-off.  The counters saturate rather than wrap.  A pulse that has started always
-// completes, so that a trigger accepted just before 'enable' drops is still counted by the master.
-// At the fill boundary, enable_sm_selftrigc does not close the fill (and so does not raise 'done'
-// to the master) until 'line_quiet': every pulse owed for the closing fill has been sent and its
-// gap has elapsed, so the master has counted it before it latches its count on 'done', however
-// long the backlog was.  Deferred pulses then go out at least GUARD_CYCLES after 'done'.
-localparam [1:0] LINE_IDLE = 2'd0, LINE_HIGH = 2'd1, LINE_LOW = 2'd2;
-reg [7:0] pending_now      = 8'd0;   // pulses owed to the master for the fill that is open
-reg [7:0] pending_deferred = 8'd0;   // pulses owed for triggers accepted during a hold-off (the next fill)
-reg [1:0] line_state       = LINE_IDLE;
-reg [7:0] line_cntr        = 8'd0;
-reg       line_hold_off_d  = 1'b0;
-wire accept_now = CS[SETUP_HOLD] & ~refused & ~line_hold_off;
-wire accept_def = CS[SETUP_HOLD] & ~refused &  line_hold_off;
-assign pending_pulses = pending_now;
-assign refused_pulse  = CS[SETUP_HOLD] & refused;
-wire send_now   = (line_state == LINE_IDLE) & (pending_now != 8'd0);
-// when the hold-off ends the deferred pulses are simply pulses of the fill that is now open, so they
-// are merged into 'pending_now' (saturating) rather than kept as a separate, lower-priority queue
-// that a steady stream of new triggers could starve past the next fill boundary
-wire hold_release    = line_hold_off_d & ~line_hold_off;
-// A fill boundary also releases them: the deferred pulses were accepted during the previous
-// hold-off and carry the parity of the fill that this boundary is now closing, so they are owed
-// for that fill and must go out before its 'done'.  Normally the guard after the previous 'done'
-// has long since released them, but if the master opened and closed the next fill before the
-// guard ran out (back-to-back readout triggers), they would otherwise stay held through the
-// close, be counted by the master in the fill after, and the two sides would disagree by that
-// many for two fills.  The master has latched the previous fill's count before it can raise the
-// next 'new_fill' (its acquisition controller waits for every channel's done first).
-reg  fill_parity_d = 1'b0;
-wire boundary        = fill_parity ^ fill_parity_d;
-wire merge_deferred  = hold_release | boundary;
-wire [8:0] merged = {1'b0, pending_now} + {1'b0, pending_deferred};
-// 'line_quiet' is registered (6.6.10): combinational, this compare fed enable_sm_selftrigc's next-state
-// logic and its guard-counter reset across two modules, 6 LUT levels at 400 MHz, and routed with 9 ps
-// of slack.  One clock of latency is harmless here: enable_sm only ever waits for it to become true,
-// and the one event that makes it false again (the merge of deferred pulses) is at the fill boundary,
-// many clocks before any of the states that test it.
-reg line_quiet_r = 1'b0;
-always @(posedge clk) line_quiet_r <= (line_state == LINE_IDLE) & (pending_now == 8'd0);
-assign line_quiet = line_quiet_r;
+// Refusal bookkeeping.  (Until 6.7.x every accepted trigger also owed the master a 120 ns pulse on
+// the trigger line, with a queue, a fill-boundary hold-off and a 'line_quiet' handshake that held
+// the fill open until the queue had drained.  The master now takes the waveform count from the
+// fill header, so all of that is gone and the line to the master is held low in channel_main.)
+assign refused_pulse = CS[SETUP_HOLD] & refused;
 always @(posedge clk) begin
-  trig_refuse <= trig_backlog_full | (merged[8:0] >= 9'd240);   // the two queues are merged at the hold release, so bound their sum
+  trig_refuse <= trig_backlog_full;
   if (rst)                                                   refused_count <= 16'd0;
   else if (CS[SETUP_HOLD] && refused && refused_count != 16'hFFFF) refused_count <= refused_count + 16'd1;
-end
-always @(posedge clk) begin
-  if (rst) begin
-    pending_now      <= 8'd0;
-    pending_deferred <= 8'd0;
-    line_state       <= LINE_IDLE;
-    line_cntr        <= 8'd0;
-    line_hold_off_d  <= 1'b0;
-    trigger          <= 1'b0;
-  end
-  else begin
-    line_hold_off_d <= line_hold_off;
-    fill_parity_d   <= fill_parity;
-    if (merge_deferred)
-      pending_now <= (merged[8] ? 8'd255 : merged[7:0]) + {7'd0, accept_now} - {7'd0, send_now};
-    else if (!(accept_now && pending_now == 8'd255))
-      pending_now <= pending_now + {7'd0, accept_now} - {7'd0, send_now};
-    if (merge_deferred)
-      pending_deferred <= {7'd0, accept_def};    // a trigger accepted in the boundary clock itself is deferred (new parity)
-    else if (!(accept_def && pending_deferred == 8'd255))
-      pending_deferred <= pending_deferred + {7'd0, accept_def};
-    case (line_state)
-      LINE_IDLE: begin
-        if (send_now) begin
-          trigger    <= 1'b1;
-          line_cntr  <= HOLD_CYCLES - 8'd1;
-          line_state <= LINE_HIGH;
-        end
-      end
-      LINE_HIGH: begin
-        if (line_cntr == 8'd0) begin
-          trigger    <= 1'b0;
-          line_cntr  <= GAP_CYCLES - 8'd1;
-          line_state <= LINE_LOW;
-        end
-        else line_cntr <= line_cntr - 8'd1;
-      end
-      LINE_LOW: begin
-        if (line_cntr == 8'd0) line_state <= LINE_IDLE;
-        else                   line_cntr  <= line_cntr - 8'd1;
-      end
-      default: line_state <= LINE_IDLE;
-    endcase
-  end
 end
 
 endmodule
