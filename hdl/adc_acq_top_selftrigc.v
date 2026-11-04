@@ -29,13 +29,11 @@ module adc_acq_top_selftrigc (
     input [5:0]  selftrig_ped_delay,// self-triggering: pedestal delay in 400 MHz clock cycles
     input [7:0]  selftrig_min_separation, // self-triggering: minimum separation of accepted triggers, clocks
     input        selftrig_retrig_level,   // self-triggering: legacy level re-trigger mode
-    input  [7:0] selftrig_line_hold,      // trigger-line pulse, clocks high (6.8.1; VIO or constant 24)
-    input  [7:0] selftrig_line_gap,       // trigger-line pulse, clocks low  (6.8.1; VIO or constant 24)
     input        selftrig_ped_bypass,// self-triggering: 1 => no pedestal subtraction
     input [3:0] xadc_alarms,
 
     // outputs
-    output self_trig,                          // the trigger line (6.8.1: kept inside the channel, not sent to the master)
+    output self_trig,                          // self-triggering conditions have been met
     output ddr3_wr_en,                         // writing of triggered events to memory is enabled - asserted for triggers
     output cbuf_rd_en,                         // we have enabled storing of events -- asserted when not switching fill buffers
     output ddr3_selftrig_wr_active,            // we are not actively writing to ddr3
@@ -291,8 +289,6 @@ self_trigger self_trigger(
     .retrig_level_in(selftrig_retrig_level),  // legacy level re-trigger mode
     .trig_backlog_full(trig_backlog_full),    // the trigger FIFOs are nearly full: refuse triggers until they drain
     .fill_parity(fill_parity),                // a fill boundary releases the deferred pulses for the fill it closes
-    .line_hold_cycles_in(selftrig_line_hold), // trigger-line pulse shape (6.8.1)
-    .line_gap_cycles_in(selftrig_line_gap),
     .refused_count(refused_count),            // triggers refused (diagnostic)
     .refused_pulse(refused_pulse),            // one clock per refusal (error latch)
     .pending_pulses(pending_pulses),          // pulses owed to the master (diagnostic)

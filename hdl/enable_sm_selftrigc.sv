@@ -1,9 +1,6 @@
 `timescale 1ns/10ps
 `default_nettype wire
 
-// 6.8.1: 'line_quiet' / 'line_hold_off' are restored from 6.7.0 (6.8.0 removed them with the trigger
-// line).  The line is no longer sent to the master, but closing a fill only once the line is quiet
-// is kept; the comments below that speak of the master's per-fill count describe 6.7.x.
 module enable_sm_selftrigc (
     input  logic         adc_clk,                    
     input  logic         enable_triggering,           // self triggers enabled and valid.    adc clk

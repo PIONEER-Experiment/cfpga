@@ -6,18 +6,16 @@
 // Peeking the five headers first, computing the size, and only then issuing the five read-fill
 // commands removes the trigger-line pulse count from the correctness path (it becomes a monitor).
 //
-// Command frame: CSN, CC, then the fill number the master expects (tlast).  The header at the head of
-// the FIFO is returned as it is, whatever its fill number (6.8.0).  A fill-number mismatch means the
-// channel and the master disagree about which event this is, and the master stops the readout on it
-// (terminal, the run is aborted) rather than risk building an event from uncorrelated fills.  Until
-// 6.8.0 a header for an OLDER fill was popped and discarded here (and CC bit 8 set) so that the
-// readout could carry on; the expected fill number is still taken from the command frame (the
-// frame format is unchanged) but no longer changes what is done, and the DISCARD / SETTLE states
-// below are unreachable (synthesis removes them).
+// Command frame: CSN, CC, then the fill number the master expects (tlast).  A header at the head of
+// the FIFO for an OLDER fill (left there when an earlier readout gave up on this channel) is popped
+// and discarded here, so that the master never has to drain a whole stale fill to get past it; the
+// reply then says so (bit 8 of the echoed CC).  Its DDR3 data is simply never read, as with the
+// 6.6.9 re-issue path.  A header for the expected fill, or a NEWER one, is returned as is: the
+// master decides what to do with a newer one (it cannot be recovered).
 //
-// Reply frame: RSN, CC (bit 8 always 0 since 6.8.0) or ~CC on error, then the four 32-bit header words
+// Reply frame: RSN, CC | {discarded, 8'd0} (or ~CC on error), then the four 32-bit header words
 // exactly as the read-fill data stream carries them (word 1 = header[31:0] ... word 4 =
-// header[127:96]), tlast on the last.  If no header is waiting,
+// header[127:96]), tlast on the last.  If no header for the expected fill or a newer one is waiting,
 // wait up to the same bound as the read-fill command (16.8 ms: the fill-closing states are bounded
 // at 10.5 ms); after that reply with ~CC and tlast, and the master skips the channel for the event.
 // A command frame with no fill-number word (tlast on the CC) is answered with ~CC too.
@@ -44,11 +42,11 @@ module cc_peek_hdr_sm (
     output send_inv_cmd,                // mux: the inverse CC (error)
     output send_hdr_data,               // mux: a fill-header word
     output [1:0] hdr_word_sel,          // ... which one (0 = header[31:0] ... 3 = header[127:96])
-    output discarded,                   // CC bit 8: always 0 since 6.8.0 (was: a stale header was discarded)
+    output discarded,                   // a stale header was discarded for this command (CC bit 8)
     // the fill-header FIFO
     input  fill_header_fifo_empty,      // a header is available when not asserted
     input  [23:0] fill_header_fill_num, // ... its fill number (header[23:0])
-    output reg fill_header_fifo_rd_en   // never pops since 6.8.0 (kept for the port list; was: pop a stale header)
+    output reg fill_header_fifo_rd_en   // pop it (a stale one)
 );
 
     parameter [3:0]
@@ -73,8 +71,9 @@ module cc_peek_hdr_sm (
     reg        discarded_r;
     reg [23:0] expected;
 
-    // 6.8.0: an older header is no longer discarded (see the top of the file)
-    wire        hdr_older = 1'b0;
+    // the header at the head of the FIFO is for an older fill than the one expected
+    wire [23:0] fill_diff = expected - fill_header_fill_num;
+    wire        hdr_older = !fill_header_fifo_empty && (fill_diff != 24'd0) && !fill_diff[23];
 
     // bound on the wait for the header: 2^21 clocks = 16.8 ms, as cc_rd_fill_sm
     reg  [20:0] wait_cntr;

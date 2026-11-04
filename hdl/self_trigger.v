@@ -23,11 +23,6 @@
 // longer: registered stages on the pair sum, the signal average, the pedestal/signal pair and the trigger
 // comparison.  This is a fixed latency and is absorbed by the pre-trigger sample count.
 
-// 6.8.1: the trigger line ('trigger') is no longer sent to the master (channel_main_selftrigc holds
-// the pin low; the master sizes each event from the fill headers).  The line logic is kept as it was in
-// 6.7.0 because its timing paces the fill close ('line_quiet') and bounds the pulse queue; the
-// comments below that speak of the master counting the pulses describe 6.7.x.  The pulse shape is
-// programmable (line_hold_cycles_in / line_gap_cycles_in, default 24 / 24).
 module self_trigger #(
     parameter MAX_PAIRS = 64          // maximum number of clock-cycle pairs in the sliding window; power of two
 ) (
@@ -49,8 +44,6 @@ module self_trigger #(
                                       // 0 => re-arm only once the comparator has dropped below threshold (one trigger per excursion)
     input trig_backlog_full,          // the trigger-address FIFOs are nearly full (adc_acq_top): accept no more until they drain
     input fill_parity,                // from enable_sm_selftrigc: toggles at every fill boundary (a boundary releases the deferred pulses)
-    input [7:0] line_hold_cycles_in,  // trigger-line pulse: clocks high (6.8.1, quasi-static, any clock domain; 0 reads as 1; 6.7.0: 24)
-    input [7:0] line_gap_cycles_in,   // trigger-line pulse: clocks low after it (6.8.1, as above; 6.7.0: 24)
     // outputs
     output reg self_trig_ready,    // enough post-enable cycles have passed for trigger calc's to be valid
     output reg [41:0] timestamp,   // timing_counter latched at trigger time
@@ -308,21 +301,8 @@ end
 // it.  The detector's own dead time is the programmed minimum separation, and in the default
 // (edge) mode it also re-arms only once the comparator has dropped below threshold, so a pulse
 // that stays over threshold for longer than the separation gives one trigger, not a train.
-// 6.8.1: the pulse shape is programmable (a VIO in channel_main_selftrigc, or constants), default
-// 24 / 24 clocks (60 ns high, 60 ns low) as in 6.7.0.  The line no longer goes to the master, but
-// its timing still paces the fill close ('line_quiet') and the pulse-queue refusal, so it is kept.
-// The inputs are quasi-static: resynchronised here, change them only between runs.
-(* ASYNC_REG = "TRUE" *) reg [7:0] line_hold_s1 = 8'd24, line_hold_s2 = 8'd24;
-(* ASYNC_REG = "TRUE" *) reg [7:0] line_gap_s1  = 8'd24, line_gap_s2  = 8'd24;
-always @(posedge clk) begin
-  line_hold_s1 <= line_hold_cycles_in; line_hold_s2 <= line_hold_s1;
-  line_gap_s1  <= line_gap_cycles_in;  line_gap_s2  <= line_gap_s1;
-end
-reg [7:0] line_hold_cycles = 8'd24, line_gap_cycles = 8'd24;
-always @(posedge clk) begin
-  line_hold_cycles <= (line_hold_s2 == 8'd0) ? 8'd1 : line_hold_s2;
-  line_gap_cycles  <= (line_gap_s2  == 8'd0) ? 8'd1 : line_gap_s2;
-end
+localparam [7:0] HOLD_CYCLES = 8'd24;   // 60 ns high
+localparam [7:0] GAP_CYCLES  = 8'd24;   // 60 ns low: the master's receiver needs both
 
 // state machine to keep track of when trigger becomes reliable
 
@@ -557,14 +537,14 @@ always @(posedge clk) begin
       LINE_IDLE: begin
         if (send_now) begin
           trigger    <= 1'b1;
-          line_cntr  <= line_hold_cycles - 8'd1;
+          line_cntr  <= HOLD_CYCLES - 8'd1;
           line_state <= LINE_HIGH;
         end
       end
       LINE_HIGH: begin
         if (line_cntr == 8'd0) begin
           trigger    <= 1'b0;
-          line_cntr  <= line_gap_cycles - 8'd1;
+          line_cntr  <= GAP_CYCLES - 8'd1;
           line_state <= LINE_LOW;
         end
         else line_cntr <= line_cntr - 8'd1;

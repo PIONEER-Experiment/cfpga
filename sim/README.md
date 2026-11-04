@@ -5,13 +5,8 @@
 (`mfpga_stc/hdl/selftrigc_mode_only`). Pulses at random phases across readout boundaries; every fill's
 master count must equal the number of waveforms the channel stored, and no pulse may be lost.
 
-6.8.1 keeps the trigger line inside the channel (it paces the fill close) but no longer sends it; the
-master's receiver went in master 6.8.0, so take it from the 6.7.3 tree for this test:
-
-    git -C ../../mfpga_stc show a294a4a:hdl/selftrigc_mode_only/channel_triggerc_receiver.v > channel_triggerc_receiver.v
     iverilog -g2012 -o sim tb_fill_boundary.sv ../hdl/self_trigger.v enable_sm_sim.sv \
-        ../hdl/circ_buf_to_ddr3_sm_selftrigc.v channel_triggerc_receiver.v ../hdl/sync_2stage.v
-    vvp sim ... +hold=N +gap=M             # trigger-line pulse shape (default 24 / 24, the 6.7.0 values)
+        ../hdl/circ_buf_to_ddr3_sm_selftrigc.v ../../mfpga_stc/hdl/selftrigc_mode_only/channel_triggerc_receiver.v ../hdl/sync_2stage.v
     vvp sim +seed=5 +burst +bdelay=10      # random run, bursts at 80% of the trigger-line rate, 10 ns board delay
     vvp sim +sweep +bdelay=30              # one pulse per fill swept from 80 clocks before to 240 after the boundary
     vvp sim +pairs +minsep=20 [+level=1]   # pulse pairs at swept spacing: minimum separation and re-arm mode

@@ -18,9 +18,6 @@ reg [7:0] min_sep = 8'd20; reg retrig_level = 0;
 integer minsep_arg = 20, level_arg = 0;
 initial begin if ($value$plusargs("minsep=%d", minsep_arg)) min_sep = minsep_arg; if ($value$plusargs("level=%d", level_arg)) retrig_level = level_arg; end
 wire line_hold_off, fill_parity, line_quiet, close_forced;
-// 6.8.1: trigger-line pulse shape (VIO in the channel); default 24 / 24 as 6.7.0, +hold= / +gap= to change
-reg [7:0] line_hold = 8'd24, line_gap = 8'd24; integer hold_arg, gap_arg;
-initial begin if ($value$plusargs("hold=%d", hold_arg)) line_hold = hold_arg; if ($value$plusargs("gap=%d", gap_arg)) line_gap = gap_arg; end
 wire self_trig_ready, trig_imm, trig_line; wire [41:0] timestamp;
 wire trig_backlog_full; wire [15:0] refused_count; wire [7:0] pending_pulses; wire refused_pulse, trig_discarded;
 integer refused_pulses = 0; always @(posedge adc_clk) if (refused_pulse) refused_pulses = refused_pulses + 1;
@@ -28,7 +25,7 @@ integer discards = 0; always @(posedge adc_clk) if (trig_discarded) discards = d
 self_trigger st (.clk(adc_clk), .rst(rst), .adcdat(adcdat), .timing_counter(timing_counter),
   .threshold_in(12'sd100), .polarity_in(1'b1), .sum_log2_in(3'd1), .ped_delay_in(6'd4), .ped_bypass_in(1'b1),
   .enable(enable_triggering), .line_hold_off(line_hold_off), .min_separation_in(min_sep), .retrig_level_in(retrig_level),
-  .trig_backlog_full(trig_backlog_full), .fill_parity(fill_parity), .line_hold_cycles_in(line_hold), .line_gap_cycles_in(line_gap), .refused_count(refused_count), .pending_pulses(pending_pulses), .refused_pulse(refused_pulse),
+  .trig_backlog_full(trig_backlog_full), .fill_parity(fill_parity), .refused_count(refused_count), .pending_pulses(pending_pulses), .refused_pulse(refused_pulse),
   .self_trig_ready(self_trig_ready), .timestamp(timestamp), .trigger_immediate(trig_imm), .trigger(trig_line), .line_quiet(line_quiet));
 
 // ---------------- channel: enable_sm ----------------
