@@ -1,28 +1,40 @@
-// watch the enable IO line from the master FPGA
-// 32 ns pulse: toggle the enable self-triggering line
-// 64 ns pulse: toggle the enable data acquisition line
+// watch the enable IO line from the master FPGA (acq_encode2 on the master)
+//
+//   master io[1]:  __|‾‾|_______|‾‾‾‾‾‾‾‾‾ run ‾‾‾‾‾‾‾‾‾|_____ ... _____|‾‾|____
+//                   40ns  ~1us                              >=0.5s      40ns
+//   decode:        INIT_WAIT -> WAIT_LINE_LOW -> WAIT_LINE_HIGH -> ACQUIRING
+//                  -> DISABLE_TRIG -> ACQ_WAIT -> DISABLE_ACQ -> IDLE
+//
+// Run start is edge-based (wait for the line to drop, then rise again) rather
+// than timer-based, so the length of the master's gap does not matter and a
+// missed start pulse simply means we start on the held-high level.  Timeouts:
+//   WAIT_LINE_LOW  : line never dropped -> the master is already holding the run
+//                    level, go straight to ACQUIRING
+//   WAIT_LINE_HIGH : line dropped and stayed low -> stray pulse, return to IDLE
 
 module enableControl2 (
     input  logic clk125,             // local clock, 125 MHz expected
     input  logic reset,              // active-high
     input  logic master_signal,      // signal from master
     output logic enable_acquisition, // DDR3 i/o enabled
-    output logic enable_triggering   // self-triggering activated
+    output logic enable_triggering,  // self-triggering activated
+    output logic [31:0] diag_word    // diagnostics, see the end of the module
 );
 
 
 // =========================================================================
 // One-hot FSM using enum
 // =========================================================================
-    typedef enum logic [7:0] {
-        IDLE             = 8'b00000001, // 01
-        INIT_WAIT        = 8'b00000010, // 02
-        ENABLE_TRIG_WAIT = 8'b00000100, // 04
-        ACQUIRING        = 8'b00001000, // 08
-        DISABLE_TRIG     = 8'b00010000, // 10
-        ACQ_WAIT         = 8'b00100000, // 20
-        DISABLE_ACQ      = 8'b01000000, // 40
-        ERROR            = 8'b10000000  // 80
+    typedef enum logic [8:0] {
+        IDLE             = 9'b000000001, // 001
+        INIT_WAIT        = 9'b000000010, // 002
+        WAIT_LINE_LOW    = 9'b000000100, // 004
+        WAIT_LINE_HIGH   = 9'b000001000, // 008
+        ACQUIRING        = 9'b000010000, // 010
+        DISABLE_TRIG     = 9'b000100000, // 020
+        ACQ_WAIT         = 9'b001000000, // 040
+        DISABLE_ACQ      = 9'b010000000, // 080
+        ERROR            = 9'b100000000  // 100
     } state_t;
 
     // declare registers to hold the enables
@@ -31,21 +43,22 @@ module enableControl2 (
     assign enable_acquisition = enable_acq_reg;
     assign enable_triggering  = enable_trig_reg;
 
-    // wait a microsecond before asserting triggering
+    // timeout counter for the two edge-wait states
     reg [15:0] counter;
     reg init_counter;  // will be asserted by the state machine
+    wire counter_zero;
     always @ ( posedge clk125) begin
       if ( reset )
         counter[15:0] <= 16'd0;
       else if ( init_counter )
-        // initialize the counter
-        counter[15:0] <= 16'd125;           //   1 us in 8 ns clock ticks (125 MHz)
+        // initialize the counter: 2 us, i.e. twice the master's 1 us gap
+        counter[15:0] <= 16'd250;           //   2 us in 8 ns clock ticks (125 MHz)
       else if ( counter_zero )
         // if the counter is zero, keep it there
-        counter[15:0] = 16'd0;
+        counter[15:0] <= 16'd0;
       else
         // decrement
-        counter[15:0] = counter[15:0] - 1;
+        counter[15:0] <= counter[15:0] - 1;
     end
     assign counter_zero = (counter[15:0] == 16'd0) ? 1'b1 : 1'b0;
 
@@ -80,16 +93,32 @@ module enableControl2 (
                   NS = IDLE;
             end
 
-            // Stay here 1 cycle to initiate counter.  Also enable acquisition
+            // Stay here 1 cycle to initiate the timeout counter.  Also enable acquisition
             INIT_WAIT: begin
-              NS = ENABLE_TRIG_WAIT;
+              NS = WAIT_LINE_LOW;
             end
 
-            ENABLE_TRIG_WAIT: begin
-              if ( counter_zero )
+            // The start pulse has been seen. Wait for the line to drop (end of the
+            // 40 ns pulse). If it never drops, we caught the held-high run level
+            // rather than the pulse, so go straight to ACQUIRING.
+            WAIT_LINE_LOW: begin
+              if ( !master_signal )
+                NS = WAIT_LINE_HIGH;
+              else if ( counter_zero )
                 NS = ACQUIRING;
               else
-                NS = ENABLE_TRIG_WAIT;
+                NS = WAIT_LINE_LOW;
+            end
+
+            // Wait for the line to rise again (the master's run level). If it stays
+            // low, that was a stray pulse: drop acquisition and return to IDLE.
+            WAIT_LINE_HIGH: begin
+              if ( master_signal )
+                NS = ACQUIRING;
+              else if ( counter_zero )
+                NS = IDLE;
+              else
+                NS = WAIT_LINE_HIGH;
             end
 
             // Stay here while master is high
@@ -139,6 +168,47 @@ module enableControl2 (
         endcase
     end // combinational always block to determine next state
 
+// =========================================================================
+// Diagnostics (channel registers 0x30 / 0x31): what the enable line did and how
+// this decoder reacted, since the last channel reset.
+//   [8:0]   CS (one-hot: IDLE, INIT_WAIT, WAIT_LINE_LOW, WAIT_LINE_HIGH, ACQUIRING,
+//                        DISABLE_TRIG, ACQ_WAIT, DISABLE_ACQ, ERROR)
+//   [12:9]  rising edges seen on the line   (4-bit, wraps)
+//   [16:13] falling edges seen on the line  (4-bit, wraps)
+//   [20:17] entries into ACQUIRING          (4-bit, wraps)
+//   [21]    sticky: left ACQUIRING because the line dropped (DISABLE_TRIG entered)
+//   [22]    sticky: acquisition switched off by the line rising in ACQ_WAIT (DISABLE_ACQ entered)
+//   [23]    sticky: WAIT_LINE_HIGH timed out, start pulse treated as stray (back to IDLE)
+//   [24]    sticky: WAIT_LINE_LOW timed out, started on the held-high level
+//   [25]    sticky: ERROR state entered
+//   [26]    the line as seen now
+//   [31:27] 0
+// =========================================================================
+    logic master_signal_d = 1'b0;
+    logic [3:0] rise_cnt = 4'd0, fall_cnt = 4'd0, acq_cnt = 4'd0;
+    logic flag_line_dropped = 1'b0, flag_disable_acq = 1'b0, flag_stray_pulse = 1'b0,
+          flag_held_start = 1'b0, flag_error = 1'b0;
+    always_ff @(posedge clk125) begin
+        master_signal_d <= master_signal;
+        if (reset) begin
+            rise_cnt <= 4'd0;  fall_cnt <= 4'd0;  acq_cnt <= 4'd0;
+            flag_line_dropped <= 1'b0;  flag_disable_acq <= 1'b0;  flag_stray_pulse <= 1'b0;
+            flag_held_start   <= 1'b0;  flag_error       <= 1'b0;
+        end
+        else begin
+            if ( master_signal && !master_signal_d) rise_cnt <= rise_cnt + 1;
+            if (!master_signal &&  master_signal_d) fall_cnt <= fall_cnt + 1;
+            if (CS != ACQUIRING      && NS == ACQUIRING)    acq_cnt           <= acq_cnt + 1;
+            if (CS == ACQUIRING      && NS == DISABLE_TRIG) flag_line_dropped <= 1'b1;
+            if (CS == ACQ_WAIT       && NS == DISABLE_ACQ)  flag_disable_acq  <= 1'b1;
+            if (CS == WAIT_LINE_HIGH && NS == IDLE)         flag_stray_pulse  <= 1'b1;
+            if (CS == WAIT_LINE_LOW  && NS == ACQUIRING)    flag_held_start   <= 1'b1;
+            if (NS == ERROR)                                flag_error        <= 1'b1;
+        end
+    end
+    assign diag_word = {5'b0, master_signal, flag_error, flag_held_start, flag_stray_pulse,
+                        flag_disable_acq, flag_line_dropped, acq_cnt, fall_cnt, rise_cnt, CS};
+
 // Drive outputs for each state at the same time as when we enter the state.
 // Use the NS[] array.
 always_ff @ (posedge clk125) begin
@@ -164,7 +234,11 @@ always_ff @ (posedge clk125) begin
         enable_acq_reg  <= 1'b1;
       end
     
-      ENABLE_TRIG_WAIT: begin
+      WAIT_LINE_LOW: begin
+        enable_acq_reg  <= 1'b1;
+      end
+
+      WAIT_LINE_HIGH: begin
         enable_acq_reg  <= 1'b1;
       end
     

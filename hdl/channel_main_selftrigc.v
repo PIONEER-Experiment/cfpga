@@ -20,7 +20,7 @@ module channel_main_selftrigc (
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  output acq_trig,              // to master, asserted active-hi when a self trigger achieved, C0_TRIG on schematic
+  output acq_trig,              // to master, C0_TRIG on schematic: unused since 6.8.0 (held low; was one pulse per self trigger)
   output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   // lkg -- stc -- need master to switch reset from io[3] to io[2]
   input  [2:0] io,              // input connections to the master FPGA
@@ -86,12 +86,25 @@ assign readout_pause = io[0];           // stop sending fill data to the Aurora
 wire enable_triggering;                 // indicates enabled for self triggering
 wire enable_acquisition;                // indicates that data acquisition has not yet completed
 wire master_enable_125;
+wire [31:0] enable_diag;   // enable-line decoder diagnostics for registers 0x30 / 0x31
+wire [31:0] selftrig_diag; // self-trigger diagnostics for register 0x35 (adc_acq_top)
+// channel error latch (6.6.10)
+wire [3:0]  err_set_adc_acq;          // from adc_acq_top: {trigger FIFO overrun, trigger discarded, fill close forced, trigger refused}
+wire [1:0]  err_set_125;              // from command_top: {DDR3 read stalled, header wait timed out}
+wire        fill_header_overrun;      // from ddr3_intf (ddr3 clock)
+wire        ddr3_wr_sync_err;         // from ddr3_intf (ddr3 clock), level
+wire        ddr3_rd_fifo_input_tready;
+wire [15:0] chan_err_bits;            // the sticky bits, clk125
+wire        chan_err_any;
+wire [6:0]  chan_err_word;            // {lost data, fault, cause code}, adc_clk, into every fill header
+wire        clear_errors;             // a write to register 0x37
 enableControl2 enableControl2(
   .clk125(clk125),
   .reset(reset_clk125),
   .master_signal(master_enable_125),
   .enable_acquisition(enable_acquisition),
-  .enable_triggering(enable_triggering)
+  .enable_triggering(enable_triggering),
+  .diag_word(enable_diag)
 );
 wire master_enable_ddr3;
 wire master_enable_adc;
@@ -238,8 +251,17 @@ wire [16:0] ddr3_wr_ctrl_state;            // write control current state
 ////////////////////////////////////////////////////////////////////////////
 wire acq_done;
 wire ddr3_selftrig_wr_active;
+wire ddr3_ui_reset;     // the MIG's ui_clk_sync_rst (ddr3_domain_clk), for the DDR3 read FIFO
+wire run_start_reset;   // from adc_acq_top_selftrigc: 160 ns pulse at the start of every run, clears the fill/DDR3 FIFOs
 // Inform the master FPGA that no data transfer to DDR3 is in process
-assign acq_idle = adc_acq_sm_idle || acq_done || !ddr3_selftrig_wr_active;
+// The done line to the master (C0_DONE).  Since 6.6.9 it is asserted only when a fill has been
+// closed (the ext_done pulse from enable_sm_selftrigc, which is produced only after every trigger
+// pulse owed to the master for that fill has been sent) or when the acquisition is idle; the
+// master latches its per-fill self-trigger count for this channel on its rising edge, and its
+// acquisition controller waits for it before storing the fill record.  It used to be high as well
+// whenever the DDR3 writer was merely between waveforms, which gave the master a "done" before
+// the fill was closed and would have latched the count at the wrong moment.
+assign acq_idle = adc_acq_sm_idle || acq_done;
 
 ////////////////////////////////////////////////////////////////////////////
 // Clock and reset handling
@@ -369,6 +391,11 @@ wire [ 9:0] enable_sm_state;
 // -- note, we are co-opting the muon_num_waveforms register to pass the self triggering threshold
 //    see note below for command_top instantiation
 wire [11:0] selftrig_threshold;
+wire [2:0]  selftrig_sum_log2;
+wire [5:0]  selftrig_ped_delay;
+wire        selftrig_ped_bypass;
+wire [7:0]  selftrig_min_separation;
+wire        selftrig_retrig_level;
 //sync_2stage #(
 //  .WIDTH(12)
 //) selftrig_sync (
@@ -425,10 +452,14 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .async_pre_trig(async_pre_trig[15:0]),               // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .selftrig_threshold(selftrig_threshold[11:0]),       // the amount by which the sample average must exceed the average pedestal to trigger
     .selftrig_polarity( selftrig_polarity),              // for self-triggering: 0 => negative polarity, 1 => positive
+    .selftrig_sum_log2(selftrig_sum_log2[2:0]),          // self-triggering: log2 of the number of sample pairs averaged
+    .selftrig_ped_delay(selftrig_ped_delay[5:0]),        // self-triggering: pedestal delay in 400 MHz clock cycles
+    .selftrig_ped_bypass(selftrig_ped_bypass),           // self-triggering: 1 => no pedestal subtraction
+    .selftrig_min_separation(selftrig_min_separation[7:0]), // self-triggering: minimum separation of accepted triggers, clocks
+    .selftrig_retrig_level(selftrig_retrig_level),       // self-triggering: legacy level re-trigger mode
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
-    .self_trig(acq_trig),                                // trigger threshold has been exceeded for this channel
     .ddr3_wr_en(ddr3_wr_en),                             // writing of triggered events to memory is enabled -- asserted while storing a trigger
     .cbuf_rd_en(cbuf_rd_en),                             // we have enabled storing of events -- asserted when not switching fill buffers
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),   // DDR3 unavailable for reading since we are writing
@@ -445,7 +476,11 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .current_waveform_num(current_waveform_num[22:0]),
     .packed_adc_dat(packed_adc_dat[25:0]),
     .burst_start_adr(burst_start_adr[22:0]),                    // starting address of current fill
-    .timestamp(timestamp)
+    .timestamp(timestamp),
+    .run_start_reset(run_start_reset),                           // stretched run-start pulse, clears the fill/DDR3 FIFOs
+    .selftrig_diag(selftrig_diag),                               // register 0x35 (adc_clk domain, status only)
+    .err_set_adc(err_set_adc_acq),                               // error latch sets, adc_clk
+    .chan_err_word(chan_err_word)                                // the channel's error word, into the fill header
 
 );
 sync_2stage ddr3_wr_en_sync (
@@ -453,17 +488,21 @@ sync_2stage ddr3_wr_en_sync (
   .in(ddr3_wr_en),
   .out(ddr3_wr_en_ddr3)
 );
+// the same signals, synchronised to clk125 for the DDR3-path diagnostic registers (0x2B..0x2D)
+wire [3:0] ddr3_path_debug_clk125;
+sync_2stage ddr3_path_dbg3_sync (.clk(clk125), .in(ddr3_selftrig_wr_active), .out(ddr3_path_debug_clk125[3]));
+sync_2stage ddr3_path_dbg2_sync (.clk(clk125), .in(ddr3_wr_en),              .out(ddr3_path_debug_clk125[2]));
+sync_2stage ddr3_path_dbg1_sync (.clk(clk125), .in(cbuf_rd_en),              .out(ddr3_path_debug_clk125[1]));
+sync_2stage ddr3_path_dbg0_sync (.clk(clk125), .in(ddr3_wr_fifo_empty),      .out(ddr3_path_debug_clk125[0]));
 sync_2stage cbuf_rd_en_sync (
   .clk(ddr3_domain_clk),
   .in(cbuf_rd_en),
   .out(cbuf_rd_en_ddr3)
 );
-wire self_trig_ddr3;
-sync_2stage st_sync (
-  .clk(ddr3_domain_clk),
-  .in(acq_trig),
-  .out(self_trig_ddr3)
-);
+// The trigger line to the master is no longer driven (6.8.0): the master takes each fill's
+// waveform count from its header.  Held low; free for a new job (see v670-header-first.md, step B).
+assign acq_trig = 1'b0;
+wire dwf_reset;   // declared before its first use (the data-writer FIFO reset); assigned below
 
 ////////////////////////////////////////////////////////////////////////////
 // Create a FIFO to buffer the fill address between the ADC block and the DDR3 block
@@ -494,9 +533,8 @@ assign high_water_warning = 1'b0;
 // Create a FIFO to buffer the data between the ADC block and the DDR3 block
 // Reset it when there is a full reset or when we are starting over -- flagged
 // by the event count reset
-wire dwf_reset;
 wire ddr3_write_fifo_full;
-assign dwf_reset = adc_acq_full_reset | evt_cnt_reset;
+assign dwf_reset = adc_acq_full_reset | evt_cnt_reset | run_start_reset;
 ddr3_write_fifo ddr3_write_fifo (
     // inputs
     .rst(dwf_reset),                // reset at startup or when requested
@@ -531,6 +569,7 @@ sync_2stage fhf_reset_sync (
   .in(dwf_reset),
   .out(fill_header_fifo_reset)
 );
+wire [4:0] mig_status_ddr3, mig_status_clk125;   // declared before the ddr3_intf instance that drives mig_status_ddr3
 wire acq_done_ddr3;
 sync_2stage ack_done_sync (
   .clk(ddr3_domain_clk),
@@ -544,7 +583,8 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .sysclk(clk200),                    // input, drives the Xilinx DDR3 IP
     .reset_clk50(reset_clk50),            // input, reset at startup or when requested by master FPGA 
     .ddr3_domain_clk(ddr3_domain_clk),  // output, the DDR3 user-interface synchronous clock
-    .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to ddr3_clk
+    .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to sysclk (the MIG's sys_rst)
+    .ddr3_domain_reset(ddr3_ui_reset), // output, the MIG's ui_clk_sync_rst, for logic on ddr3_domain_clk
 
     // writing connections
     .ddr3_wr_en(ddr3_wr_en_ddr3),                 // writing of triggered events to memory is enabled -- asserted when storing a triggered waveform
@@ -552,7 +592,7 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .ddr3_wr_fifo_empty(ddr3_wr_fifo_empty),      // input, data is available when this is not asserted
     .ddr3_wr_fifo_rd_en(ddr3_wr_fifo_rd_en),      // output, use and remove the data on the FIFO head
     .ddr3_wr_fifo_dat(ddr3_wr_fifo_dat[131:0]),   // input, 132-bit 4-bit tag plus 128-bit data from the ddr3_write_fifo, to be written to the DDR3
-    .ddr3_wr_sync_err(),                          // synchronization error flag
+    .ddr3_wr_sync_err(ddr3_wr_sync_err),          // synchronization error flag (error latch, 6.6.10)
     .ddr3_wr_done(ddr3_wr_done),                  // asserted when the 'ddr3_wr_control' is in the DONE state
     .high_water_warning(high_water_warning),      // passed ddr3 high water mark -- must pause data taking
     .acq_done(acq_done),                          // input, acquisition is done
@@ -564,6 +604,7 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .local_domain_clk(clk125),                           // input, the local user synchronous clock
     .fill_header_fifo_reset(fill_header_fifo_reset),     // input, clear out the fifo for a new run
     .fill_header_fifo_empty(fill_header_fifo_empty),     // output, a header is available when not asserted
+    .fill_header_overrun(fill_header_overrun),           // output, a header was written to a full FIFO (error latch)
     .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // input, remove the current data from the FIFO
     .fill_header_fifo_out(fill_header_fifo_out[151:0]),  // output, data at the head of the FIFO
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),       // input, the address of the first requested 128-bit burst
@@ -593,6 +634,7 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .ddr3_dm(ddr3_dm[1:0]),
     .ddr3_odt(ddr3_odt[0:0]),
     .app_rdy(),
+    .mig_status(mig_status_ddr3),                        // diagnostics, DDR3 clock domain
      // states
     .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),            // read control current state
     .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),            // write control current state
@@ -612,9 +654,10 @@ sync_2stage ddr3_wr_done_sync (
 ddr3_read_fifo ddr3_read_fifo(
     .m_aclk(clk125),
     .s_aclk(ddr3_domain_clk),
-    .s_aresetn(~reset_ddr3_clk),
+    .s_aresetn(~ddr3_ui_reset),   // ui_clk_sync_rst (6.8.4): 'reset_ddr3_clk' is also the MIG's sys_rst, which stops this
+                                  // FIFO's write clock, so the FIFO came out of that reset with ui_clk not running
     .s_axis_tvalid(ddr3_rd_fifo_wr_en),
-    .s_axis_tready(),
+    .s_axis_tready(ddr3_rd_fifo_input_tready),   // a word offered while not ready is lost: reported (error latch, 6.6.10)
     .s_axis_tlast(ddr3_rd_fifo_input_tlast),
     .s_axis_tdata(ddr3_rd_fifo_input_dat[127:0]),
     .m_axis_tvalid(ddr3_rd_fifo_output_tvalid),
@@ -626,10 +669,29 @@ ddr3_read_fifo ddr3_read_fifo(
     .rd_rst_busy()         // output wire rd_rst_busy
 );
 
+////////////////////////////////////////////////////////////////////////////
+// Channel error latch (6.6.10): every way the channel can lose a trigger or a waveform, or fail
+// in its DDR3 / readout path, sets a sticky bit here.  The bits go into every fill header (the
+// master raises the TTS line on them), into register 0x37, and the first one freezes the
+// channel's diagnostic snapshot.  Cleared by a write to 0x37 or the full reset.
+chan_error_selftrigc chan_error (
+    .adc_clk(adc_clk),
+    .ddr3_clk(ddr3_domain_clk),
+    .clk125(clk125),
+    .full_reset_adc(adc_acq_full_reset),
+    .clear_125(clear_errors),
+    .set_adc({err_set_adc_acq[3], ddr3_write_fifo_full & adc_acq_out_valid, err_set_adc_acq[2:0]}),
+    .set_ddr3({ddr3_rd_fifo_wr_en & ~ddr3_rd_fifo_input_tready, ddr3_wr_sync_err, fill_header_overrun}),
+    .set_125(err_set_125),
+    .err_bits_125(chan_err_bits),
+    .err_any_125(chan_err_any),
+    .err_word_adc(chan_err_word)
+);
+
 // Create a width converter to change the 128-bit data to 32-bit data
 ddr3_read_data_width_converter ddr3_read_data_width_converter(
     .aclk(clk125),
-    .aresetn(~reset_clk50),
+    .aresetn(~reset_clk125),      // clk125 module: the synchronised copy (6.8.4; was reset_clk50, unsynchronised)
     .s_axis_tvalid(ddr3_rd_fifo_output_tvalid),
     .s_axis_tready(ddr3_rd_fifo_output_tready),
     .s_axis_tdata(ddr3_rd_fifo_output_dat[127:0]),  // 128-bit
@@ -638,6 +700,63 @@ ddr3_read_data_width_converter ddr3_read_data_width_converter(
     .m_axis_tready(ddr3_32bit_tready),
     .m_axis_tdata(ddr3_32bit_tx_tdata[31:0]),       // 32-bit
     .m_axis_tlast(ddr3_32bit_tlast)
+);
+
+// DDR3 user-interface handshakes, synchronised to clk125 for the diagnostic registers
+sync_2stage #(.WIDTH(5)) mig_status_sync (.clk(clk125), .in(mig_status_ddr3), .out(mig_status_clk125));
+
+// Count the words exchanged with the Aurora core, for comparison with the master's per-channel
+// counters after a stuck readout.  Free running, never reset; the command path snapshots them.
+reg [15:0] aurora_tx_word_cnt = 16'd0;
+reg [15:0] aurora_rx_word_cnt = 16'd0;
+always @(posedge clk125) begin
+    if (c0_tx_axi_tvalid && c0_tx_axi_tready) aurora_tx_word_cnt <= aurora_tx_word_cnt + 1;
+    if (c0_rx_axi_tvalid && c0_rx_axi_tready) aurora_rx_word_cnt <= aurora_rx_word_cnt + 1;
+end
+
+// The same counts taken at the Aurora core's own interface (after the TX FIFO / before the RX FIFO),
+// brought from 'aurora_user_clk' into clk125.  They are gray coded, so a sample taken across a single
+// increment differs in at most one bit and is either the old or the new value; the two clocks are
+// nominally equal in frequency but asynchronous, so very occasionally two increments fall between
+// samples and a sample could be torn.  A value is therefore only accepted once two consecutive
+// samples agree, which they always do as soon as the link is quiet.
+wire [31:0] c0_core_word_counts_gray;   // from the Aurora wrapper (all_channels below), 'aurora_user_clk' domain, gray coded
+wire [31:0] c0_link_event_counts;       // from the Aurora wrapper, 'clk50' domain: {channel_up drops, lane_up drops, hard_err, link_reset}
+// link-event counters into clk125: rare events, so a plain two-stage sample is enough (read when quiet)
+(* ASYNC_REG = "TRUE" *) reg [31:0] link_events_s1 = 32'd0, link_events_s2 = 32'd0;
+always @(posedge clk125) begin
+    link_events_s1 <= c0_link_event_counts;
+    link_events_s2 <= link_events_s1;
+end
+(* ASYNC_REG = "TRUE" *) reg [31:0] core_cnt_gray_s1 = 32'd0, core_cnt_gray_s2 = 32'd0;
+reg  [31:0] core_cnt_gray_s3 = 32'd0;
+reg  [31:0] core_word_counts = 32'd0;
+function [15:0] gray2bin;
+    input [15:0] g;
+    integer i;
+    begin
+        gray2bin[15] = g[15];
+        for (i = 14; i >= 0; i = i - 1) gray2bin[i] = gray2bin[i+1] ^ g[i];
+    end
+endfunction
+always @(posedge clk125) begin
+    core_cnt_gray_s1 <= c0_core_word_counts_gray;
+    core_cnt_gray_s2 <= core_cnt_gray_s1;
+    core_cnt_gray_s3 <= core_cnt_gray_s2;
+    if (core_cnt_gray_s3 == core_cnt_gray_s2)
+        core_word_counts <= {gray2bin(core_cnt_gray_s2[31:16]), gray2bin(core_cnt_gray_s2[15:0])};
+end
+
+// The diagnostic snapshots in command_top are triggered by the arrival of the master's reset line
+// itself, not by the channel's own reset: the latter follows the master_reset classifier and the
+// startup_reset synchronisers, some 100-300 ns after the line rises, by which time the master's own
+// post-reset activity (the ENABLE_ACQ pulse, the FIFO resets) has already disturbed the state we want
+// to freeze.  'rst_from_master_sync' is in the clk50 domain.
+wire rst_from_master_125;
+sync_2stage rst_from_master_125_sync (
+    .clk(clk125),
+    .in(rst_from_master_sync),
+    .out(rst_from_master_125)
 );
 
 // Synchronize  'readout_pause' to 'clk125'.
@@ -719,7 +838,9 @@ all_channels channels(
     .c0_rxp(c0_rx), .c0_rxn(c0_rx_N),                // receive from channel 0 FPGA
     .c0_txp(c0_tx), .c0_txn(c0_tx_N),                // transmit to channel 0 FPGA
 //    .debug(debug[7:0]),
-    .channel_up(aurora_channel_up)
+    .channel_up(aurora_channel_up),
+    .c0_core_word_counts(c0_core_word_counts_gray),
+    .c0_link_event_counts(c0_link_event_counts)
 );
 
 // We need to swap the bit order for the RX data
@@ -814,6 +935,11 @@ command_top command_top (
     .async_pre_trig(async_pre_trig[15:0]),              // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
     .selftrig_polarity(selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
+    .selftrig_sum_log2(selftrig_sum_log2[2:0]),                        // self-triggering: averaging window
+    .selftrig_ped_delay(selftrig_ped_delay[5:0]),                      // self-triggering: pedestal delay
+    .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
+    .selftrig_min_separation(selftrig_min_separation[7:0]),            // self-triggering: minimum separation, clocks
+    .selftrig_retrig_level(selftrig_retrig_level),                     // self-triggering: legacy level re-trigger mode
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished
@@ -833,6 +959,19 @@ command_top command_top (
     
     // status signals
     .command_sm_idle(command_sm_idle),
+    .cmd_path_debug({aurora_channel_up, readout_pause_sync2, c0_tx_axi_tready, c0_tx_axi_tvalid,
+                     ddr3_32bit_tvalid, ddr3_32bit_tready, c0_rx_axi_tvalid, c0_rx_axi_tready}),
+    .ddr3_path_debug(ddr3_path_debug_clk125),
+    .mig_status(mig_status_clk125),
+    .link_word_counts({aurora_rx_word_cnt, aurora_tx_word_cnt}),
+    .core_word_counts(core_word_counts),
+    .link_event_counts(link_events_s2),
+    .snapshot_trigger(rst_from_master_125),
+    .enable_diag(enable_diag),
+    .selftrig_diag(selftrig_diag),
+    .err_bits(chan_err_bits),                 // error latch bits (register 0x37, snapshot on the first)
+    .clear_errors(clear_errors),              // a write to 0x37
+    .err_set_125(err_set_125),                // read-fill error sets
     .image_type(image_type),
 
     // other state machine states

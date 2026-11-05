@@ -6,7 +6,8 @@ module ddr3_intf_selftrigc(
     input sysclk,                               // input, drives the Xilinx DDR3 IP
     input reset_clk50,                          // input, reset at startup or when requested by master FPGA 
     output ddr3_domain_clk,                     // output, the DDR3 user-interface synchronous clock
-    output reset_ddr3_clk,                      // output, synched to ddr3_clk
+    output reset_ddr3_clk,                      // output, 'reset_clk50' synched to sysclk; drives the MIG's sys_rst
+    output ddr3_domain_reset,                   // output, the MIG's ui_clk_sync_rst: held until ui_clk is running and locked
     // writing connections
     input ddr3_wr_en,                           // writing of triggered events to memory is enabled
     input cbuf_rd_en,                           // we have enabled storing of events -- asserted when not switching fill buffers
@@ -24,6 +25,7 @@ module ddr3_intf_selftrigc(
     input local_domain_clk,                     // input, the local interface synchronous clock
     input fill_header_fifo_reset,               // input, clear out the fifo for a new run
     output fill_header_fifo_empty,              // output, a header is available when not asserted
+    output fill_header_overrun,                 // output, ddr3 clock: a header was written while the FIFO was full (error latch)
     input fill_header_fifo_rd_en,               // input, remove the current data from the FIFO
     output [151:0] fill_header_fifo_out,        // output, data at the head of the FIFO
     input [22:0] ddr3_rd_start_addr,            // input, the address of the first requested 128-bit burst
@@ -51,6 +53,7 @@ module ddr3_intf_selftrigc(
     output [1:0] ddr3_dm,
     output [0:0] ddr3_odt,
     output app_rdy,                              // output, PHY calibration is done
+    output [4:0] mig_status,                     // diagnostics: {init_calib_complete, app_rdy, app_wdf_rdy, rd_app_en, ddr3_rd_fifo_almost_full}
     // states
     output [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     output [16:0] ddr3_wr_ctrl_state,            // write control current state
@@ -117,7 +120,7 @@ wire [127:0] ddr3_wr_dat;
 assign ddr3_rd_fifo_input_dat[127:0] = ddr3_rd_dat[127:0];
 
 ////////////////////////////////////////////////////////////////
-assign addressing_acq_enabled = writing_last_fill | ddr3_wr_en_sync2;
+assign addressing_acq_enabled = ddr3_wr_en_sync2;
 // Connect the module that manages the address and command ports
 ddr3_addr_control ddr3_addr_control (
     // 'write' ports
@@ -174,8 +177,7 @@ ddr3_wr_control_selftrigc ddr3_wr_control_selftrigc (
     //.app_rdy(app_rdy),
     // done debugging
     .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),        // write control current state
-    .acq_done(acq_done),                            // input, asserted when the 'adc_acq_sm' is in the DONE state
-    .writing_last_fill(writing_last_fill)
+    .acq_done(acq_done)                             // input, asserted when the 'adc_acq_sm' is in the DONE state
  );
 
 ///////////////////////////////////////////////////////////////
@@ -212,6 +214,8 @@ ddr3_rd_control ddr3_rd_control (
 // The read port will be connected to the 'read' controller.
 wire full_fifo_reset;
 assign full_fifo_reset = fill_header_fifo_reset | ddr3_domain_reset;
+wire fill_header_fifo_full;
+assign fill_header_overrun = fill_header_fifo_full & fill_header_wr_en;
 fill_header_fifo fill_header_fifo (
     .rst(full_fifo_reset),                   // was .rst(ddr3_domain_reset),                // reset at startup or when requested
     .wr_clk(ddr3_domain_clk),               // clock used by 'write' controller
@@ -220,7 +224,7 @@ fill_header_fifo fill_header_fifo (
     .wr_en(fill_header_wr_en),              // store the fill header 
     .rd_en(fill_header_fifo_rd_en),             // read the next word of the fill header
     .dout(fill_header_fifo_out[151:0]),     // fill header 
-    .full(),                                // the header fifo is full, WHAT DO WE DO?
+    .full(fill_header_fifo_full),           // a write while full loses that fill's header: reported (error latch, 6.6.10)
     .empty(fill_header_fifo_empty)          // a fill header is available when this is not asserted
 );
     
@@ -297,5 +301,8 @@ wfd5_ddr3_r1 u_wfd5_ddr3_r1 (
     // .dbg_po_f_stg23_sel(dbg_po_f_stg23_sel),
     // .dbg_po_f_dec(dbg_po_f_dec),
 );
+
+// DDR3 user-interface handshakes for the diagnostic registers (ddr3_domain_clk; synchronised by the caller)
+assign mig_status[4:0] = {init_calib_complete, app_rdy, app_wdf_rdy, rd_app_en, ddr3_rd_fifo_almost_full};
 
 endmodule

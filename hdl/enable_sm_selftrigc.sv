@@ -21,6 +21,8 @@ module enable_sm_selftrigc (
     output logic         adc_acq_sm_idle, // ADC acquisition state machine is idle (used for front panel LED status)
     output logic         init_ddr3_addr,  // initialize the ddr3 address for this run
     output logic         ext_done,        // external output indicating acquisition is done
+    output logic         fill_parity,     // toggles at every fill boundary; tags each trigger with its fill
+    output logic         close_forced,    // one clock: a fill was closed by the time-out, not by the reader (diagnostic count)
     output logic [9:0]   enable_sm_state  // enable_sm current state
 );
 
@@ -60,7 +62,7 @@ end
 // =========================================================================
 logic [5:0] pulse_cntr;
 logic       init_pulse_cntr;
-logic       pulse_cntr_zero = (pulse_cntr == 6'd0);
+wire        pulse_cntr_zero = (pulse_cntr == 6'd0);   // continuous assignment (a 'logic' initialiser is evaluated once by the language)
 always_ff @(posedge adc_clk) begin
     if (reset_clk_adc) begin
         // reset counter
@@ -100,10 +102,46 @@ state_t NS;
 
 assign enable_sm_state = CS;
 
+// 'new_fill' is a ~150 ns level from the master (NEW_DDR3_BUFFER + TRANSITION).  It is taken as a
+// latched rising edge rather than as a level (6.6.9): a level could be seen twice if a fill ever
+// closed in less than the level's width (a second, empty fill the master did not ask for), or not
+// at all if it ended before this machine was back in TRIG_ENABLED (the channel then one fill
+// behind for the rest of the run).  The request is held until TRIG_ENABLED consumes it, and
+// dropped at the end of the run.
+logic new_fill_sync3 = 1'b0, new_fill_req = 1'b0;
+wire  new_fill_edge  = new_fill_sync2 & ~new_fill_sync3;
+wire  new_fill_boundary = new_fill_edge | new_fill_req;
+always_ff @(posedge adc_clk) begin
+  new_fill_sync3 <= new_fill_sync2;
+  if (reset_clk_adc || !enable_acquisition) new_fill_req <= 1'b0;
+  else if (CS == TRIG_ENABLED)             new_fill_req <= 1'b0;   // consumed (an edge in this state acts directly)
+  else if (new_fill_edge)                  new_fill_req <= 1'b1;
+end
+
 // Sequential state update
 always_ff @(posedge adc_clk) begin
     if (reset_clk_adc) CS <= IDLE;
     else               CS <= NS;
+end
+
+// =========================================================================
+// Bound on the fill-closing states (CBUF_RD_ENABLED, DDR3_DONE_WAIT): 2^22 clocks = 10.5 ms.  A
+// legitimate close drains whatever the trigger FIFO holds at 2.5 ns per sample: up to the
+// back-pressure threshold of 960 waveforms (adc_acq_top_selftrigc), 1.2 ms at 1024 samples each and
+// 10 ms only at ~4400 samples, so this is well clear of any real close and still inside the
+// channel's own header wait (16.8 ms, cc_rd_fill_sm) and the master's wait for done (26 ms).  A
+// fill that cannot close ends in a header-less fill (the master then gets a channel error for that
+// event) instead of a hung channel.
+// =========================================================================
+logic [22:0] close_cntr = 23'd0;
+wire  close_timeout = close_cntr[22];
+always_ff @(posedge adc_clk) begin
+    if (reset_clk_adc || !(CS == CBUF_RD_ENABLED || CS == DDR3_DONE_WAIT)) close_cntr <= 23'd0;
+    else if (!close_timeout)                                               close_cntr <= close_cntr + 23'd1;
+    // the time-out exit was taken (the normal exits are tested first in the case above, so a
+    // close_timeout that coincides with a legitimate exit is not counted)
+    close_forced <= close_timeout && (NS == DONE1) && !(!enable_acquisition && !ddr3_selftrig_wr_active) &&
+                    ((CS == CBUF_RD_ENABLED && !cbuf_rd_trig_wait) || (CS == DDR3_DONE_WAIT && !ddr3_wr_done_sync2));
 end
 
 // Next-state logic
@@ -132,28 +170,39 @@ always_comb begin
       NS = TRIG_ENABLED;
     end
     
-    // Triggers are accepted during TRIG_ENABLED. Stay in TRIG_ENABLED until either the
-    // ENABLE signal from the master has been negated, or a change in ddr3 buffer has
-    // been detected. Either signals the end of possible new acquisitions
-    // for the current buffer. Go to CBUF_RD_ENABLED to finish writing any triggered
-    // acquisitions to the DDR3 and write the final fill_header.
-    // We should have completed all necessary readout when enable_acquisition deasserts,
-    // so simply go to the idle state once that happens
+    // Triggers are accepted during TRIG_ENABLED. Stay in TRIG_ENABLED until either
+    // enable_acquisition is negated (run end) or a new_fill boundary is detected.
+    // In both cases, go to CBUF_RD_ENABLED to drain any in-flight triggered write
+    // to DDR3 before signalling done. Previously, run-end jumped straight to IDLE,
+    // which could abandon an in-progress DDR3 write; now both paths drain cleanly.
     TRIG_ENABLED: begin
-      if (!enable_acquisition )      NS = IDLE;
-      // a fill of this buffer is ending, so prep the next, write buffer leave the DDR3 asserted.
-      else if ( new_fill_sync2 )     NS = CBUF_RD_ENABLED;
+      // Both run-end and fill-boundary go through the drain sequence.
+      if (!enable_acquisition || new_fill_boundary)  NS = CBUF_RD_ENABLED;
       // filling this buffer  is still active, so stay here
-      else                           NS = TRIG_ENABLED;
+      else                                        NS = TRIG_ENABLED;
     end
     
-    // Stay in CBUF_RD_ENABLED until the 'cbuf_rd_trig_wait' signal from the circular buf
-    // reader has been asserted. This signals that all of the data for the final trigger
-    // has been sent to the DDR3
+    // Stay in CBUF_RD_ENABLED until either:
+    //   (a) cbuf_rd_trig_wait asserts -- the circular buffer reader has finished sending
+    //       all data for the last trigger to the DDR3 (normal fill-boundary or run-end path), or
+    //   (b) enable_acquisition is deasserted AND ddr3_selftrig_wr_active is low -- run-end
+    //       arrived with nothing actively being written, so skip straight to wrap-up (DONE1).
     CBUF_RD_ENABLED: begin
-      // If he final event has been processed, reading done. Otherwise stay here
-      NS = cbuf_rd_trig_wait ? CBUF_RD_DONE : CBUF_RD_ENABLED;
-    end
+      if (cbuf_rd_trig_wait)
+        // Normal path: circular buffer reader has finished sending the last event.
+        NS = CBUF_RD_DONE;
+      else if (close_timeout)
+        // The reader never came back to TRIG_WAIT (it should not be possible since 6.6.9, but a
+        // fill that cannot be closed must not hold the master for ever): wrap up anyway.
+        // 'close_forced' records that it happened.
+        NS = DONE1;
+      else if (!enable_acquisition && !ddr3_selftrig_wr_active)
+        // Run-end escape: no active DDR3 write in progress and no more triggers
+        // will arrive (enable is gone), so nothing left to drain -- skip to wrap-up.
+        NS = DONE1;
+      else
+        NS = CBUF_RD_ENABLED;
+    end    
     
     // When we have sent the final event to the DDR3, we need to send the checksum and the
     // fill header. 
@@ -161,11 +210,27 @@ always_comb begin
       NS = DDR3_DONE_WAIT;
     end
     
-    // Stay in DDR3_DONE_WAIT until the DONE signals from the DDR3
-    // has been asserted. This signals that all of the data is in the DDR3
+    // Stay in DDR3_DONE_WAIT until the DONE signal from the DDR3 writer has
+    // been asserted, i.e. the checksum and fill header are in memory.
+    //
+    // Run-end escape: if enable_acquisition dropped while a waveform was in
+    // flight, we arrive here via the cbuf_rd_trig_wait branch, but the reader
+    // (circ_buf_to_ddr3_sm) has gone to IDLE without writing a checksum or
+    // header and the writer (ddr3_wr_control) has gone to IDLE without seeing
+    // one, so ddr3_wr_done can never come.  Once the reader is idle
+    // (ddr3_selftrig_wr_active low) there is nothing left to wait for; go to
+    // DONE1 so ext_done is produced and the machine can return to IDLE.
+    // (Until 6.7.x both exits also waited for self_trigger's 'line_quiet', so that the master had
+    // counted every trigger-line pulse of the fill before 'done'.  There is no line any more.)
     DDR3_DONE_WAIT: begin
-      // if everything is in memory, start fill wrap up, else remain here.
-      NS = ddr3_wr_done_sync2 ? DONE1 : DDR3_DONE_WAIT;
+      if (ddr3_wr_done_sync2)
+        NS = DONE1;
+      else if (close_timeout)
+        NS = DONE1;                    // bounded, as CBUF_RD_ENABLED
+      else if (!enable_acquisition && !ddr3_selftrig_wr_active)
+        NS = DONE1;
+      else
+        NS = DDR3_DONE_WAIT;
     end
     
     // initialize duration counter for asserting ext_done so that the master will see it
@@ -193,6 +258,23 @@ always_comb begin
   endcase
 end // combinational always block to determine next state
 
+// =========================================================================
+// Fill parity.
+//
+// At a fill boundary (new_fill while in TRIG_ENABLED with the acquisition still on) the fill
+// parity toggles.  From then on every accepted trigger is tagged with the new parity (it belongs
+// to the next fill: adc_acq_top_selftrigc), and circ_buf_to_ddr3_sm ends the closing fill at the
+// first trigger of the other parity.  (Until 6.7.x a trigger-line hold-off and its guard counter
+// lived here too, to keep the master's pulse count on the right side of 'done'; they went with
+// the line in 6.8.0.)
+// =========================================================================
+wire boundary_ns = (CS == TRIG_ENABLED) && (NS == CBUF_RD_ENABLED) && enable_acquisition;
+always_ff @(posedge adc_clk) begin
+    if (reset_clk_adc)              fill_parity <= 1'b0;
+    else if (NS == INIT_DDR3_ADDR)  fill_parity <= 1'b0;   // run start: the trigger FIFOs are cleared at the same time (adc_acq_top)
+    else if (boundary_ns)           fill_parity <= ~fill_parity;
+end
+
 // Registered outputs: “on entry” driven from NS
 always_ff @(posedge adc_clk) begin
     // defaults every cycle
@@ -219,7 +301,8 @@ always_ff @(posedge adc_clk) begin
 
     ENABLE_WAIT: begin
       adc_acq_sm_idle <= 1'b1;
-      ext_done        <= 1'b1;
+      // (ext_done deliberately not asserted here: a one-cycle blip of "done" at
+      //  run start only confuses acq_idle / acq_done consumers)
     end
 
     BUFFER_FILL_START: begin

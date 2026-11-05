@@ -52,6 +52,9 @@ module cc_rd_fill_sm (
   output reg [23:0] ddr3_rd_burst_cnt,    // number of bursts to read from the DDR3
   output reg enable_reading,              // start the 'ddr3_rd_control'
   input reading_done,                     // reading is complete
+  output reading_done_synced,             // 'reading_done' after the synchroniser below, for the diagnostics
+  output [31:0] rd_fill_diag,             // register 0x36: {stalls in GET_DDR3_DATA [31:26], DDR3 words still to send [25:0]}
+  output [1:0]  err_set_125,              // error latch sets, clk: {DDR3 read stalled, header wait timed out}
   input acq_done_latch,                   // input, last self-trigger safely processed (default to 1 in other modes)
 
 // interface to the AXIS 2:1 MUX
@@ -63,12 +66,13 @@ module cc_rd_fill_sm (
 
 // Synchronize  'reading_done'.
 (* ASYNC_REG = "TRUE" *) reg reading_done_sync1;
-(* ASYNC_REG = "TRUE", mark_debug = "true" *) reg reading_done_sync2;
+(* ASYNC_REG = "TRUE" *) reg reading_done_sync2;
 
 always @(posedge clk) begin
     reading_done_sync1 <= reading_done;
     reading_done_sync2 <= reading_done_sync1;
 end
+assign reading_done_synced = reading_done_sync2;
 
 // make a register to save the header
 reg [127:0] saved_header;
@@ -84,15 +88,19 @@ always @(posedge clk) begin
     all_ddr3_words_sent <= (ddr3_words_to_send[25:0] == 26'b0);
 end
 
-// latch and clear the acq_done to avoid timing issues
-reg acq_done_local;
-reg clear_acq_done;
-always @(posedge clk) begin
-  if ( acq_done_latch )
-    acq_done_local <= 1'b1;
-  else if ( clear_acq_done )
-    acq_done_local <= 1'b0;
-end
+// The "has the fill closed?" interlock.  Until 6.6.9 this was a latch set by 'acq_done_latch'
+// (the delayed ext_done) and cleared after use.  That latch had no reset, set beat clear, and
+// enable_sm_selftrigc holds ext_done high between runs, so at the first read-fill of every run
+// (and after any close that overlapped the clear) it was already set and the state machine went
+// straight to the header FIFO, which was still empty: ERROR1, the master saw chan_error_rc, and
+// the next readout tripped ERROR_TRIG_NUM on the leftover header.  The header FIFO itself is the
+// right interlock: ddr3_wr_control pushes the fill header into it only after the header (the last
+// word of the fill) has been written to the DDR3, so "header waiting" means "fill in memory".
+// CHK_FIFO_EMPTY therefore waits for the header FIFO to become non-empty, bounded by the
+// 'acq_wait_cntr' time-out below, and errors only on the time-out.  'acq_done_latch' is no longer
+// used (the port is kept for the other channel_main variants).
+reg clear_acq_done;   // (no longer drives anything; kept so the output block below is unchanged)
+
 
 // keep track of fill number we are reading
 reg [19:0] fill_no_rd_ddr3;
@@ -125,6 +133,44 @@ parameter [3:0]
 reg [9:0] /* synopsys enum STATE_TYPE */ CS;
 reg [9:0] /* synopsys enum STATE_TYPE */ NS;
 assign cc_rd_fill_state = CS;
+
+// Timeout for waiting on acq_done in CHK_FIFO_EMPTY.  The command dispatcher
+// blocks on this state machine, so if acquisition never reports done (for
+// example a channel parked with enable_acquisition stuck high) every later
+// command, register reads included, would queue behind us for ever.  After
+// ~4 s we give up and return the error response instead.  The limit is deliberately
+// generous: it only has to catch a channel that will never finish, and a readout that
+// is merely slow (a loaded DAQ server, a large fill) must never trip it.
+// The counter reloads whenever we are not running, i.e. between commands.
+// 2^21 clk125 = 16.8 ms (6.6.9; was 4.3 s, a diagnostic setting from before the state snapshots
+// existed).  The fill-closing states of enable_sm_selftrigc are bounded at 2.6 ms, after which the
+// header is either written or will never come, so a header that has not arrived in 16.8 ms is
+// not coming; replying with an error then costs one event instead of stalling the DAQ for seconds.
+// The master's own reply wait is 67 ms, longer than this, so the error reply is always taken.
+reg [20:0] acq_wait_cntr;
+wire acq_wait_timeout;
+assign acq_wait_timeout = (acq_wait_cntr[20:0] == 21'd0);
+always @(posedge clk) begin
+  if ( !run_sm )
+    acq_wait_cntr[20:0] <= 21'h1FFFFF;            // ~16.8 ms at 125 MHz
+  else if ( CS[CHK_FIFO_EMPTY] && !acq_wait_timeout )
+    acq_wait_cntr[20:0] <= acq_wait_cntr[20:0] - 1;
+end
+// Diagnostics for a readout that stalls in GET_DDR3_DATA (register 0x36): the words still owed
+// to the master, live, and a count of stalls, where a stall is 2^20 clocks (8 ms) in
+// GET_DDR3_DATA without a word accepted by the Aurora.  A read that under-delivers (the DDR3 read
+// FIFO dropped words) sits here with nothing to send, which is the channel half of the
+// first-event hang signature; this says so without a logic analyser.
+reg  [20:0] ddr3_stall_cntr = 21'd0;
+reg  [ 5:0] ddr3_stall_count = 6'd0;
+always @(posedge clk) begin
+  if ( !CS[GET_DDR3_DATA] || aurora_ddr3_accept ) ddr3_stall_cntr <= 21'd0;
+  else if ( !ddr3_stall_cntr[20] )               ddr3_stall_cntr <= ddr3_stall_cntr + 21'd1;
+  if ( reset )                                                             ddr3_stall_count <= 6'd0;
+  else if ( ddr3_stall_cntr == 21'h0FFFFF && ddr3_stall_count != 6'h3F ) ddr3_stall_count <= ddr3_stall_count + 6'd1;
+end
+assign rd_fill_diag = {ddr3_stall_count, ddr3_words_to_send[25:0]};
+assign err_set_125  = {(ddr3_stall_cntr == 21'h0FFFFF), (CS[ERROR1] && !error_found)};   // one clock each
 //synopsys state_vector CS
  
 // sequential always block for state transitions (use non-blocking [<=] assignments)
@@ -138,7 +184,7 @@ always @ (posedge clk) begin
 end
 
 // combinational always block to determine next state  (use blocking [=] assignments)
-always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or acq_done_latch or run_sm or acq_done_local ) begin
+always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or error_found or all_ddr3_words_sent or run_sm or acq_wait_timeout ) begin
     NS = 10'b0; // default all bits to zero; will overrride one bit
 
     case (1'b1) //synopsys full_case parallel_case
@@ -159,15 +205,13 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         // We enter the CHK_FIFO_EMPTY state after we have been started.
         // There should be a complete header in the FIFO. If nothing is there, then we flag an error
         CS[CHK_FIFO_EMPTY]: begin
-//            if ( !acq_done_latch ) begin
-            if ( !acq_done_local ) begin
-               // the DDR3 writing and header fifo should be ready for us -- wait here
+            if ( fill_header_fifo_empty && !acq_wait_timeout ) begin
+               // the fill is still being closed and written to the DDR3 -- wait here
+               // (bounded: on timeout we fall through and report an error)
                NS[CHK_FIFO_EMPTY] = 1'b1;
             end
-            // See if there is something in the header FIFO
             else if (fill_header_fifo_empty)
-                // We were asked for a fill, but nothing there, so go flag an error.
-                // We need to somehow resync.
+                // We were asked for a fill, and none arrived within the time-out: flag an error.
                 NS[ERROR1] = 1'b1;
             else
                 // Fetch and check the fill_fifo_header.
@@ -206,9 +250,15 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         end
 
         // We enter the ECHO_CSN2 state whenever the TX FIFO is ready to accept the CSN.
-        // We stay here for one cycle, during which we assert 'tx_tvalid'
+        // 'tx_tvalid' is asserted here, and held until the word is actually accepted:
+        // 'tx_tready' is the Aurora's ready gated by 'readout_pause', and either can drop
+        // in the cycle after ECHO_CSN1 sampled it.  (AXI4-Stream: once TVALID is asserted
+        // it must stay asserted until TREADY.)
         CS[ECHO_CSN2]: begin
-            NS[ECHO_CC1] = 1'b1;
+            if (tx_tready)
+                NS[ECHO_CC1] = 1'b1;
+            else
+                NS[ECHO_CSN2] = 1'b1;
         end
 
         // We enter the ECHO_CC1 state whenever we have sent the CSN
@@ -225,11 +275,14 @@ always @ (CS or fill_header_fifo_empty or reading_done_sync2 or tx_tready or err
         end
 
         // We enter the ECHO_CC2 state whenever the TX FIFO is ready to accept the CC.
-        // We stay here for one cycle, during which we assert 'tx_tvalid'.
+        // 'tx_tvalid' is asserted here and held until the word is accepted (see ECHO_CSN2).
         // If there were any errors, we assert 'tx_tlast' and go to DONE.
         CS[ECHO_CC2]: begin
+            if (!tx_tready)
+                // not accepted yet, keep presenting the CC
+                NS[ECHO_CC2] = 1'b1;
             // Check error state
-            if (error_found)
+            else if (error_found)
                 // there was an error, so assert 'tx_tlast' and go to DONE
                 NS[DONE] = 1'b1;
             else

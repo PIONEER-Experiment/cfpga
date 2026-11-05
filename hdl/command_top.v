@@ -64,6 +64,11 @@ module command_top (
     output [15:0] async_pre_trig,             // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     output [11:0] selftrig_threshold,         // above-pedestal threshold for self triggering
     output        selftrig_polarity,          // for self-triggering: 0 => negative polarity, 1 => positive
+    output [2:0]  selftrig_sum_log2,          // self-triggering: log2 of the number of sample pairs averaged
+    output [5:0]  selftrig_ped_delay,         // self-triggering: pedestal delay in 400 MHz clock cycles
+    output        selftrig_ped_bypass,        // self-triggering: 1 => no pedestal subtraction
+    output [7:0]  selftrig_min_separation,    // self-triggering: minimum separation of accepted triggers, 400 MHz clocks
+    output        selftrig_retrig_level,      // self-triggering: 1 => re-trigger while still over threshold (legacy level mode)
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
     output read_fill_done,                    // read fill state machine finished
@@ -91,7 +96,35 @@ module command_top (
      input [ 9:0] enable_sm_state,
 
      input [ 2:0] ddr3_rd_ctrl_state,           // read control current state
-     input [16:0] ddr3_wr_ctrl_state            // write control current state
+     input [16:0] ddr3_wr_ctrl_state,           // write control current state
+
+     // command-path diagnostics from channel_main (clk125 domain):
+     //   [7] aurora channel_up  [6] readout_pause (synced)  [5] aurora tx tready  [4] aurora tx tvalid
+     //   [3] ddr3 32-bit tvalid [2] ddr3 32-bit tready      [1] aurora rx tvalid  [0] aurora rx tready
+     input [ 7:0] cmd_path_debug,
+
+     // DDR3-path diagnostics from channel_main, already synchronised to clk:
+     //   [3] ddr3_selftrig_wr_active  [2] ddr3_wr_en  [1] cbuf_rd_en  [0] ddr3 write FIFO empty
+     input [ 3:0] ddr3_path_debug,
+     // DDR3 user-interface handshakes, synchronised to clk:
+     //   [4] init_calib_complete  [3] app_rdy  [2] app_wdf_rdy  [1] rd_app_en  [0] read FIFO almost full
+     input [ 4:0] mig_status,
+     // {words received from the Aurora RX [31:16], words accepted by the Aurora TX [15:0]}, free running
+     input [31:0] link_word_counts,
+     // the same, counted at the Aurora core's own interface (after the TX FIFO / before the RX FIFO)
+     input [31:0] core_word_counts,
+     // {channel_up drops [31:24], lane_up drops [23:16], hard_err [15:8], link_reset [7:0]}, free running (0x34)
+     input [31:0] link_event_counts,
+     // rising edge takes the diagnostic snapshots (if a command is in progress); the master's reset line
+     input        snapshot_trigger,
+     // enable-line decoder diagnostics (enableControl2.diag_word), clk domain
+     input [31:0] enable_diag,
+     // self-trigger diagnostics from adc_acq_top (register 0x35), adc_clk domain, status only
+     input [31:0] selftrig_diag,
+     // channel error latch (6.6.10): the sticky bits (clk), the clear from register 0x37, the read-fill sets
+     input [15:0] err_bits,
+     output       clear_errors,
+     output [1:0] err_set_125
 );
 
     wire ser_num_le, command_le;
@@ -155,13 +188,14 @@ module command_top (
     // Use the actual command from the command register to activate 1 particular sm.
     wire run_cmd_sm;
     wire run_cc_loopback, run_cc_rd_reg, run_cc_wr_reg, run_cc_map_delay;
-    wire run_cc_rd_fill;
+    wire run_cc_rd_fill, run_cc_peek_hdr;
 
     assign run_cc_loopback  = (run_cmd_sm && (command_reg[4:0] == `CC_LOOPBACK));
     assign run_cc_rd_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_RD_REG));
     assign run_cc_wr_reg    = (run_cmd_sm && (command_reg[4:0] == `CC_WR_REG));
     assign run_cc_rd_fill   = (run_cmd_sm && (command_reg[4:0] == `CC_RD_FILL));
     assign run_cc_map_delay = (run_cmd_sm && (command_reg[4:0] == `CC_MAP_DELAY));
+    assign run_cc_peek_hdr  = (run_cmd_sm && (command_reg[4:0] == `CC_PEEK_HDR));
 
     reg s1, s2, s3;
     wire run_cc_rd_fill_pulse;
@@ -190,28 +224,32 @@ module command_top (
     // merge 'running' and 'done' signals from the state machines that handle individual commands.
     // only 1 of each, from the activated sm, should ever be active at the same time
     wire cmd_sm_running, map_sm_running;
-    wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_map_delay_running;
-    assign cmd_sm_running = cc_loopback_running || cc_rd_reg_running || cc_wr_reg_running || cc_rd_fill_running || cc_map_delay_running;
+    wire cc_loopback_running, cc_rd_reg_running, cc_wr_reg_running, cc_rd_fill_running, cc_map_delay_running, cc_peek_hdr_running;
+    assign cmd_sm_running = cc_loopback_running || cc_rd_reg_running || cc_wr_reg_running || cc_rd_fill_running || cc_map_delay_running || cc_peek_hdr_running;
 
     wire cmd_sm_done, map_sm_done;
-    wire cc_loopback_done, cc_rd_reg_done, cc_wr_reg_done, cc_rd_fill_done, cc_map_delay_done;
-    assign cmd_sm_done = cc_loopback_done || cc_rd_reg_done || cc_wr_reg_done || cc_rd_fill_done || cc_map_delay_done;
+    wire cc_loopback_done, cc_rd_reg_done, cc_wr_reg_done, cc_rd_fill_done, cc_map_delay_done, cc_peek_hdr_done;
+    assign cmd_sm_done = cc_loopback_done || cc_rd_reg_done || cc_wr_reg_done || cc_rd_fill_done || cc_map_delay_done || cc_peek_hdr_done;
     assign read_fill_done = cc_rd_fill_done;
 
     ////////////////////////////////////////////////////////////////////
     // every state machine will need to drive certain FIFO control lines
-    wire command_top_sm_rx_tready, loopback_sm_rx_tready, rd_reg_sm_rx_tready, wr_reg_sm_rx_tready;
-    assign rx_tready = command_top_sm_rx_tready || loopback_sm_rx_tready || rd_reg_sm_rx_tready || wr_reg_sm_rx_tready;
+    wire command_top_sm_rx_tready, loopback_sm_rx_tready, rd_reg_sm_rx_tready, wr_reg_sm_rx_tready, peek_hdr_sm_rx_tready;
+    assign rx_tready = command_top_sm_rx_tready || loopback_sm_rx_tready || rd_reg_sm_rx_tready || wr_reg_sm_rx_tready || peek_hdr_sm_rx_tready;
+    // the fill-header FIFO is popped by the read-fill command, and by the peek command for a stale header (6.7.0)
+    wire rd_fill_fifo_rd_en, peek_hdr_fifo_rd_en, peek_hdr_discarded;
+    assign fill_header_fifo_rd_en = rd_fill_fifo_rd_en || peek_hdr_fifo_rd_en;
          
-    wire loopback_sm_tx_tvalid, rd_reg_sm_tx_tvalid, wr_reg_sm_tx_tvalid, rd_fill_sm_tx_tvalid, map_delay_sm_tx_tvalid;
-    assign tx_tvalid = loopback_sm_tx_tvalid || rd_reg_sm_tx_tvalid || wr_reg_sm_tx_tvalid || rd_fill_sm_tx_tvalid || map_delay_sm_tx_tvalid;
+    wire loopback_sm_tx_tvalid, rd_reg_sm_tx_tvalid, wr_reg_sm_tx_tvalid, rd_fill_sm_tx_tvalid, map_delay_sm_tx_tvalid, peek_hdr_sm_tx_tvalid;
+    assign tx_tvalid = loopback_sm_tx_tvalid || rd_reg_sm_tx_tvalid || wr_reg_sm_tx_tvalid || rd_fill_sm_tx_tvalid || map_delay_sm_tx_tvalid || peek_hdr_sm_tx_tvalid;
 
-    wire loopback_sm_tx_tlast, rd_reg_sm_tx_tlast, wr_reg_sm_tx_tlast, rd_fill_sm_tx_tlast, map_delay_sm_tx_tlast;
-    assign tx_tlast = loopback_sm_tx_tlast || rd_reg_sm_tx_tlast || wr_reg_sm_tx_tlast || rd_fill_sm_tx_tlast || map_delay_sm_tx_tlast;
+    wire loopback_sm_tx_tlast, rd_reg_sm_tx_tlast, wr_reg_sm_tx_tlast, rd_fill_sm_tx_tlast, map_delay_sm_tx_tlast, peek_hdr_sm_tx_tlast;
+    assign tx_tlast = loopback_sm_tx_tlast || rd_reg_sm_tx_tlast || wr_reg_sm_tx_tlast || rd_fill_sm_tx_tlast || map_delay_sm_tx_tlast || peek_hdr_sm_tx_tlast;
 
     /////////////////////////////////////////////////
     // connect a big mux to steer data to the TX FIFO
-    wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_delay_data;
+    wire send_csn, send_cmd, send_inv_cmd, send_rx_data, send_reg_data, send_delay_data, send_hdr_data;
+    wire [1:0] hdr_word_sel;
     wire [31:0] map_data_integrity;
     reg [31:0] tx_data_reg;
 
@@ -243,26 +281,27 @@ module command_top (
 
     always @ (posedge clk) begin
         if (send_csn)           tx_data_reg[31:0] <= serial_num_reg[31:0]; // serial number
-        if (send_cmd)           tx_data_reg[31:0] <= command_reg[31:0];    // command
+        if (send_cmd)           tx_data_reg[31:0] <= {command_reg[31:9], peek_hdr_discarded, command_reg[7:0]}; // command ([8]: peek discarded a stale header, 6.7.0)
         if (send_inv_cmd)       tx_data_reg[31:0] <= ~command_reg[31:0];   // inverse of command
         if (send_rx_data)       tx_data_reg[31:0] <= rx_data[31:0];        // loopback
         if (send_reg_data)      tx_data_reg[31:0] <= reg_data[31:0];           // reading from a register
         if (send_delay_data) tx_data_reg[31:0] <= map_data_out[31:0];   // reading tap delay validity
+        if (send_hdr_data)      tx_data_reg[31:0] <= fill_header_fifo_out[hdr_word_sel*32 +: 32]; // peeking the fill header (6.7.0)
     end
     assign tx_data[31:0] = tx_data_reg[31:0];
     
     // Create the mux control signals
     // All state machines need to send the CSN
-    wire loopback_sm_send_csn, rd_reg_sm_send_csn, wr_reg_sm_send_csn, rd_fill_sm_send_csn, map_delay_sm_send_csn;
-    assign send_csn = loopback_sm_send_csn || rd_reg_sm_send_csn || wr_reg_sm_send_csn || rd_fill_sm_send_csn || map_delay_sm_send_csn;
+    wire loopback_sm_send_csn, rd_reg_sm_send_csn, wr_reg_sm_send_csn, rd_fill_sm_send_csn, map_delay_sm_send_csn, peek_hdr_sm_send_csn;
+    assign send_csn = loopback_sm_send_csn || rd_reg_sm_send_csn || wr_reg_sm_send_csn || rd_fill_sm_send_csn || map_delay_sm_send_csn || peek_hdr_sm_send_csn;
     
     // All state machines need to send the CC
-    wire loopback_sm_send_cmd, rd_reg_sm_send_cmd, wr_reg_sm_send_cmd, rd_fill_sm_send_cmd, map_delay_sm_send_cmd;
-    assign send_cmd = loopback_sm_send_cmd || rd_reg_sm_send_cmd || wr_reg_sm_send_cmd || rd_fill_sm_send_cmd || map_delay_sm_send_cmd;
+    wire loopback_sm_send_cmd, rd_reg_sm_send_cmd, wr_reg_sm_send_cmd, rd_fill_sm_send_cmd, map_delay_sm_send_cmd, peek_hdr_sm_send_cmd;
+    assign send_cmd = loopback_sm_send_cmd || rd_reg_sm_send_cmd || wr_reg_sm_send_cmd || rd_fill_sm_send_cmd || map_delay_sm_send_cmd || peek_hdr_sm_send_cmd;
 
     // Only a few state machines need to send the inverse CC
-    wire rd_reg_sm_send_inv_cmd, wr_reg_sm_send_inv_cmd, rd_fill_sm_send_inv_cmd, map_delay_sm_send_inv_cmd;
-    assign send_inv_cmd = rd_reg_sm_send_inv_cmd || wr_reg_sm_send_inv_cmd || rd_fill_sm_send_inv_cmd || map_delay_sm_send_inv_cmd;
+    wire rd_reg_sm_send_inv_cmd, wr_reg_sm_send_inv_cmd, rd_fill_sm_send_inv_cmd, map_delay_sm_send_inv_cmd, peek_hdr_sm_send_inv_cmd;
+    assign send_inv_cmd = rd_reg_sm_send_inv_cmd || wr_reg_sm_send_inv_cmd || rd_fill_sm_send_inv_cmd || map_delay_sm_send_inv_cmd || peek_hdr_sm_send_inv_cmd;
     
     // Only the loopback state machine send RX DATA directly
     wire loopback_sm_send_rx_data;
@@ -278,6 +317,7 @@ module command_top (
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // connect the state machine that receives and dispatches commands
     // This state machine never drives the transmit FIFO 
+    wire [10:0] command_sm_state;          // command_sm current state, for the diagnostic registers
     command_sm command_sm (
         .clk(clk),                              // local clock
         .reset(reset),
@@ -293,8 +333,96 @@ module command_top (
         // control inputs
         .cmd_sm_running(cmd_sm_running),      // someone is running
         .cmd_sm_done(cmd_sm_done),              // someone is finished
-        .sm_idle(command_sm_idle)             // state machine is idle
+        .sm_idle(command_sm_idle),            // state machine is idle
+        .state(command_sm_state)              // current state, for the diagnostic registers
     );
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Command-path diagnostics (channel registers 0x29 and 0x2A).
+    // 0x29 is the live picture of the command dispatcher, the read-fill state machine and the
+    // Aurora-side handshakes.  0x2A is the same word frozen the cycle before the last reset from the
+    // master took effect, so that after a SYS.RST the state the channel was stuck in can still be read.
+    // The snapshot register is deliberately not reset.
+    wire [31:0] rd_fill_diag;
+    wire [31:0] cmd_path_live;
+    assign cmd_path_live = {command_sm_state[10:0],   // [31:21] command_sm CS (one-hot)
+                            cc_rd_fill_state[9:0],    // [20:11] cc_rd_fill_sm CS (one-hot)
+                            use_ddr3_data,            // [10]    TX mux set to DDR3 data
+                            tx_tvalid,                // [9]     command path presenting a word
+                            tx_tready,                // [8]     command path may send (aurora ready and not paused)
+                            cmd_path_debug[7:0]};     // [7:0]   see the port comment
+    // The snapshots (0x2A, 0x2B, 0x2C, 0x2E, 0x30) are taken only by a reset that arrives while a
+    // command is in progress, i.e. while the channel is stuck in one: resets of an idle channel leave
+    // them alone, so the capture of a stuck readout survives the extra resets it usually takes to
+    // get the master going again.  'snapshot_count' (0x30 [31:27]) says how many captures there have
+    // been since configuration.
+    reg  [31:0] cmd_path_live_d = 32'd0;
+    reg  [31:0] cmd_path_snapshot = 32'd0;
+    reg         snapshot_trigger_d = 1'b0;
+    reg  [ 4:0] snapshot_count = 5'd0;
+    wire        take_snapshot;
+    // taken on the rising edge of the master's reset line (before the channel's own reset follows it)
+    // ... and (6.6.10) unconditionally at the first error latched since the last clear: the error latch's
+    // bits rising from zero.  'error_snap_valid' says the snapshot registers hold an error capture (rather
+    // than a reset capture or nothing); register 0x37 reports it.
+    reg  err_any_d = 1'b0, error_snap_valid = 1'b0;
+    wire err_any = |err_bits;
+    wire error_snapshot = err_any && !err_any_d;
+    reg  [31:0] selftrig_diag_snap = 32'd0, rd_fill_diag_snap = 32'd0;
+    wire [31:0] error_status = {error_snap_valid, |(err_bits & 16'h003F), |(err_bits & 16'h03C0), 13'd0, err_bits};
+    always @(posedge clk) begin
+        err_any_d <= err_any;
+        if (error_snapshot) begin error_snap_valid <= 1'b1; selftrig_diag_snap <= selftrig_diag; rd_fill_diag_snap <= rd_fill_diag; end
+        else if (!err_any)  error_snap_valid <= 1'b0;
+    end
+    assign take_snapshot = (snapshot_trigger && !snapshot_trigger_d && !command_sm_state[0]) || error_snapshot;
+    always @(posedge clk) begin
+        cmd_path_live_d    <= cmd_path_live;
+        snapshot_trigger_d <= snapshot_trigger;
+        if (take_snapshot) begin
+            cmd_path_snapshot <= cmd_path_live_d;
+            snapshot_count    <= snapshot_count + 1;
+        end
+    end
+
+    // DDR3-path diagnostics (channel registers 0x2B, 0x2C and 0x2D), frozen at the same reset edge.
+    // 0x2B: the acquisition / DDR3 write / DDR3 read state machines.  0x2C: the circular-buffer
+    // drain state machine and the handshakes the read-fill command depends on.  0x2D is the live
+    // version of 0x2C (the live state machines are already at 0x21, 0x23, 0x24 and 0x25).
+    // The state machines run on the ADC and DDR3 clocks, so the state fields are sampled
+    // asynchronously, as the live registers are; they are read when nothing is moving anyway.
+    // 'reading_done' is synchronised inside cc_rd_fill_sm; the diagnostic uses that copy rather than a
+    // second synchroniser on the same source (report_cdc CDC-11)
+    wire reading_done_s2;
+    wire [31:0] ddr3_path_live_a;
+    wire [31:0] ddr3_path_live_b;
+    assign ddr3_path_live_a = {2'b0,
+                               enable_sm_state[9:0],       // [29:20] enable_sm CS (one-hot)
+                               ddr3_rd_ctrl_state[2:0],    // [19:17] ddr3_rd_control CS
+                               ddr3_wr_ctrl_state[16:0]};  // [16:0]  ddr3_wr_control CS (one-hot)
+    assign ddr3_path_live_b = {circ_to_ddr3_state[18:0],   // [31:13] circ_buf_to_ddr3 CS (one-hot)
+                               mig_status[4:0],            // [12:8]  see the port comment
+                               ddr3_path_debug[3:0],       // [7:4]   see the port comment
+                               acq_done_latch,             // [3]     acquisition reported done (delayed ext_done)
+                               enable_reading,             // [2]     read-fill asked the DDR3 reader to start
+                               reading_done_s2,            // [1]     DDR3 reader reports done
+                               fill_header_fifo_empty};    // [0]     no fill header waiting
+    reg  [31:0] ddr3_path_live_a_d = 32'd0, ddr3_path_live_b_d = 32'd0, link_word_counts_d = 32'd0, enable_diag_d = 32'd0, core_word_counts_d = 32'd0;
+    reg  [31:0] ddr3_path_snap_a   = 32'd0, ddr3_path_snap_b   = 32'd0, link_word_counts_snap = 32'd0, enable_diag_snap = 32'd0, core_word_counts_snap = 32'd0;
+    always @(posedge clk) begin
+        ddr3_path_live_a_d <= ddr3_path_live_a;
+        ddr3_path_live_b_d <= ddr3_path_live_b;
+        link_word_counts_d <= link_word_counts;
+        core_word_counts_d <= core_word_counts;
+        enable_diag_d      <= enable_diag;
+        if (take_snapshot) begin
+            ddr3_path_snap_a      <= ddr3_path_live_a_d;
+            ddr3_path_snap_b      <= ddr3_path_live_b_d;
+            link_word_counts_snap <= link_word_counts_d;   // 0x2E; 0x2F is the live count
+            core_word_counts_snap <= core_word_counts_d;   // 0x33; 0x32 is the live count
+            enable_diag_snap      <= {snapshot_count + 5'd1, enable_diag_d[26:0]};   // 0x30; 0x31 is live
+        end
+    end
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // connect the state machine that processes the CC_LOOPBACK command
@@ -421,6 +549,11 @@ module command_top (
         .async_num_bursts(async_num_bursts[13:0]),                     // number of 8-sample bursts in an ASYNC waveform
         .selftrig_threshold(selftrig_threshold),                           // above-pedestal threshold for self triggering
         .selftrig_polarity( selftrig_polarity),                             // for self-triggering: 0 => negative polarity, 1 => positive
+        .selftrig_sum_log2(selftrig_sum_log2[2:0]),                        // self-triggering: averaging window
+        .selftrig_ped_delay(selftrig_ped_delay[5:0]),                      // self-triggering: pedestal delay
+        .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
+        .selftrig_min_separation(selftrig_min_separation[7:0]),            // self-triggering: minimum separation (6.6.9)
+        .selftrig_retrig_level(selftrig_retrig_level),                     // self-triggering: level re-trigger mode (6.6.9)
         .async_pre_trig(async_pre_trig[15:0]),                         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
         .current_waveform_num(current_waveform_num[22:0]),
         // slow control
@@ -440,10 +573,54 @@ module command_top (
         .enable_sm_state(enable_sm_state),
         .cc_rd_fill_state(cc_rd_fill_state),
         .ddr3_rd_ctrl_state(ddr3_rd_ctrl_state),
-        .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state)
+        .ddr3_wr_ctrl_state(ddr3_wr_ctrl_state),
+        .cmd_path_live(cmd_path_live),
+        .cmd_path_snapshot(cmd_path_snapshot),
+        .ddr3_path_snap_a(ddr3_path_snap_a),
+        .ddr3_path_snap_b(ddr3_path_snap_b),
+        .ddr3_path_live_b(ddr3_path_live_b),
+        .link_word_counts_snap(link_word_counts_snap),
+        .link_word_counts(link_word_counts),
+        .core_word_counts(core_word_counts),
+        .core_word_counts_snap(core_word_counts_snap),
+        .link_event_counts(link_event_counts),
+        .enable_diag_snap(enable_diag_snap),
+        .enable_diag(enable_diag),
+        .selftrig_diag(selftrig_diag),
+        .rd_fill_diag(rd_fill_diag),
+        .error_status(error_status),
+        .selftrig_diag_snap(selftrig_diag_snap),
+        .rd_fill_diag_snap(rd_fill_diag_snap),
+        .clear_errors(clear_errors)
     );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // connect the state machine that processes the CC_PEEK_HDR command (6.7.0): the fill header at
+    // the head of the FIFO, without popping it, so the master can size the event before reading it
+    cc_peek_hdr_sm cc_peek_hdr_sm (
+        .clk(clk),
+        .reset(reset),
+        .run_sm(run_cc_peek_hdr),
+        .sm_running(cc_peek_hdr_running),
+        .sm_done(cc_peek_hdr_done),
+        .tx_tvalid(peek_hdr_sm_tx_tvalid),
+        .tx_tlast(peek_hdr_sm_tx_tlast),
+        .tx_tready(tx_tready),
+        .send_csn(peek_hdr_sm_send_csn),
+        .send_cmd(peek_hdr_sm_send_cmd),
+        .send_inv_cmd(peek_hdr_sm_send_inv_cmd),
+        .send_hdr_data(send_hdr_data),
+        .hdr_word_sel(hdr_word_sel),
+        .discarded(peek_hdr_discarded),
+        .rx_tvalid(rx_tvalid),
+        .rx_tlast(rx_tlast),
+        .rx_data(rx_data[31:0]),
+        .rx_tready(peek_hdr_sm_rx_tready),
+        .fill_header_fifo_empty(fill_header_fifo_empty),
+        .fill_header_fill_num(fill_header_fifo_out[23:0]),
+        .fill_header_fifo_rd_en(peek_hdr_fifo_rd_en)
+    );
+
     // connect the state machine that processes the CC_RD_FILL command
     cc_rd_fill_sm cc_rd_fill_sm (
         .clk(clk),                                             // local clock
@@ -465,7 +642,7 @@ module command_top (
         // local controls
         // interface to the header FIFO
         .fill_header_fifo_empty(fill_header_fifo_empty),     // a header is available when not asserted
-        .fill_header_fifo_rd_en(fill_header_fifo_rd_en),     // remove the current data from the FIFO
+        .fill_header_fifo_rd_en(rd_fill_fifo_rd_en),         // remove the current data from the FIFO
         .fill_header_fifo_out(fill_header_fifo_out[151:0]),     // data at the head of the FIFO
         .fixed_ddr3_start_addr(fixed_ddr3_start_addr[22:0]),
         .en_fixed_ddr3_start_addr(en_fixed_ddr3_start_addr),
@@ -474,6 +651,9 @@ module command_top (
         .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),           // number of bursts to read from the DDR3
         .enable_reading(enable_reading),                       // start the 'ddr3_rd_control'
         .reading_done(reading_done),                           // reading is complete
+        .reading_done_synced(reading_done_s2),                 // the same, synchronised, for the diagnostics
+        .rd_fill_diag(rd_fill_diag),                           // register 0x36 (stalls, words still to send)
+        .err_set_125(err_set_125),                             // error latch sets (read stalled, header wait timed out)
         .acq_done_latch(acq_done_latch),                       // input, last self-trigger safely processed (default to 1 in other modes)
         // interface to the AXIS 2:1 MUX
         .use_ddr3_data(use_ddr3_data),                         // the data source is the DDR3 memory

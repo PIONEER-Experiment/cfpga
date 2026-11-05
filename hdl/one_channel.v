@@ -35,7 +35,12 @@ module one_channel(
   output gt0_qpllreset,                // output
   // status
 //  output [7:0] debug,
-  output channel_up
+  output channel_up,
+  // word counters at the Aurora core's own AXI interface (after the TX FIFO, before the RX FIFO):
+  // {RX words [31:16], TX words [15:0]}, free running, GRAY CODED, 'aurora_user_clk' domain
+  output [31:0] core_word_counts,
+  // {channel_up drops [31:24], lane_up drops [23:16], hard_err [15:8], link_reset [7:0]}, free running, 'clk50' domain
+  output [31:0] link_event_counts
  );
 
   wire local_axis_resetn;                 // a local reset synched to the Aurora 'user_clk'
@@ -216,6 +221,42 @@ module one_channel(
     .sys_reset_out(sys_reset_out),          // output, synched to 'aurora_user_clk', to TX FIFO and RX FIFO
     .tx_out_clk(tx_out_clk)                // output, from channel clock module
   );
+
+  // Count the words that the Aurora core itself accepts on 's_axi_tx' (i.e. words that made it through
+  // the TX FIFO) and delivers on 'm_axi_rx' (before the RX FIFO).  Together with the clk125-side
+  // counters in channel_main (FIFO input / FIFO output) these split the path at the FIFOs, so a word
+  // that is accepted into the TX FIFO but never reaches the master can be blamed on the FIFO or on the
+  // serial link.  Free running, never reset.  Exported gray coded so that a clk125 sampler sees at
+  // most one changed bit per increment.
+  reg [15:0] core_tx_cnt = 16'd0;
+  reg [15:0] core_rx_cnt = 16'd0;
+  reg [31:0] core_word_counts_gray = 32'd0;
+  always @(posedge aurora_user_clk) begin
+    if (local_axis_tx_tvalid && local_axis_tx_tready) core_tx_cnt <= core_tx_cnt + 1;
+    if (local_axis_rx_tvalid)                         core_rx_cnt <= core_rx_cnt + 1;
+    core_word_counts_gray <= {core_rx_cnt ^ (core_rx_cnt >> 1), core_tx_cnt ^ (core_tx_cnt >> 1)};
+  end
+  assign core_word_counts = core_word_counts_gray;
+
+  // Link-event counters: falling edges of channel_up and lane_up, rising edges of hard_err and
+  // link_reset, 8 bits each, free running.  A momentary link loss (drop and retrain) leaves no trace
+  // in the live status flags by the time they are read; these say whether one happened.  Counted on
+  // 'clk50', the always-running init clock, through synchronisers, so a drop that also stops
+  // 'aurora_user_clk' is still counted (all four signals stay in their new state for far longer than
+  // a few clk50 periods).
+  (* ASYNC_REG = "TRUE" *) reg [3:0] lnk_ev_s1 = 4'd0, lnk_ev_s2 = 4'd0;
+  reg [3:0] lnk_ev_s3 = 4'd0;
+  reg [7:0] chan_up_drop_cnt = 8'd0, lane_up_drop_cnt = 8'd0, hard_err_cnt = 8'd0, link_reset_cnt = 8'd0;
+  always @(posedge clk50) begin
+    lnk_ev_s1 <= {channel_up, lane_up, hard_err, link_reset};
+    lnk_ev_s2 <= lnk_ev_s1;
+    lnk_ev_s3 <= lnk_ev_s2;
+    if ( lnk_ev_s3[3] & ~lnk_ev_s2[3]) chan_up_drop_cnt <= chan_up_drop_cnt + 1;
+    if ( lnk_ev_s3[2] & ~lnk_ev_s2[2]) lane_up_drop_cnt <= lane_up_drop_cnt + 1;
+    if (~lnk_ev_s3[1] &  lnk_ev_s2[1]) hard_err_cnt     <= hard_err_cnt     + 1;
+    if (~lnk_ev_s3[0] &  lnk_ev_s2[0]) link_reset_cnt   <= link_reset_cnt   + 1;
+  end
+  assign link_event_counts = {chan_up_drop_cnt, lane_up_drop_cnt, hard_err_cnt, link_reset_cnt};
 
   // Instantiate a channel clock module
   aurora_8b10b_0_CLOCK_MODULE clock_module (

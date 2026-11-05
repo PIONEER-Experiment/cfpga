@@ -15,6 +15,8 @@ module circ_buf_to_ddr3_selftrigc (
     input [25:0] circ_buf_rd_dat,     // 26-bit wide data from the circular buffer
     input [15:0] circ_buf_trig_addr,  // circular buffer address corresponding to a trigger, FIFO output
     input trig_fifo_empty,            // no triggers available when asserted
+    input trig_fifo_parity,           // fill parity of the trigger at the head of the FIFO
+    input fill_parity,                // parity of the fill now open (enable_sm_selftrigc)
     input [22:0] fill_address,        // latched starting address for a fill
     input [41:0] trigger_time,        // the time of the most recent data trigger
     input init_ddr3_addr,             // a new run has started
@@ -33,7 +35,9 @@ module circ_buf_to_ddr3_selftrigc (
     output ddr3_selftrig_wr_active,     // enabled whenever we are actively writing a trigger to the DDR3
     output fill_cntr_en,                // increment the fill counter
     output address_cntr_en,             // increment the ddr3 address so that we can track the starting address for the next fill
-    output [18:0] circ_to_ddr3_state    // current state
+    output [18:0] circ_to_ddr3_state,   // current state
+    output trig_discarded,              // a trigger of the wrong fill parity was discarded (error latch)
+    input  [6:0] chan_err_word          // {lost data, fault, cause code} for the fill header (chan_error_selftrigc)
 );
 
 wire [22:0] burst_adr;            // DDR3 burst memory location (3 LSBs=0) for a waveform
@@ -93,6 +97,7 @@ adc_dat_mux_selftrigc adc_dat_mux_selftrigc (
     .dat1_(circ_buf_dat_reg1_[25:0]),              // a pair of ADC samples and a pair of over-range bits
     .dat0_(circ_buf_dat_reg0_[25:0]),              // a pair of ADC samples and a pair of over-range bits
     .channel_tag(channel_tag[11:0]),               // stuff about the channel to put in the header
+    .chan_err_word(chan_err_word[6:0]),            // the channel's error word, into the fill header (6.6.10)
     .num_fill_bursts(num_fill_bursts[22:0]),       // number of bursts of any type (header, data, checksum)
     .waveform_start_adr(waveform_start_adr[22:0]), // DDR3 burst memory location (3 LSBs=0) for a waveform
     .current_waveform_num(current_waveform_num[22:0]),// the current waveform number, to be used in header
@@ -192,6 +197,8 @@ circ_buf_to_ddr3_sm_selftrigc circ_buf_to_ddr3_sm_selftrigc (
     .cbuf_rd_en(cbuf_rd_en),                       // moving data from the circ buf to the DDR3 FIFO is enabled, checksum and fill header go when first negated
     .cbuf_trig_en(cbuf_trig_en),                   // triggering of new waveforms is enabled
     .trig_fifo_empty(trig_fifo_empty),             // if not empty then process a waveform
+    .trig_fifo_parity(trig_fifo_parity),           // fill parity of the trigger at the head of the FIFO
+    .fill_parity(fill_parity),                     // parity of the fill now open
     .reset_clk_adc(reset_clk_adc),                 // either 'ext_reset' or 'reset_clk50' is asserted
     .burst_cntr_zero(burst_cntr_zero),             // all sample bursts have been saved
     .enable_acquisition(enable_acquisition),       // capturing and reading out data is enabled
@@ -221,7 +228,8 @@ circ_buf_to_ddr3_sm_selftrigc circ_buf_to_ddr3_sm_selftrigc (
     .waveform_cntr_en(waveform_cntr_en),           // will be enabled once after each waveform
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active), // will be enabled whenever we need active writing to the DDR3
     .address_cntr_en(address_cntr_en),             // increment the ddr3 address so that we can track the starting address for the next fill
-    .circ_to_ddr3_state(circ_to_ddr3_state)
+    .circ_to_ddr3_state(circ_to_ddr3_state),
+    .trig_discarded(trig_discarded)
 );
 
 endmodule

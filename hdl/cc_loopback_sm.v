@@ -99,7 +99,11 @@ module cc_loopback_sm (
 			// We enter the ECHO_CSN2 state whenever the TX fifo is ready to accept the CSN.
 			// We stay here for one cycle, during which we assert 'tx_tvalid'
 			CS[ECHO_CSN2]: begin
-				NS[ECHO_CC1] = 1'b1;
+				// hold 'tx_tvalid' until the word is accepted (tx_tready can drop after ECHO_CSN1 sampled it)
+				if (tx_tready)
+					NS[ECHO_CC1] = 1'b1;
+				else
+					NS[ECHO_CSN2] = 1'b1;
 			end
 
 			// We enter the ECHO_CC1 state whenever we have send the CSN
@@ -118,7 +122,10 @@ module cc_loopback_sm (
 			// We enter the ECHO_CC2 state whenever the TX fifo is ready to accept the CC.
 			// We stay here for one cycle, during which we assert 'tx_tvalid'
 			CS[ECHO_CC2]: begin
-				NS[ECHO_DATA1] = 1'b1;
+				if (tx_tready)
+					NS[ECHO_DATA1] = 1'b1;
+				else
+					NS[ECHO_CC2] = 1'b1;
 			end
 
 			// We enter the ECHO_DATA1 state after we have transmitted the CC.
@@ -140,8 +147,11 @@ module cc_loopback_sm (
 			// the TX FIFO that it is seeing good data.
 			// The RX data is routed to the TX FIFO
 			CS[ECHO_DATA2]: begin
+				if (!tx_tready)
+					// not accepted yet: keep presenting the word ('rx_tready' is gated the same way)
+					NS[ECHO_DATA2] = 1'b1;
 				// See if LAST is asserted.
-				if (rx_tlast)
+				else if (rx_tlast)
 					// We are done
 					NS[DONE] = 1'b1;
 				else
@@ -170,7 +180,7 @@ module cc_loopback_sm (
 	assign send_csn     = (CS[ECHO_CSN1]  == 1'b1 || CS[ECHO_CSN2]  == 1'b1); // send the CSN
 	assign send_cmd     = (CS[ECHO_CC1]   == 1'b1 || CS[ECHO_CC2]   == 1'b1); // send the CC
 	assign send_rx_data = (CS[ECHO_DATA1] == 1'b1 || CS[ECHO_DATA2] == 1'b1); // mux source is RX FIFO
-	assign rx_tready    = (CS[ECHO_DATA2] == 1'b1); 
+	assign rx_tready    = (CS[ECHO_DATA2] == 1'b1) && tx_tready;   // consume the RX word only when the TX side takes it
 	assign tx_tvalid    = (CS[ECHO_CSN2]  == 1'b1 || CS[ECHO_CC2]   == 1'b1 || CS[ECHO_DATA2] == 1'b1);
 	assign tx_tlast     = (CS[ECHO_DATA2] == 1'b1) && rx_tlast;
 	

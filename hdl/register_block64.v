@@ -44,6 +44,11 @@ module register_block64(
     output [15:0] async_pre_trig,            // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
     output [11:0] selftrig_threshold,        // above-pedestal threshold for self triggering
     output        selftrig_polarity,         // for self-triggering: 0 => negative polarity, 1 => positive
+    output [2:0]  selftrig_sum_log2,         // self-triggering: log2 of the number of sample pairs averaged
+    output [5:0]  selftrig_ped_delay,        // self-triggering: pedestal delay in 400 MHz clock cycles (1..63)
+    output        selftrig_ped_bypass,       // self-triggering: 1 => no pedestal subtraction
+    output [7:0]  selftrig_min_separation,   // self-triggering: minimum separation of accepted triggers, 400 MHz clocks
+    output        selftrig_retrig_level,     // self-triggering: 1 => re-trigger while still over threshold (legacy level mode)
     input  [22:0] current_waveform_num,
  
     // slow control
@@ -64,6 +69,24 @@ module register_block64(
     input [18:0] circ_to_ddr3_state,
     input [ 9:0] cc_rd_fill_state,
     input [ 9:0] enable_sm_state,
+    input [31:0] cmd_path_live,                // R41 (0x29): command-path diagnostics, live
+    input [31:0] cmd_path_snapshot,            // R42 (0x2A): the same, frozen just before the last master reset
+    input [31:0] ddr3_path_snap_a,             // R43 (0x2B): acquisition / DDR3 state machines, frozen before the last reset
+    input [31:0] ddr3_path_snap_b,             // R44 (0x2C): circ-buf drain SM and read-fill handshakes, frozen before the last reset
+    input [31:0] ddr3_path_live_b,             // R45 (0x2D): the same as R44, live
+    input [31:0] link_word_counts_snap,        // R46 (0x2E): {Aurora RX words, Aurora TX words} frozen before the last reset
+    input [31:0] link_word_counts,             // R47 (0x2F): the same, live
+    input [31:0] enable_diag_snap,             // R48 (0x30): enable-line decoder diagnostics, frozen before the last reset
+    input [31:0] enable_diag,                  // R49 (0x31): the same, live
+    input [31:0] core_word_counts,             // R50 (0x32): {RX words, TX words} at the Aurora core itself (after the TX FIFO), live
+    input [31:0] core_word_counts_snap,        // R51 (0x33): the same, frozen before the last reset
+    input [31:0] link_event_counts,            // R52 (0x34): {channel_up drops, lane_up drops, hard_err, link_reset}, 8 bits each, free running
+    input [31:0] selftrig_diag,                // R53 (0x35): {0 [31:24] (6.8.0; was pulses owed to the master), forced fill closes [23:16], refused triggers [15:0]}
+    input [31:0] rd_fill_diag,                 // R54 (0x36): {stalls in GET_DDR3_DATA [31:26], DDR3 words still to send [25:0]}
+    input [31:0] error_status,                 // R55 (0x37): {snapshot valid, lost data, fault, 13'd0, error bits [15:0]}; a write clears
+    input [31:0] selftrig_diag_snap,           // R56 (0x38): 0x35 frozen at the first error
+    input [31:0] rd_fill_diag_snap,            // R57 (0x39): 0x36 frozen at the first error
+    output       clear_errors,                 // one clock: register 0x37 was written
     input [ 2:0] ddr3_rd_ctrl_state,            // read control current state
     input [16:0] ddr3_wr_ctrl_state            // write control current state
 );
@@ -83,6 +106,8 @@ module register_block64(
     end
     // set the illegal flag if any upper bit is non-zero
     assign illegal_reg_num = (reg_num[31:6] == 26'b00000000000000000000000000) ? 1'b0 : 1'b1;
+    reg clear_errors_r = 1'b0;
+    assign clear_errors = clear_errors_r;
     
     // make a block of 64 32-bit registers
     // those with explicit defaults follow below
@@ -104,44 +129,52 @@ module register_block64(
     reg [31:0] reg20_ = 32'd10;       // async burst count of 10
     reg [31:0] reg21_ = 32'd2;        // async pre-trigger of 2
     reg [31:0] reg38_ = 32'd200;      // self trigger threshold and polarity
-    reg [31:0] reg39_ = 32'd0;        // run in progress
+    // R40 (0x28): self-trigger running-average window and pedestal
+    //   bits [2:0]  log2 of the number of sample pairs summed (001 = 4 samples)
+    //   bits [8:3]  pedestal delay in 400 MHz clock cycles, 1..63 (000100 = 4)
+    //   bit  [9]    1 = bypass the pedestal subtraction
+    // default 0x21 reproduces the original fixed 4-sample / 4-cycle trigger
+    reg [31:0] reg40_ = 32'h00005021;  // window 4 samples, pedestal delay 4 clocks, minimum separation 20 clocks (50 ns), edge mode
     
     // write to the writable registers
     always @ (posedge clk) begin
-        if (wr_en && (reg_num[4:0] == 5'h00)) reg0_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h01)) reg1_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h02)) reg2_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h03)) reg3_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h04)) reg4_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h05)) reg5_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h06)) reg6_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h00)) reg0_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h01)) reg1_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h02)) reg2_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h03)) reg3_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h04)) reg4_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h05)) reg5_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h06)) reg6_[31:0] <= rx_data[31:0];
         // R7  is read only
-        if (wr_en && (reg_num[4:0] == 5'h08)) reg8_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h08)) reg8_[31:0] <= rx_data[31:0];
         // R9  is read only
         // R10 is read only
         // R11 is read only
         // R12 is read only
-        if (wr_en && (reg_num[4:0] == 5'h0d)) reg13_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h0e)) reg14_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h0f)) reg15_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h10)) reg16_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h11)) reg17_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h12)) reg18_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h13)) reg19_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h14)) reg20_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h15)) reg21_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h0d)) reg13_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h0e)) reg14_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h0f)) reg15_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h10)) reg16_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h11)) reg17_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h12)) reg18_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h13)) reg19_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h14)) reg20_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h15)) reg21_[31:0] <= rx_data[31:0];
         // R22 is read only
         // R23 is read only
         // R24 is read only
         // R25 is read only
-        if (wr_en && (reg_num[4:0] == 5'h1a)) reg26_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1b)) reg27_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1c)) reg28_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1d)) reg29_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[4:0] == 5'h1e)) reg30_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1a)) reg26_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1b)) reg27_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1c)) reg28_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1d)) reg29_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h1e)) reg30_[31:0] <= rx_data[31:0];
         // R31 through 37 are read only
         if (wr_en && (reg_num[5:0] == 6'h26)) reg38_[31:0] <= rx_data[31:0];
-        if (wr_en && (reg_num[5:0] == 6'h27)) reg39_[31:0] <= rx_data[31:0];
+        if (wr_en && (reg_num[5:0] == 6'h28)) reg40_[31:0] <= rx_data[31:0];
+        // R39 (0x27) was a 'run in progress' flag that nothing in the firmware consumed; it is now read-only zero
+        // R55 (0x37): any write clears the error latch and its snapshot (6.6.10)
+        clear_errors_r <= wr_en && (reg_num[5:0] == 6'h37);
         // R40 through R63 are read only
     end
 
@@ -151,7 +184,7 @@ module register_block64(
     // Send R0 'wr_en' to the ADC acquisition controller
     // fill number will be set back to initial value after a reset
     //wire initial_fill_num_wr_wire;
-    //assign initial_fill_num_wr_wire = ((wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
+    //assign initial_fill_num_wr_wire = ((wr_en && (reg_num[6:0] == 6'h00)) | reset | cnt_reset) ? 1'b1 : 1'b0;
 
     // R1 - channel tag
     // bits [2:0] from configuration jumpers
@@ -242,6 +275,18 @@ module register_block64(
     // 0 for odd polarity and 1 for even polarity
     assign selftrig_threshold[11:0]    = reg38_[11:0];
     assign selftrig_polarity           = reg38_[12];
+
+    // R40
+    // self-trigger averaging window, pedestal delay and pedestal bypass
+    assign selftrig_sum_log2[2:0]      = reg40_[2:0];
+    assign selftrig_ped_delay[5:0]     = reg40_[8:3];
+    assign selftrig_ped_bypass         = reg40_[9];
+    // R40 [17:10]: minimum separation between accepted self triggers in 400 MHz clocks; 0 (an older
+    // configuration writing only the low bits) reads as the default of 20 = 50 ns.  R40 [18]: 1 keeps
+    // the legacy behaviour of re-triggering after the separation while the signal is still over
+    // threshold; 0 (default) re-arms only once it has dropped below, one trigger per excursion.
+    assign selftrig_min_separation[7:0] = (reg40_[17:10] == 8'd0) ? 8'd20 : reg40_[17:10];
+    assign selftrig_retrig_level        = reg40_[18];
     
     reg [31:0] rdbk_reg;
     assign tx_data[31:0] = rdbk_reg[31:0];
@@ -264,7 +309,7 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h0b)) rdbk_reg[31:0] <= {17'd0, adc_buf_current_data_delay[64:50]}; // R11 is read only
         if (rd_en && (reg_num[5:0] == 6'h0c)) rdbk_reg[31:0] <= {31'd0, adc_buf_delay_data_error};          // R12 is read only
         if (rd_en && (reg_num[5:0] == 6'h0d)) rdbk_reg[31:0] <= reg13_[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h0e)) rdbk_reg[11:0] <= {20'd0, reg14_[11:0]};
+        if (rd_en && (reg_num[5:0] == 6'h0e)) rdbk_reg[31:0] <= {20'd0, reg14_[11:0]};
         if (rd_en && (reg_num[5:0] == 6'h0f)) rdbk_reg[31:0] <= {10'd0, reg15_[21:0]};
         if (rd_en && (reg_num[5:0] == 6'h10)) rdbk_reg[31:0] <= {20'd0, reg16_[11:0]};
         if (rd_en && (reg_num[5:0] == 6'h11)) rdbk_reg[31:0] <= {10'd0, reg17_[21:0]};
@@ -289,25 +334,25 @@ module register_block64(
         if (rd_en && (reg_num[5:0] == 6'h24)) rdbk_reg[31:0] <= {15'd0,ddr3_wr_ctrl_state[16:0]};
         if (rd_en && (reg_num[5:0] == 6'h25)) rdbk_reg[31:0] <= {22'd0,enable_sm_state[9:0]};
         if (rd_en && (reg_num[5:0] == 6'h26)) rdbk_reg[31:0] <= reg38_[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // reg39_[31:0];
-        if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2b)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2c)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2d)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2e)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h2f)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h30)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h31)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h32)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h33)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h34)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h35)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h36)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h37)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h38)) rdbk_reg[31:0] <= 32'd0;
-        if (rd_en && (reg_num[5:0] == 6'h39)) rdbk_reg[31:0] <= 32'd0;
+        if (rd_en && (reg_num[5:0] == 6'h27)) rdbk_reg[31:0] <= 32'd0; // unused (was 'run in progress')
+        if (rd_en && (reg_num[5:0] == 6'h28)) rdbk_reg[31:0] <= reg40_[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h29)) rdbk_reg[31:0] <= cmd_path_live[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2a)) rdbk_reg[31:0] <= cmd_path_snapshot[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2b)) rdbk_reg[31:0] <= ddr3_path_snap_a[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2c)) rdbk_reg[31:0] <= ddr3_path_snap_b[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2d)) rdbk_reg[31:0] <= ddr3_path_live_b[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2e)) rdbk_reg[31:0] <= link_word_counts_snap[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h2f)) rdbk_reg[31:0] <= link_word_counts[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h30)) rdbk_reg[31:0] <= enable_diag_snap[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h31)) rdbk_reg[31:0] <= enable_diag[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h32)) rdbk_reg[31:0] <= core_word_counts[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h33)) rdbk_reg[31:0] <= core_word_counts_snap[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h34)) rdbk_reg[31:0] <= link_event_counts[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h35)) rdbk_reg[31:0] <= selftrig_diag[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h36)) rdbk_reg[31:0] <= rd_fill_diag[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h37)) rdbk_reg[31:0] <= error_status[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h38)) rdbk_reg[31:0] <= selftrig_diag_snap[31:0];
+        if (rd_en && (reg_num[5:0] == 6'h39)) rdbk_reg[31:0] <= rd_fill_diag_snap[31:0];
         if (rd_en && (reg_num[5:0] == 6'h3a)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h3b)) rdbk_reg[31:0] <= 32'd0;
         if (rd_en && (reg_num[5:0] == 6'h3c)) rdbk_reg[31:0] <= 32'd0;
@@ -317,7 +362,7 @@ module register_block64(
 
 
         // fill number will be set back to initial value after a reset
-        if ( (wr_en && (reg_num[4:0] == 5'h00)) | reset | cnt_reset) begin
+        if ( (wr_en && (reg_num[5:0] == 6'h00)) | reset | cnt_reset) begin
            initial_fill_num_wr <= 1'b1;
         end
         else begin
