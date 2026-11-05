@@ -20,7 +20,7 @@ module channel_main_selftrigc (
   input [2:0] ch_addr,          // will be 3'b111, this chip's address, from pullup/pulldown
   input [2:0] power_good,       // from regulators, active-hi, #2=1.8v, #1=1.2v, #0=1.0v
   input clkin,                  // 50 MHz oscillator
-  output acq_trig,              // to master, asserted active-hi when a self trigger achieved, C0_TRIG on schematic
+  output acq_trig,              // to master, C0_TRIG on schematic: unused since 6.8.0 (held low; was one pulse per self trigger)
   output acq_idle,              // to master, asserted active-hi at the end of acquisition, C0_DONE on schematic
   // lkg -- stc -- need master to switch reset from io[3] to io[2]
   input  [2:0] io,              // input connections to the master FPGA
@@ -251,6 +251,7 @@ wire [16:0] ddr3_wr_ctrl_state;            // write control current state
 ////////////////////////////////////////////////////////////////////////////
 wire acq_done;
 wire ddr3_selftrig_wr_active;
+wire ddr3_ui_reset;     // the MIG's ui_clk_sync_rst (ddr3_domain_clk), for the DDR3 read FIFO
 wire run_start_reset;   // from adc_acq_top_selftrigc: 160 ns pulse at the start of every run, clears the fill/DDR3 FIFOs
 // Inform the master FPGA that no data transfer to DDR3 is in process
 // The done line to the master (C0_DONE).  Since 6.6.9 it is asserted only when a fill has been
@@ -427,13 +428,6 @@ wire ddr3_wr_done_adc;
 wire ddr3_wr_en_ddr3;
 wire cbuf_rd_en_ddr3;
 wire [22:0] fill_address_ddr3;
-wire self_trig_line;     // the trigger line
-// 6.8.3 test: the line goes to the master unless register 0x27 [0] is set, so one bitstream (one
-// placement) can run with the line on and off.  Static between runs; synchronised into adc_clk.
-wire line_out_off;       // from the register block (clk125)
-wire line_out_off_adc;
-sync_2stage line_out_off_sync (.clk(adc_clk), .in(line_out_off), .out(line_out_off_adc));
-assign acq_trig = self_trig_line & ~line_out_off_adc;
 adc_acq_top_selftrigc adc_acq_top_selftrigc (
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
@@ -466,7 +460,6 @@ adc_acq_top_selftrigc adc_acq_top_selftrigc (
     .xadc_alarms(xadc_alarms[3:0]),
  
     // outputs
-    .self_trig(self_trig_line),                          // trigger threshold has been exceeded for this channel (not sent to the master)
     .ddr3_wr_en(ddr3_wr_en),                             // writing of triggered events to memory is enabled -- asserted while storing a trigger
     .cbuf_rd_en(cbuf_rd_en),                             // we have enabled storing of events -- asserted when not switching fill buffers
     .ddr3_selftrig_wr_active(ddr3_selftrig_wr_active),   // DDR3 unavailable for reading since we are writing
@@ -506,12 +499,9 @@ sync_2stage cbuf_rd_en_sync (
   .in(cbuf_rd_en),
   .out(cbuf_rd_en_ddr3)
 );
-wire self_trig_ddr3;
-sync_2stage st_sync (
-  .clk(ddr3_domain_clk),
-  .in(self_trig_line),
-  .out(self_trig_ddr3)
-);
+// The trigger line to the master is no longer driven (6.8.0): the master takes each fill's
+// waveform count from its header.  Held low; free for a new job (see v670-header-first.md, step B).
+assign acq_trig = 1'b0;
 wire dwf_reset;   // declared before its first use (the data-writer FIFO reset); assigned below
 
 ////////////////////////////////////////////////////////////////////////////
@@ -593,7 +583,8 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .sysclk(clk200),                    // input, drives the Xilinx DDR3 IP
     .reset_clk50(reset_clk50),            // input, reset at startup or when requested by master FPGA 
     .ddr3_domain_clk(ddr3_domain_clk),  // output, the DDR3 user-interface synchronous clock
-    .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to ddr3_clk
+    .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to sysclk (the MIG's sys_rst)
+    .ddr3_domain_reset(ddr3_ui_reset), // output, the MIG's ui_clk_sync_rst, for logic on ddr3_domain_clk
 
     // writing connections
     .ddr3_wr_en(ddr3_wr_en_ddr3),                 // writing of triggered events to memory is enabled -- asserted when storing a triggered waveform
@@ -663,7 +654,8 @@ sync_2stage ddr3_wr_done_sync (
 ddr3_read_fifo ddr3_read_fifo(
     .m_aclk(clk125),
     .s_aclk(ddr3_domain_clk),
-    .s_aresetn(~reset_ddr3_clk),
+    .s_aresetn(~ddr3_ui_reset),   // ui_clk_sync_rst (6.8.4): 'reset_ddr3_clk' is also the MIG's sys_rst, which stops this
+                                  // FIFO's write clock, so the FIFO came out of that reset with ui_clk not running
     .s_axis_tvalid(ddr3_rd_fifo_wr_en),
     .s_axis_tready(ddr3_rd_fifo_input_tready),   // a word offered while not ready is lost: reported (error latch, 6.6.10)
     .s_axis_tlast(ddr3_rd_fifo_input_tlast),
@@ -699,7 +691,7 @@ chan_error_selftrigc chan_error (
 // Create a width converter to change the 128-bit data to 32-bit data
 ddr3_read_data_width_converter ddr3_read_data_width_converter(
     .aclk(clk125),
-    .aresetn(~reset_clk50),
+    .aresetn(~reset_clk125),      // clk125 module: the synchronised copy (6.8.4; was reset_clk50, unsynchronised)
     .s_axis_tvalid(ddr3_rd_fifo_output_tvalid),
     .s_axis_tready(ddr3_rd_fifo_output_tready),
     .s_axis_tdata(ddr3_rd_fifo_output_dat[127:0]),  // 128-bit
@@ -948,7 +940,6 @@ command_top command_top (
     .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
     .selftrig_min_separation(selftrig_min_separation[7:0]),            // self-triggering: minimum separation, clocks
     .selftrig_retrig_level(selftrig_retrig_level),                     // self-triggering: legacy level re-trigger mode
-    .line_out_off(line_out_off),                                       // trigger-line pin off (6.8.3 test)
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished

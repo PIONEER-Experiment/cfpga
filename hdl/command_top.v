@@ -69,7 +69,6 @@ module command_top (
     output        selftrig_ped_bypass,        // self-triggering: 1 => no pedestal subtraction
     output [7:0]  selftrig_min_separation,    // self-triggering: minimum separation of accepted triggers, 400 MHz clocks
     output        selftrig_retrig_level,      // self-triggering: 1 => re-trigger while still over threshold (legacy level mode)
-    output        line_out_off,               // R39 (0x27) [0]: 1 => hold the trigger-line pin low (6.8.3 test)
     input  [25:0] packed_adc_dat,
     input  [22:0] current_waveform_num,
     output read_fill_done,                    // read fill state machine finished
@@ -555,7 +554,6 @@ module command_top (
         .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
         .selftrig_min_separation(selftrig_min_separation[7:0]),            // self-triggering: minimum separation (6.6.9)
         .selftrig_retrig_level(selftrig_retrig_level),                     // self-triggering: level re-trigger mode (6.6.9)
-        .line_out_off(line_out_off),                                       // trigger-line pin off (6.8.3 test)
         .async_pre_trig(async_pre_trig[15:0]),                         // number of pre-trigger 400 MHz ADC clocks in an ASYNC waveform
         .current_waveform_num(current_waveform_num[22:0]),
         // slow control

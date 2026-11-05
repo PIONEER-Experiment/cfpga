@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
-// cc_peek_hdr_sm (6.7.0): the command carries the expected fill number; the reply frame is RSN,
+// cc_peek_hdr_sm (6.7.0; 6.8.0: no header is popped): the command carries the expected fill number; the reply frame is RSN,
 // CC, header[31:0], [63:32], [95:64], [127:96] with tlast on the last word; a header for the
-// expected (or a newer) fill is never popped; a header for an older fill is popped (once) and the
-// echoed CC carries bit 8; back-pressure on tx_tready holds each word; when no header arrives
+// expected, an older or a newer fill is never popped and CC bit 8 is never set (6.8.0: an older one
+// was popped until then; the master now stops on any fill-number mismatch); back-pressure on tx_tready holds each word; when no header arrives
 // before the bound the reply is RSN, ~CC with tlast; a command without the fill-number word too.
 module tb;
 reg clk=0; always #4 clk=~clk; reg reset=1;
@@ -56,18 +56,18 @@ initial begin
   // 5: after the time-out, a normal command works again (flags cleared)
   push(24'd12, 32'hD4D3D2D1); n=0; lastw=-1; run_cmd(24'd12);
   check(n==6 && frame[1]==cmd, "case 5: error flag cleared for the next command");
-  // 6: two stale headers (older fills) in front of the expected one: popped, CC bit 8 set, no more pops
-  qn=0; push(24'd13, 32'h13131313); push(24'd14, 32'h14141414); push(24'd15, 32'h15151515); pops=0; n=0; lastw=-1; run_cmd(24'd15);
-  check(n==6 && frame[1]==(cmd|32'h100) && frame[2]==32'h0000000F && frame[5]==32'h15151515, "case 6: stale headers skipped, CC bit 8, expected header returned");
-  check(pops==2 && qn==1, "case 6: exactly two pops");
-  // 7: the discard flag is cleared for the next command
-  n=0; run_cmd(24'd15); check(frame[1]==cmd, "case 7: discard flag cleared");
+  // 6: an older header in front of the expected one: returned as is (the master stops on it), not popped
+  qn=0; push(24'd13, 32'h13131313); push(24'd15, 32'h15151515); pops=0; n=0; lastw=-1; run_cmd(24'd15);
+  check(n==6 && frame[1]==cmd && frame[2]==32'h0000000D && frame[5]==32'h13131313, "case 6: older header returned, CC bit 8 clear");
+  check(pops==0 && qn==2, "case 6: nothing popped");
+  // 7: asked again, the same header
+  n=0; run_cmd(24'd15); check(frame[1]==cmd && frame[2]==32'h0000000D && pops==0, "case 7: still the same header, still not popped");
   // 8: a NEWER header is returned as is, not popped
   qn=0; push(24'd20, 32'h20202020); pops=0; n=0; run_cmd(24'd16);
   check(n==6 && frame[1]==cmd && frame[2]==32'h00000014 && pops==0, "case 8: newer header returned, not popped");
-  // 9: wrap-around: expected 0x000005, header 0xFFFFF0 is older (mod 2^24)
+  // 9: wrap-around: an older header across the wrap is returned as is too
   qn=0; push(24'hFFFFF0, 32'h01010101); push(24'h000005, 32'h05050505); pops=0; n=0; run_cmd(24'h000005);
-  check(frame[1]==(cmd|32'h100) && frame[5]==32'h05050505 && pops==1, "case 9: older across the wrap is discarded");
+  check(frame[1]==cmd && frame[5]==32'h01010101 && pops==0, "case 9: older across the wrap returned, not popped");
   // 10: malformed command (fill word without tlast): ~CC
   qn=0; push(24'd30, 32'h30303030); n=0; lastw=-1; send_fill(24'd30, 0); run_sm<=1; wait(done); @(posedge clk); run_sm<=0; repeat(5) @(posedge clk);
   check(n==2 && frame[1]==~cmd && qn==1, "case 10: malformed command answered with ~CC, nothing popped");
