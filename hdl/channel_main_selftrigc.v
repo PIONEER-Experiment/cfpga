@@ -427,8 +427,13 @@ wire ddr3_wr_done_adc;
 wire ddr3_wr_en_ddr3;
 wire cbuf_rd_en_ddr3;
 wire [22:0] fill_address_ddr3;
-wire self_trig_line;     // the trigger line, kept inside the channel
-assign acq_trig = 1'b0;  // the trigger line is not sent to the master
+wire self_trig_line;     // the trigger line
+// 6.8.3 test: the line goes to the master unless register 0x27 [0] is set, so one bitstream (one
+// placement) can run with the line on and off.  Static between runs; synchronised into adc_clk.
+wire line_out_off;       // from the register block (clk125)
+wire line_out_off_adc;
+sync_2stage line_out_off_sync (.clk(adc_clk), .in(line_out_off), .out(line_out_off_adc));
+assign acq_trig = self_trig_line & ~line_out_off_adc;
 adc_acq_top_selftrigc adc_acq_top_selftrigc (
     // inputs
     .adc_in_p(adc_in_p[11:0]),                           // [11:0] array of ADC 'p' data pins
@@ -943,6 +948,7 @@ command_top command_top (
     .selftrig_ped_bypass(selftrig_ped_bypass),                         // self-triggering: pedestal bypass
     .selftrig_min_separation(selftrig_min_separation[7:0]),            // self-triggering: minimum separation, clocks
     .selftrig_retrig_level(selftrig_retrig_level),                     // self-triggering: legacy level re-trigger mode
+    .line_out_off(line_out_off),                                       // trigger-line pin off (6.8.3 test)
     .packed_adc_dat(packed_adc_dat[25:0]),
     .current_waveform_num(current_waveform_num[22:0]),
     .read_fill_done(read_fill_done),                    // read fill state machine finished
