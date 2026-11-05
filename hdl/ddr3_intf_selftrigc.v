@@ -6,7 +6,8 @@ module ddr3_intf_selftrigc(
     input sysclk,                               // input, drives the Xilinx DDR3 IP
     input reset_clk50,                          // input, reset at startup or when requested by master FPGA 
     output ddr3_domain_clk,                     // output, the DDR3 user-interface synchronous clock
-    output reset_ddr3_clk,                      // output, synched to ddr3_clk
+    output reset_ddr3_clk,                      // output, 'reset_clk50' synched to sysclk; drives the MIG's sys_rst
+    output ddr3_domain_reset,                   // output, the MIG's ui_clk_sync_rst: held until ui_clk is running and locked
     // writing connections
     input ddr3_wr_en,                           // writing of triggered events to memory is enabled
     input cbuf_rd_en,                           // we have enabled storing of events -- asserted when not switching fill buffers

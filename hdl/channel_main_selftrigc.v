@@ -251,6 +251,7 @@ wire [16:0] ddr3_wr_ctrl_state;            // write control current state
 ////////////////////////////////////////////////////////////////////////////
 wire acq_done;
 wire ddr3_selftrig_wr_active;
+wire ddr3_ui_reset;     // the MIG's ui_clk_sync_rst (ddr3_domain_clk), for the DDR3 read FIFO
 wire run_start_reset;   // from adc_acq_top_selftrigc: 160 ns pulse at the start of every run, clears the fill/DDR3 FIFOs
 // Inform the master FPGA that no data transfer to DDR3 is in process
 // The done line to the master (C0_DONE).  Since 6.6.9 it is asserted only when a fill has been
@@ -588,7 +589,8 @@ ddr3_intf_selftrigc ddr3_intf_selftrigc(
     .sysclk(clk200),                    // input, drives the Xilinx DDR3 IP
     .reset_clk50(reset_clk50),            // input, reset at startup or when requested by master FPGA 
     .ddr3_domain_clk(ddr3_domain_clk),  // output, the DDR3 user-interface synchronous clock
-    .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to ddr3_clk
+    .reset_ddr3_clk(reset_ddr3_clk),   // output, synched to sysclk (the MIG's sys_rst)
+    .ddr3_domain_reset(ddr3_ui_reset), // output, the MIG's ui_clk_sync_rst, for logic on ddr3_domain_clk
 
     // writing connections
     .ddr3_wr_en(ddr3_wr_en_ddr3),                 // writing of triggered events to memory is enabled -- asserted when storing a triggered waveform
@@ -658,7 +660,8 @@ sync_2stage ddr3_wr_done_sync (
 ddr3_read_fifo ddr3_read_fifo(
     .m_aclk(clk125),
     .s_aclk(ddr3_domain_clk),
-    .s_aresetn(~reset_ddr3_clk),
+    .s_aresetn(~ddr3_ui_reset),   // ui_clk_sync_rst (6.8.4): 'reset_ddr3_clk' is also the MIG's sys_rst, which stops this
+                                  // FIFO's write clock, so the FIFO came out of that reset with ui_clk not running
     .s_axis_tvalid(ddr3_rd_fifo_wr_en),
     .s_axis_tready(ddr3_rd_fifo_input_tready),   // a word offered while not ready is lost: reported (error latch, 6.6.10)
     .s_axis_tlast(ddr3_rd_fifo_input_tlast),
@@ -694,7 +697,7 @@ chan_error_selftrigc chan_error (
 // Create a width converter to change the 128-bit data to 32-bit data
 ddr3_read_data_width_converter ddr3_read_data_width_converter(
     .aclk(clk125),
-    .aresetn(~reset_clk50),
+    .aresetn(~reset_clk125),      // clk125 module: the synchronised copy (6.8.4; was reset_clk50, unsynchronised)
     .s_axis_tvalid(ddr3_rd_fifo_output_tvalid),
     .s_axis_tready(ddr3_rd_fifo_output_tready),
     .s_axis_tdata(ddr3_rd_fifo_output_dat[127:0]),  // 128-bit
