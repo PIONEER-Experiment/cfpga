@@ -44,3 +44,15 @@ for an older fill is popped (once, with a settle wait) and reported in CC bit 8;
 time-out reply; a malformed command.
 
     iverilog -g2012 -o sim tb_peek_hdr.v ../hdl/cc_peek_hdr_sm.v && vvp sim
+
+`tb_ddr3_arb.v` — DDR3 command-port arbitration (6.8.7): the real `ddr3_wr_control_selftrigc`, `ddr3_addr_control`
+and `ddr3_rd_control` with models of the adc side (Poisson self-triggers, 72-clock waveforms into the 256-word
+write FIFO), the MIG user interface (command queue, turnarounds, refresh, periodic reads) and the fill readout.
+`+old` selects the 6.8.6 arbitration (port follows `ddr3_wr_en_sync2` only). With a 9-clock turnaround penalty
+the old arbitration overflows the write FIFO at 120 kHz and the writer goes to SYNC_ERR, as channel 3 did; the
+new one holds the backlog to one waveform up to 1 MHz with a 20-clock penalty. Results are in the file header.
+
+    iverilog -g2012 -o sim tb_ddr3_arb.v ../hdl/ddr3_wr_control_selftrigc.v ../hdl/ddr3_addr_control.v \
+        ../hdl/ddr3_rd_control.v
+    vvp sim                       # 120 kHz, 100 Hz readout: PASS, write FIFO max 17
+    vvp sim +old +turn=9          # the 6.8.6 arbitration: write FIFO overflow, SYNC_ERR

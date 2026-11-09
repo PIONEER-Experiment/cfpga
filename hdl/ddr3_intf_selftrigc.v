@@ -120,7 +120,19 @@ wire [127:0] ddr3_wr_dat;
 assign ddr3_rd_fifo_input_dat[127:0] = ddr3_rd_dat[127:0];
 
 ////////////////////////////////////////////////////////////////
-assign addressing_acq_enabled = ddr3_wr_en_sync2;
+// Command-port arbitration (6.8.7): the writer has priority.  It takes the port whenever it has an
+// address to issue (wr_app_en), and also while the circular-buffer reader is moving a waveform
+// (ddr3_wr_en_sync2, as before).  Until 6.8.6 the port followed ddr3_wr_en_sync2 alone, which is high
+// only for the ~180 ns the adc side spends on each waveform: the writer, a few clocks behind on the
+// DDR3 side, finished each waveform in the next trigger's window, with almost no margin, and anything
+// the MIG spent in those windows (refresh, periodic reads, turnarounds, queued fill reads) was never
+// made up.  The backlog in the 256-word write FIFO then grew with the number of triggers until it
+// overflowed (channel error bits 3 then 6).  wr_app_en does not depend on the mux, so there is no
+// combinational loop; both controllers hold a command that is not accepted, so the port can change
+// hands on any clock.  Reads use whatever the writer leaves.  sim/tb_ddr3_arb.v.
+wire wr_app_en, wr_app_rdy, rd_app_en, rd_app_rdy;   // declared before use (they were implicit nets)
+wire addressing_acq_enabled;
+assign addressing_acq_enabled = wr_app_en | ddr3_wr_en_sync2;
 // Connect the module that manages the address and command ports
 ddr3_addr_control ddr3_addr_control (
     // 'write' ports
@@ -186,7 +198,7 @@ ddr3_rd_control ddr3_rd_control (
     // User interface clock and reset   
     .clk(ddr3_domain_clk),
     .reset(ddr3_domain_reset),                              // reset at startup or when requested
-    .acq_enabled(ddr3_wr_en_sync2),                        // input, writing is enabled
+    .acq_enabled(addressing_acq_enabled),                  // input, the writer has the command port (6.8.7)
     // connections to the 'rd_fill' command logic
     .ddr3_rd_start_addr(ddr3_rd_start_addr[22:0]),          // input, the address of the first requested 128-bit burst
     .ddr3_rd_burst_cnt(ddr3_rd_burst_cnt[23:0]),            // input, the number of bursts to read
